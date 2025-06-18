@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Star Portfolio</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="bg-gray-900 text-white">
+
+    <div id="big-image-container" class="big-image-container">
+        <img id="big-image" src="" alt="Big Image">
+    </div>
+
+    <div id="right-text-container" class="right-text-container">
+        <div class="right-text-content">
+            <div class="flex justify-between items-center mb-4">
+                <h2 id="right-text-title" class="text-2xl font-bold text-violet-300"></h2>
+                <button id="right-text-close" class="text-gray-400 hover:text-white transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+
+            <div id="project-navigation" class="project-navigation" style="display: none;">
+                <button id="prev-project" class="project-nav-btn">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                    </svg>
+                </button>
+                
+                <div class="project-indicator">
+                    <div class="project-dot active" data-project="0"></div>
+                    <div class="project-dot" data-project="1"></div>
+                </div>
+                
+                <button id="next-project" class="project-nav-btn">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                    </svg>
+                </button>
+            </div>
+            
+            <div id="right-text-body" class="text-gray-300 leading-relaxed">
+            </div>
+        </div>
+    </div>
+
+    <div class="relative min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-900 to-indigo-900">
+
+        <div class="relative star-container flex justify-center items-center">
+
+            <div id="center-star" class="star-item relative w-40 h-40 md:w-56 md:h-56 cursor-pointer z-10" 
+                 data-title="Bienvenido!" 
+                 data-image="bigcenter"
+                 data-content="Soy Thiago Collante un alumno de un Instituto Tecnico que estudia programación, hace click en los planetas que rodean el sol para saber mas">
+                <img src="assets/star_center.png" alt="Welcome Star" class="w-full h-full object-contain" onerror="this.onerror=null;this.src='https://placehold.co/224x224/111827/a78bfa?text=★';">
+            </div>
+
+            <div class="orbit-container">
+
+                <div class="orbit-star w-24 h-24 md:w-32 md:h-32 cursor-pointer"
+                     data-title="Sobre Mí"
+                     data-image="bigabout"
+                     data-content="Hola! Soy Thiago Collante, soy un alumno de un Instituto Tecnico que estudia programación, aparte que edstudio por mi cuenta tecnicas de dibujo para realizar el arte de mis proyectos, Entre a la carrera de programación para desarollar videojuegos pero al final me termino enganchando los otros ambitos de la programación.">
+                    <img src="assets/about.png" alt="Sobre Mí" class="w-full h-full object-contain" onerror="this.onerror=null;this.src='https://placehold.co/128x128/111827/06b6d4?text=★';">
+                </div>
+
+                <div class="orbit-star w-24 h-24 md:w-32 md:h-32 cursor-pointer"
+                     data-title="Mis Proyectos"
+                     data-image="bigprojects"
+                     data-type="projects"
+                     data-content="">
+                    <img src="assets/projects.png" alt="Mis Proyectos" class="w-full h-full object-contain" onerror="this.onerror=null;this.src='https://placehold.co/128x128/111827/06b6d4?text=★';">
+                </div>
+
+                <div class="orbit-star w-24 h-24 md:w-32 md:h-32 cursor-pointer"
+                     data-title="Habilidades"
+                     data-image="bigskills"
+                     data-content="Se utillizar los siguientes programas y codigos<br><div class='mt-2 flex flex-wrap gap-2'> <span class='bg-gray-700 text-cyan-300 px-2 py-1 rounded-full text-sm'>Aseprite</span> <span class='bg-gray-700 text-cyan-300 px-2 py-1 rounded-full text-sm'>Python</span> <span class='bg-gray-700 text-cyan-300 px-2 py-1 rounded-full text-sm'>CSS</span> <span class='bg-gray-700 text-cyan-300 px-2 py-1 rounded-full text-sm'>HTML</span> <span class='bg-gray-700 text-cyan-300 px-2 py-1 rounded-full text-sm'>Photoshop</span> <span class='bg-gray-700 text-cyan-300 px-2 py-1 rounded-full text-sm'>Scratch</span></div>">
+                    <img src="assets/skills.png" alt="Skills & Expertise" class="w-full h-full object-contain" onerror="this.onerror=null;this.src='https://placehold.co/128x128/111827/06b6d4?text=★';">
+                </div>
+
+                <div class="orbit-star w-24 h-24 md:w-32 md:h-32 cursor-pointer"
+                     data-title="Contactame"
+                     data-image="bigcontact"
+                     data-content="Pudo colaborar en distintos proyecto tomando distintos roles contactame cuando quieras:<br><strong class='mt-2 block'>Email:</strong> <a href='mailto:titicoyoteweb@gmail.com' class='text-cyan-400 hover:underline'>titicoyoteweb@gmail.com</a><br><strong class='mt-1 block'>GitHub:</strong> <a href='https://github.com/ThiagoCollante' target='_blank' class='text-cyan-400 hover:underline'>github.com/ThiagoCollante</a>">
+                    <img src="assets/contact.png" alt="Get In Touch" class="w-full h-full object-contain" onerror="this.onerror=null;this.src='https://placehold.co/128x128/111827/06b6d4?text=★';">
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <div id="modal" class="modal-hidden fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 transition-all duration-300 z-50">
+        <div id="modal-content" class="bg-gray-800 rounded-2xl shadow-2xl p-6 md:p-8 w-full max-w-lg mx-auto border border-gray-700">
+            <div class="flex justify-between items-center mb-4">
+                <h2 id="modal-title" class="text-2xl font-bold text-violet-300"></h2>
+                <button id="modal-close" class="text-gray-400 hover:text-white transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div id="modal-body" class="text-gray-300 leading-relaxed">
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
