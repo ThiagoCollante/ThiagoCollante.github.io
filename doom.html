@@ -10,7 +10,7 @@
             padding: 0;
             overflow: hidden;
             background: #000;
-            font-family: Arial, sans-serif;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
         
         #gameContainer {
@@ -30,19 +30,54 @@
             font-size: 14px;
             z-index: 100;
             max-width: 250px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
         }
         
+        /* General crosshair container */
         #crosshair {
             position: absolute;
             top: 50%;
             left: 50%;
-            width: 4px;
-            height: 4px;
-            background: white;
-            border-radius: 50%;
             transform: translate(-50%, -50%);
             z-index: 100;
+            display: block;
         }
+
+        /* Default crosshair for Pistol and unscoped Sniper */
+        #crosshair.default-crosshair {
+            width: 20px;
+            height: 20px;
+            border: none;
+            border-radius: 0;
+        }
+        #crosshair.default-crosshair::before,
+        #crosshair.default-crosshair::after {
+            content: '';
+            position: absolute;
+            background-color: white;
+            box-shadow: 0 0 2px 1px rgba(0,0,0,0.5);
+        }
+        #crosshair.default-crosshair::before {
+            left: 50%; top: 0; width: 2px; height: 100%; transform: translateX(-50%);
+        }
+        #crosshair.default-crosshair::after {
+            top: 50%; left: 0; height: 2px; width: 100%; transform: translateY(-50%);
+        }
+
+        /* Shotgun crosshair (circle) */
+        #crosshair.shotgun-crosshair {
+            width: 40px;
+            height: 40px;
+            background-color: transparent;
+            border: 2px solid white;
+            border-radius: 50%;
+            box-shadow: 0 0 2px 1px rgba(0,0,0,0.5);
+        }
+        #crosshair.shotgun-crosshair::before,
+        #crosshair.shotgun-crosshair::after {
+            content: none; /* Hide the '+' lines for the circle */
+        }
+
 
         #minimapContainer {
             position: absolute;
@@ -54,6 +89,7 @@
             border-radius: 50%;
             overflow: hidden;
             z-index: 101;
+            background: rgba(0, 0, 0, 0.3);
         }
 
         #minimapRenderer {
@@ -72,6 +108,53 @@
             font-size: 24px;
             font-weight: bold;
             z-index: 100;
+            text-align: right;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        #sniperScope {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: transparent;
+            display: none; 
+            z-index: 102;
+            pointer-events: none;
+        }
+
+        #scopeLines {
+             position: absolute;
+             top: 50%;
+             left: 50%;
+             transform: translate(-50%, -50%);
+             width: 90vmin; 
+             height: 90vmin;
+             z-index: 103;
+             display: none; 
+             border-radius: 50%;
+             box-shadow: 0 0 0 100vmax rgba(0,0,0,0.8);
+        }
+
+        #scopeLines .line {
+            position: absolute;
+            background-color: white;
+            box-shadow: 0 0 3px 1px black;
+        }
+
+        #scopeLines .vertical {
+            left: 50%;
+            width: 1px; 
+            height: 100%;
+            transform: translateX(-50%);
+        }
+
+        #scopeLines .horizontal {
+            top: 50%;
+            height: 1px; 
+            width: 100%;
+            transform: translateY(-50%);
         }
         
         canvas {
@@ -88,14 +171,24 @@
             Space - Jump<br>
             Shift - Run<br>
             R - Reload<br>
+            Mouse Wheel - Switch Weapon<br>
+            Right-Click - Zoom (Sniper)<br>
             <strong>Click screen to start!</strong><br>
             <strong>Left Click - Shoot</strong>
         </div>
+        <!-- This div's class will be changed by JS to show the correct crosshair -->
         <div id="crosshair"></div>
         <div id="minimapContainer">
             <div id="minimapRenderer"></div>
         </div>
         <div id="ammoInfo"></div>
+        <!-- This container holds the sniper scope overlay and its unique crosshair -->
+        <div id="sniperScope">
+            <div id="scopeLines">
+                 <div class="line vertical"></div>
+                 <div class="line horizontal"></div>
+            </div>
+        </div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -118,17 +211,9 @@
                 this.bulletTrails = [];
                 this.shootableObjects = [];
 
-                // Ammo and Reloading
-                this.maxAmmo = 10;
-                this.currentAmmo = this.maxAmmo;
-                this.isReloading = false;
-                this.reloadTime = 500; // Time in ms until reload is complete and player can fire
-                this.reloadAnimTime = 2; // Time in ms for the visual animation to complete
-                this.reloadFlipAmount = 0;
-
                 this.initScene();
                 this.initCamera();
-                this.initViewModel();
+                this.initWeapons();
                 this.initRenderer();
                 this.initMinimap();
                 this.initLighting();
@@ -136,6 +221,7 @@
                 this.initWorld();
                 this.initControls();
                 
+                this.updateCrosshair(); // Set initial crosshair
                 this.updateAmmoUI();
                 this.animate();
             }
@@ -153,54 +239,129 @@
                 this.camera.position.set(startPos.x, 10, startPos.z);
                 this.initialRotation = Math.PI;
                 this.scene.add(this.camera);
+                this.defaultFov = 75;
+                this.zoomFov = 20;
+                this.isZoomed = false;
             }
 
-            initViewModel() {
-                this.viewModel = new THREE.Group();
-                const material = new THREE.MeshStandardMaterial({
-                    color: 0x444444,
-                    metalness: 0.8,
-                    roughness: 0.4
-                });
+            initWeapons() {
+                this.weapons = [
+                    this.createPistol(),
+                    this.createShotgun(),
+                    this.createSniper(),
+                ];
+                this.currentWeaponIndex = 0;
+                this.lastShotTime = 0;
 
+                this.weapons.forEach((weapon, index) => {
+                    this.camera.add(weapon.viewModel);
+                    weapon.viewModel.visible = (index === this.currentWeaponIndex);
+                });
+            }
+
+            createPistol() {
+                const viewModel = new THREE.Group();
+                const material = new THREE.MeshStandardMaterial({ color: 0x444444, metalness: 0.8, roughness: 0.4 });
                 const bodyGeom = new THREE.BoxGeometry(0.2, 0.3, 1);
                 const body = new THREE.Mesh(bodyGeom, material);
                 const barrelGeom = new THREE.CylinderGeometry(0.05, 0.05, 0.8, 16);
                 const barrel = new THREE.Mesh(barrelGeom, material);
-                this.muzzlePoint = new THREE.Object3D();
-                const flashMaterial = new THREE.MeshBasicMaterial({ color: 0xfff5a1, transparent: true, opacity: 0 });
-                const flashGeometry = new THREE.PlaneGeometry(0.5, 0.5);
-                this.muzzleFlash = new THREE.Mesh(flashGeometry, flashMaterial);
-
-                this.muzzlePoint.add(this.muzzleFlash);
-                barrel.add(this.muzzlePoint);
-                this.viewModel.add(body);
-                this.viewModel.add(barrel);
-                this.camera.add(this.viewModel);
-
                 barrel.position.set(0, 0.05, -0.9);
                 barrel.rotation.x = Math.PI / 2;
+                viewModel.add(body, barrel);
+                this.setupViewModel(viewModel, new THREE.Vector3(0.3, -0.3, -1.2));
+                return {
+                    name: 'Pistol',
+                    viewModel: viewModel,
+                    maxAmmo: 10,
+                    currentAmmo: 10,
+                    reloadTime: 1500,
+                    fireRate: 250,
+                    isReloading: false,
+                    recoilAmount: 0,
+                    baseRecoil: 0.1,
+                    muzzlePoint: this.createMuzzlePoint(barrel, new THREE.Vector3(0, 0.4, 0))
+                };
+            }
+
+            createShotgun() {
+                const viewModel = new THREE.Group();
+                const material = new THREE.MeshStandardMaterial({ color: 0x604020, metalness: 0.6, roughness: 0.5 });
+                const bodyGeom = new THREE.BoxGeometry(0.3, 0.3, 1.2);
+                const body = new THREE.Mesh(bodyGeom, material);
+                const barrelGeom = new THREE.CylinderGeometry(0.08, 0.08, 1.0, 16);
+                const barrel = new THREE.Mesh(barrelGeom, material);
+                barrel.position.set(0, 0, -0.7);
+                barrel.rotation.x = Math.PI / 2;
+                viewModel.add(body, barrel);
+                this.setupViewModel(viewModel, new THREE.Vector3(0.3, -0.3, -1.2));
+                return {
+                    name: 'Shotgun',
+                    viewModel: viewModel,
+                    maxAmmo: 5,
+                    currentAmmo: 5,
+                    reloadTime: 2500,
+                    fireRate: 1000,
+                    isReloading: false,
+                    recoilAmount: 0,
+                    baseRecoil: 0.4,
+                    pellets: 8,
+                    spread: 0.05,
+                    muzzlePoint: this.createMuzzlePoint(barrel, new THREE.Vector3(0, 0.5, 0))
+                };
+            }
+
+            createSniper() {
+                const viewModel = new THREE.Group();
+                const material = new THREE.MeshStandardMaterial({ color: 0x2d3436, metalness: 0.7, roughness: 0.3 });
+                const bodyGeom = new THREE.BoxGeometry(0.2, 0.25, 1.8);
+                const body = new THREE.Mesh(bodyGeom, material);
+                const barrelGeom = new THREE.CylinderGeometry(0.04, 0.04, 1.5, 16);
+                const barrel = new THREE.Mesh(barrelGeom, material);
+                barrel.position.set(0, 0, -1.2);
+                barrel.rotation.x = Math.PI / 2;
                 
-                // Reverted muzzle point to the tip of the gun for correct visual effect
-                this.muzzlePoint.position.set(0, 0, -0.4);
-                this.muzzleFlash.position.set(0, 0, 0);
-
-                // Adjusted view model position to be higher and more centered
-                this.viewModel.position.set(0.3, -0.3, -1.2);
-                this.viewModel.rotation.set(0, 0, 0);
-
-                this.baseViewModelPos = this.viewModel.position.clone();
-
-                this.viewModel.traverse(child => {
+                viewModel.add(body, barrel);
+                
+                this.setupViewModel(viewModel, new THREE.Vector3(0.3, -0.3, -1.2));
+                return {
+                    name: 'Sniper',
+                    viewModel: viewModel,
+                    maxAmmo: 4,
+                    currentAmmo: 4,
+                    reloadTime: 3000,
+                    fireRate: 1500,
+                    isReloading: false,
+                    recoilAmount: 0,
+                    baseRecoil: 0.8,
+                    muzzlePoint: this.createMuzzlePoint(barrel, new THREE.Vector3(0, 0.75, 0))
+                };
+            }
+            
+            createMuzzlePoint(parent, position) {
+                const muzzlePoint = new THREE.Object3D();
+                const flashMaterial = new THREE.MeshBasicMaterial({ color: 0xfff5a1, transparent: true, opacity: 0 });
+                const flashGeometry = new THREE.PlaneGeometry(0.5, 0.5);
+                const muzzleFlash = new THREE.Mesh(flashGeometry, flashMaterial);
+                muzzlePoint.add(muzzleFlash);
+                parent.add(muzzlePoint);
+                muzzlePoint.position.copy(position);
+                muzzlePoint.flash = muzzleFlash;
+                return muzzlePoint;
+            }
+            
+            setupViewModel(viewModel, position) {
+                viewModel.position.copy(position);
+                viewModel.basePosition = position.clone();
+                viewModel.rotation.set(0, 0, 0);
+                viewModel.traverse(child => {
                     if (child.isMesh) {
                         child.castShadow = false;
                         child.receiveShadow = false;
                     }
                 });
-
-                this.recoilAmount = 0;
             }
-            
+
             initRenderer() {
                 this.renderer = new THREE.WebGLRenderer({ antialias: true });
                 this.renderer.setSize(window.innerWidth, window.innerHeight);
@@ -250,22 +411,17 @@
                 this.velocity = new THREE.Vector3();
                 this.direction = new THREE.Vector3();
                 this.isOnGround = false;
-                
                 this.playerHeight = 10;
                 this.jumpForce = 0.35;
                 this.gravity = -0.015;
                 this.walkSpeed = 0.3;
                 this.runSpeed = 0.6;
                 this.playerRadius = 1.5;
-                
                 this.collidableObjects = [];
-                
                 this.createPlayerShadow();
             }
             
-            initWorld() {
-                this.generateWorldFromGrid();
-            }
+            initWorld() { this.generateWorldFromGrid(); }
             
             generateWorldFromGrid() {
                 const wallHeight = this.tileSize;
@@ -288,15 +444,11 @@
                         const worldZ = offsetZ + z * this.tileSize + this.tileSize / 2;
 
                         switch (tileType) {
-                            case 1:
-                                this.createTree(worldX, worldZ);
-                                break;
+                            case 1: this.createTree(worldX, worldZ); break;
                             case 2:
                                 const wallGeometry = new THREE.BoxGeometry(this.tileSize, wallHeight, this.tileSize);
                                 const grayShade = Math.random() * 0.2 + 0.4;
-                                const wallMaterial = new THREE.MeshLambertMaterial({ 
-                                    color: new THREE.Color(grayShade, grayShade, grayShade) 
-                                });
+                                const wallMaterial = new THREE.MeshLambertMaterial({ color: new THREE.Color(grayShade, grayShade, grayShade) });
                                 const wall = new THREE.Mesh(wallGeometry, wallMaterial);
                                 wall.position.set(worldX, wallHeight / 2, worldZ);
                                 wall.castShadow = true;
@@ -316,7 +468,6 @@
                 const gridDepth = this.mapGrid.length * this.tileSize;
                 const offsetX = -gridWidth / 2;
                 const offsetZ = -gridDepth / 2;
-
                 for (let z = 0; z < this.mapGrid.length; z++) {
                     for (let x = 0; x < this.mapGrid[z].length; x++) {
                         if (this.mapGrid[z][x] === 0) {
@@ -358,22 +509,29 @@
                 
                 document.addEventListener('keydown', (e) => { 
                     this.keys[e.code] = true; 
-                    if (e.code === 'KeyR') {
-                        this.reload();
-                    }
+                    if (e.code === 'KeyR') this.reload();
                 });
                 document.addEventListener('keyup', (e) => { this.keys[e.code] = false; });
                 
-                document.addEventListener('click', () => {
+                document.addEventListener('mousedown', (e) => {
                     if (!this.isPointerLocked) {
                         this.renderer.domElement.requestPointerLock();
                     } else {
-                        this.shoot();
+                        if (e.button === 0) { // Left click
+                            this.shoot();
+                        } else if (e.button === 2) { // Right click
+                           this.toggleZoom();
+                        }
                     }
                 });
+
+                this.renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
                 
                 document.addEventListener('pointerlockchange', () => {
                     this.isPointerLocked = document.pointerLockElement === this.renderer.domElement;
+                    if (!this.isPointerLocked && this.isZoomed) {
+                        this.toggleZoom();
+                    }
                 });
                 
                 document.addEventListener('mousemove', (e) => {
@@ -384,6 +542,21 @@
                         this.mouse.y = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.mouse.y));
                     }
                 });
+
+                document.addEventListener('wheel', (e) => {
+                    if (!this.isPointerLocked) return;
+                    if (this.isZoomed) this.toggleZoom();
+
+                    const currentWeapon = this.weapons[this.currentWeaponIndex];
+                    if (currentWeapon.isReloading) return;
+
+                    currentWeapon.viewModel.visible = false;
+                    const direction = e.deltaY > 0 ? 1 : -1;
+                    this.currentWeaponIndex = (this.currentWeaponIndex + direction + this.weapons.length) % this.weapons.length;
+                    this.weapons[this.currentWeaponIndex].viewModel.visible = true;
+                    this.updateCrosshair(); // Update crosshair on switch
+                    this.updateAmmoUI();
+                });
                 
                 window.addEventListener('resize', () => {
                     this.camera.aspect = window.innerWidth / window.innerHeight;
@@ -392,19 +565,62 @@
                 });
             }
 
+            updateCrosshair() {
+                const weapon = this.weapons[this.currentWeaponIndex];
+                const crosshair = document.getElementById('crosshair');
+                crosshair.className = ''; // Reset class list
+
+                switch(weapon.name) {
+                    case 'Shotgun':
+                        crosshair.classList.add('shotgun-crosshair');
+                        break;
+                    case 'Pistol':
+                    case 'Sniper':
+                    default:
+                        crosshair.classList.add('default-crosshair');
+                        break;
+                }
+            }
+
             shoot() {
-                if (this.isReloading || this.currentAmmo <= 0) {
-                    return; // Can't shoot while reloading or if out of ammo
+                const weapon = this.weapons[this.currentWeaponIndex];
+                const now = performance.now();
+
+                if (weapon.isReloading || weapon.currentAmmo <= 0 || now - this.lastShotTime < weapon.fireRate) {
+                    return;
+                }
+                
+                if (this.isZoomed && weapon.name !== 'Sniper') {
+                    this.toggleZoom();
                 }
 
-                this.currentAmmo--;
+                this.lastShotTime = now;
+                weapon.currentAmmo--;
                 this.updateAmmoUI();
 
-                this.recoilAmount = 0.1;
-                this.muzzleFlash.material.opacity = 1;
-                setTimeout(() => { this.muzzleFlash.material.opacity = 0; }, 60);
+                weapon.recoilAmount = weapon.baseRecoil;
+                weapon.muzzlePoint.flash.material.opacity = 1;
+                setTimeout(() => { weapon.muzzlePoint.flash.material.opacity = 0; }, 60);
 
-                this.raycaster.setFromCamera({ x: 0, y: 0 }, this.camera);
+                if (weapon.name === 'Shotgun') {
+                    for (let i = 0; i < weapon.pellets; i++) {
+                        this.fireBullet(weapon.spread);
+                    }
+                } else {
+                    this.fireBullet(0);
+                }
+
+                if (weapon.currentAmmo === 0) {
+                    this.reload();
+                }
+            }
+            
+            fireBullet(spread) {
+                const spreadDirection = new THREE.Vector2(
+                    (Math.random() - 0.5) * spread,
+                    (Math.random() - 0.5) * spread
+                );
+                this.raycaster.setFromCamera(spreadDirection, this.camera);
                 const intersects = this.raycaster.intersectObjects(this.shootableObjects);
 
                 let endPoint;
@@ -419,73 +635,79 @@
                     this.raycaster.ray.at(1000, endPoint);
                 }
                 this.createBulletTrail(endPoint);
-
-                if (this.currentAmmo === 0) {
-                    this.reload();
-                }
             }
 
             reload() {
-                if (this.isReloading || this.currentAmmo === this.maxAmmo) {
-                    return;
-                }
+                const weapon = this.weapons[this.currentWeaponIndex];
+                if (weapon.isReloading || weapon.currentAmmo === weapon.maxAmmo) return;
+                
+                if (this.isZoomed) this.toggleZoom();
 
-                this.isReloading = true;
-                this.reloadFlipAmount = Math.PI * 2; // One full backflip
-                document.getElementById('ammoInfo').innerText = "Reloading...";
+                weapon.isReloading = true;
+                weapon.viewModel.reloadFlipAmount = Math.PI * 2;
+                this.updateAmmoUI();
 
                 setTimeout(() => {
-                    this.currentAmmo = this.maxAmmo;
-                    this.isReloading = false;
+                    weapon.currentAmmo = weapon.maxAmmo;
+                    weapon.isReloading = false;
                     this.updateAmmoUI();
-                }, this.reloadTime);
+                }, weapon.reloadTime);
+            }
+
+            toggleZoom() {
+                const weapon = this.weapons[this.currentWeaponIndex];
+                if (weapon.name !== 'Sniper' || weapon.isReloading) return;
+
+                this.isZoomed = !this.isZoomed;
+                const sniperScope = document.getElementById('sniperScope');
+                const scopeLines = document.getElementById('scopeLines');
+                const crosshair = document.getElementById('crosshair');
+                
+                this.camera.fov = this.isZoomed ? this.zoomFov : this.defaultFov;
+                this.camera.updateProjectionMatrix();
+
+                sniperScope.style.display = this.isZoomed ? 'block' : 'none';
+                scopeLines.style.display = this.isZoomed ? 'block' : 'none';
+                crosshair.style.display = this.isZoomed ? 'none' : 'block';
+                weapon.viewModel.visible = !this.isZoomed;
             }
 
             updateAmmoUI() {
-                document.getElementById('ammoInfo').innerText = `${this.currentAmmo} / ${this.maxAmmo}`;
+                const weapon = this.weapons[this.currentWeaponIndex];
+                const ammoElem = document.getElementById('ammoInfo');
+                if (weapon.isReloading) {
+                    ammoElem.innerHTML = `${weapon.name}<br>Reloading...`;
+                } else {
+                    ammoElem.innerHTML = `${weapon.name}<br>${weapon.currentAmmo} / ${weapon.maxAmmo}`;
+                }
             }
 
             createBulletTrail(endPoint) {
+                const weapon = this.weapons[this.currentWeaponIndex];
                 const startPoint = new THREE.Vector3();
-                this.muzzlePoint.getWorldPosition(startPoint);
+                weapon.muzzlePoint.getWorldPosition(startPoint);
                 const points = [startPoint, endPoint];
                 const geometry = new THREE.BufferGeometry().setFromPoints(points);
-                const material = new THREE.LineBasicMaterial({
-                    color: 0xffff00,
-                    transparent: true,
-                    opacity: 1.0
-                });
+                const material = new THREE.LineBasicMaterial({ color: 0xffff00, transparent: true, opacity: 1.0 });
                 const trail = new THREE.Line(geometry, material);
                 this.scene.add(trail);
                 this.bulletTrails.push({ line: trail, createdAt: Date.now() });
             }
 
             createBulletDecal(position, normal) {
-                const decalMaterial = new THREE.MeshBasicMaterial({
-                    color: 0x000000,
-                    transparent: true,
-                    opacity: 0.8,
-                    depthTest: true,
-                    depthWrite: false,
-                });
+                const decalMaterial = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.8, depthTest: true, depthWrite: false });
                 const decalGeometry = new THREE.PlaneGeometry(0.2, 0.2);
                 const decal = new THREE.Mesh(decalGeometry, decalMaterial);
-                
                 decal.position.copy(position);
                 decal.lookAt(position.clone().add(normal));
                 decal.position.add(normal.multiplyScalar(0.01));
-                
                 this.scene.add(decal);
                 this.bulletDecals.push({ mesh: decal, createdAt: Date.now() });
             }
             
             createPlayerShadow() {
                 const shadowGeometry = new THREE.CircleGeometry(this.playerRadius, 16);
-                const shadowMaterial = new THREE.MeshBasicMaterial({ 
-                    color: 0x000000, 
-                    transparent: true, 
-                    opacity: 0.3 
-                });
+                const shadowMaterial = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.3 });
                 this.playerShadow = new THREE.Mesh(shadowGeometry, shadowMaterial);
                 this.playerShadow.rotation.x = -Math.PI / 2;
                 this.playerShadow.position.y = 0.01;
@@ -531,9 +753,7 @@
                 }
 
                 const deltaPosition = this.velocity.clone().multiplyScalar(delta * 60);
-                
                 this.handleCollisions(deltaPosition);
-                
                 this.camera.position.add(deltaPosition);
 
                 if (this.camera.position.y < this.playerHeight) {
@@ -547,33 +767,17 @@
 
             handleCollisions(deltaPosition) {
                 const playerSphere = new THREE.Sphere(this.camera.position, this.playerRadius);
-
                 for (const obj of this.collidableObjects) {
                     const nextPlayerSphere = new THREE.Sphere(playerSphere.center.clone().add(deltaPosition), playerSphere.radius);
-
-                    if (obj.type === 'box') {
-                        const box = obj.bounds;
-                        if (nextPlayerSphere.intersectsBox(box)) {
-                            const closestPoint = new THREE.Vector3().copy(nextPlayerSphere.center).clamp(box.min, box.max);
-                            const penetrationVector = new THREE.Vector3().subVectors(nextPlayerSphere.center, closestPoint).normalize();
-                            
-                            const dot = deltaPosition.dot(penetrationVector);
-                            if (dot < 0) {
-                                const correction = penetrationVector.multiplyScalar(dot);
-                                deltaPosition.sub(correction);
-                            }
-                        }
-                    } else if (obj.type === 'sphere') {
-                        const sphere = obj.bounds;
-                        if (nextPlayerSphere.intersectsSphere(sphere)) {
-                            const penetrationVector = new THREE.Vector3().subVectors(nextPlayerSphere.center, sphere.center).normalize();
-                            
-                            const dot = deltaPosition.dot(penetrationVector);
-                            if (dot < 0) {
-                                const correction = penetrationVector.multiplyScalar(dot);
-                                deltaPosition.sub(correction);
-                            }
-                        }
+                    if (obj.type === 'box' && nextPlayerSphere.intersectsBox(obj.bounds)) {
+                        const closestPoint = new THREE.Vector3().copy(nextPlayerSphere.center).clamp(obj.bounds.min, obj.bounds.max);
+                        const penetrationVector = new THREE.Vector3().subVectors(nextPlayerSphere.center, closestPoint).normalize();
+                        const dot = deltaPosition.dot(penetrationVector);
+                        if (dot < 0) deltaPosition.sub(penetrationVector.multiplyScalar(dot));
+                    } else if (obj.type === 'sphere' && nextPlayerSphere.intersectsSphere(obj.bounds)) {
+                        const penetrationVector = new THREE.Vector3().subVectors(nextPlayerSphere.center, obj.bounds.center).normalize();
+                        const dot = deltaPosition.dot(penetrationVector);
+                        if (dot < 0) deltaPosition.sub(penetrationVector.multiplyScalar(dot));
                     }
                 }
             }
@@ -581,10 +785,8 @@
             updatePlayerShadow() {
                 this.playerShadow.position.x = this.camera.position.x;
                 this.playerShadow.position.z = this.camera.position.z;
-                
                 const heightFactor = Math.max(0, (this.camera.position.y - this.playerHeight) / 20);
                 this.playerShadow.material.opacity = Math.max(0.1, 0.4 - heightFactor * 0.3);
-                
                 const scale = 1 + heightFactor * 0.5;
                 this.playerShadow.scale.set(scale, scale, scale);
             }
@@ -595,25 +797,25 @@
                 this.camera.rotation.x = this.mouse.y;
             }
 
-            updateViewModel(elapsedTime) {
+            updateViewModel(elapsedTime, delta) {
+                const weapon = this.weapons[this.currentWeaponIndex];
+                const viewModel = weapon.viewModel;
+
                 // Recoil
-                this.viewModel.position.z = this.baseViewModelPos.z + this.recoilAmount;
-                this.recoilAmount *= 0.8;
+                viewModel.position.z = viewModel.basePosition.z + weapon.recoilAmount;
+                weapon.recoilAmount *= 0.8;
 
-                // Breathing animation
-                const swayFrequency = 2;
-                const swayAmplitude = 0.005;
-                this.viewModel.position.y = this.baseViewModelPos.y + Math.sin(elapsedTime * swayFrequency) * swayAmplitude;
+                // BUG FIX: Removed the idle sway animation that was causing vertical drift.
+                viewModel.position.y = viewModel.basePosition.y;
 
-                // Reloading animation (backflip)
-                if (this.reloadFlipAmount > 0) {
-                    const flipSpeed = (Math.PI * 2) / (this.reloadAnimTime / 1000); // Use reloadAnimTime for the visual speed
-                    const deltaFlip = flipSpeed * (this.clock.getDelta());
-                    this.viewModel.rotation.x += deltaFlip; // Rotate on the X-axis for a backflip
-                    this.reloadFlipAmount -= deltaFlip;
+                // Reloading animation
+                if (viewModel.reloadFlipAmount > 0) {
+                    const flipSpeed = (Math.PI * 2) / (weapon.reloadTime / 1000 * 0.5);
+                    const deltaFlip = flipSpeed * delta;
+                    viewModel.rotation.x += deltaFlip;
+                    viewModel.reloadFlipAmount -= deltaFlip;
                 } else {
-                    // Snap back to 0 to avoid floating point errors
-                    this.viewModel.rotation.x = 0; 
+                    viewModel.rotation.x = 0; 
                 }
             }
 
@@ -635,7 +837,7 @@
                 if (this.isPointerLocked) {
                     this.updatePlayer(delta);
                 }
-                this.updateViewModel(elapsedTime);
+                this.updateViewModel(elapsedTime, delta);
                 
                 const now = Date.now();
                 this.bulletDecals = this.bulletDecals.filter(decal => {
