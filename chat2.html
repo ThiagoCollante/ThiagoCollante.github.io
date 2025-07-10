@@ -53,7 +53,7 @@
                 </div>
                  <p id="error-message" class="text-red-400 text-center mt-4 hidden"></p>
             </div>
-             <div class="fixed bottom-4 left-4 text-xs text-gray-500 font-mono">v3.1 (WebRTC)</div>
+             <div class="fixed bottom-4 left-4 text-xs text-gray-500 font-mono">v3.2 (WebRTC)</div>
         </div>
 
         <!-- Chat View (Canvas) -->
@@ -71,7 +71,6 @@
     
     <script type="module">
         // --- Config ---
-        // Using a free public WebSocket for signaling. In a real app, you'd host your own.
         const SIGNALING_SERVER_URL = 'wss://www.piesocket.com/v3/1?api_key=VCXCEuvhGcBDP7XhiJJUDvR1e1D3eiVjgZ9VRiaV&notify_self=true';
 
         // --- DOM Elements ---
@@ -98,9 +97,9 @@
         let lobbyId = null;
         let players = {};
         let isHost = false;
-        let ws; // WebSocket connection
-        let peerConnections = {}; // { peerId: RTCPeerConnection }
-        let dataChannels = {}; // { peerId: RTCDataChannel }
+        let ws; 
+        let peerConnections = {}; 
+        let dataChannels = {};
         let animationFrameId;
         const keys = { w: false, a: false, s: false, d: false, ArrowUp: false, ArrowLeft: false, ArrowDown: false, ArrowRight: false };
         
@@ -129,8 +128,7 @@
             ws.onopen = () => console.log('Connected to signaling server.');
             ws.onmessage = (message) => {
                 const data = JSON.parse(message.data);
-                // The `channel` property is specific to piesocket and can be ignored for general signaling
-                if ((data.lobbyId !== lobbyId && data.type !== 'ping') || data.event === 'subscribe') return; 
+                if ((data.lobbyId !== lobbyId && data.type !== 'ping') || data.event === 'subscribe' || data.sender === userId) return; 
 
                 console.log('Received signal:', data);
                 switch (data.type) {
@@ -153,7 +151,7 @@
         
         function sendSignal(data) {
             if (ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ ...data, lobbyId }));
+                ws.send(JSON.stringify({ ...data, lobbyId, sender: userId }));
             }
         }
 
@@ -198,7 +196,7 @@
 
         function createPeerConnection(peerId) {
             const pc = new RTCPeerConnection({
-                iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] // Public STUN server
+                iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
             });
 
             pc.onicecandidate = (event) => {
@@ -208,14 +206,16 @@
             };
             
             pc.ondatachannel = (event) => {
-                const channel = event.channel;
                 console.log(`Data channel received from ${peerId}`);
-                setupDataChannel(peerId, channel);
+                setupDataChannel(peerId, event.channel);
             };
             
             pc.onconnectionstatechange = () => {
-                if (pc.connectionState === 'disconnected' || pc.connectionState === 'closed' || pc.connectionState === 'failed') {
+                if (['disconnected', 'closed', 'failed'].includes(pc.connectionState)) {
                     console.log(`Peer ${peerId} disconnected.`);
+                    if(isHost) {
+                        broadcastToPeers({ type: 'player-left', id: peerId });
+                    }
                     delete players[peerId];
                     delete peerConnections[peerId];
                     delete dataChannels[peerId];
@@ -224,8 +224,6 @@
 
             peerConnections[peerId] = pc;
             
-            // If we are not the host, we wait for the host's data channel.
-            // If we are the host, we create it to connect to the new peer.
             if (isHost) {
                 const channel = pc.createDataChannel('chat', { reliable: true });
                 setupDataChannel(peerId, channel);
@@ -238,8 +236,9 @@
             dataChannels[peerId] = channel;
             channel.onopen = () => {
                 console.log(`Data channel with ${peerId} is open.`);
-                // Announce our presence to the new peer and request their info
-                channel.send(JSON.stringify({ type: 'sync-request', from: userId, player: players[userId] }));
+                if (!isHost) {
+                    channel.send(JSON.stringify({ type: 'player-hello', player: players[userId] }));
+                }
             };
             channel.onmessage = (event) => {
                 const data = JSON.parse(event.data);
@@ -252,29 +251,53 @@
         }
         
         function handleDataMessage(data, fromPeerId) {
-            switch(data.type) {
-                case 'update':
-                    players[data.player.id] = data.player;
-                    break;
-                case 'chat':
-                    if (players[data.id]) {
-                        players[data.id].message = data.message;
-                        players[data.id].messageTimestamp = Date.now();
-                    }
-                    break;
-                case 'leave':
-                    delete players[data.id];
-                    break;
-                case 'sync-request': // A new peer wants our data
-                    players[data.player.id] = data.player;
-                    // Send our own player data back to the requester
-                    if (dataChannels[fromPeerId] && dataChannels[fromPeerId].readyState === 'open') {
-                        dataChannels[fromPeerId].send(JSON.stringify({ type: 'sync-response', player: players[userId] }));
-                    }
-                    break;
-                case 'sync-response': // We received data back from a peer
-                    players[data.player.id] = data.player;
-                    break;
+            if (isHost) {
+                // Host relays messages to all other peers
+                broadcastToPeers(data, fromPeerId);
+                
+                // Host updates its own state
+                switch(data.type) {
+                    case 'player-hello':
+                        players[data.player.id] = data.player;
+                        // Send the full lobby state to the new player
+                        if (dataChannels[fromPeerId]?.readyState === 'open') {
+                             dataChannels[fromPeerId].send(JSON.stringify({ type: 'welcome-state', players: players }));
+                        }
+                        // Inform others about the new player
+                        broadcastToPeers({ type: 'player-joined', player: data.player }, fromPeerId);
+                        break;
+                    case 'update':
+                        players[data.player.id] = data.player;
+                        break;
+                    case 'chat':
+                         if (players[data.id]) {
+                            players[data.id].message = data.message;
+                            players[data.id].messageTimestamp = Date.now();
+                        }
+                        break;
+                }
+            } else {
+                // Guests just process messages from the host
+                switch(data.type) {
+                    case 'welcome-state':
+                        players = data.players;
+                        break;
+                    case 'player-joined':
+                        players[data.player.id] = data.player;
+                        break;
+                    case 'player-left':
+                        delete players[data.id];
+                        break;
+                    case 'update':
+                        players[data.player.id] = data.player;
+                        break;
+                    case 'chat':
+                        if (players[data.id]) {
+                            players[data.id].message = data.message;
+                            players[data.id].messageTimestamp = Date.now();
+                        }
+                        break;
+                }
             }
         }
 
@@ -337,13 +360,19 @@
             p.x = Math.max(20, Math.min(canvas.width - 20, p.x));
             p.y = Math.max(20, Math.min(canvas.height - 20, p.y));
             if (moved) {
-                broadcastToPeers({ type: 'update', player: p });
+                // Everyone sends their updates
+                const data = { type: 'update', player: p };
+                if (isHost) {
+                    broadcastToPeers(data);
+                } else if (dataChannels[Object.keys(dataChannels)[0]]) { // Guest sends to host
+                    dataChannels[Object.keys(dataChannels)[0]].send(JSON.stringify(data));
+                }
             }
         }
 
-        function broadcastToPeers(data) {
+        function broadcastToPeers(data, excludePeerId = null) {
             for (const id in dataChannels) {
-                if (dataChannels[id] && dataChannels[id].readyState === 'open') {
+                if (id !== excludePeerId && dataChannels[id] && dataChannels[id].readyState === 'open') {
                     dataChannels[id].send(JSON.stringify(data));
                 }
             }
@@ -365,7 +394,13 @@
         }
         
         function leaveLobby() {
-            broadcastToPeers({ type: 'leave', id: userId });
+            const data = { type: 'leave', id: userId };
+            if (isHost) {
+                broadcastToPeers(data);
+            } else if (dataChannels[Object.keys(dataChannels)[0]]) {
+                 dataChannels[Object.keys(dataChannels)[0]].send(JSON.stringify(data));
+            }
+
             cancelAnimationFrame(animationFrameId);
             for (const id in peerConnections) {
                 peerConnections[id].close();
@@ -385,7 +420,12 @@
             messageInput.value = '';
             players[userId].message = text;
             players[userId].messageTimestamp = Date.now();
-            broadcastToPeers({ type: 'chat', id: userId, message: text });
+            const data = { type: 'chat', id: userId, message: text };
+            if (isHost) {
+                broadcastToPeers(data);
+            } else if (dataChannels[Object.keys(dataChannels)[0]]) {
+                dataChannels[Object.keys(dataChannels)[0]].send(JSON.stringify(data));
+            }
         }
 
         function switchToChatView() {
