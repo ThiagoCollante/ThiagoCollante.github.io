@@ -17,11 +17,24 @@
 </head>
 <body class="bg-gray-900 text-white flex items-center justify-center h-screen">
 
-    <div id="app" class="w-full max-w-4xl h-full md:h-auto md:max-h-[90vh] bg-gray-800 rounded-lg shadow-xl flex flex-col p-4 sm:p-6">
+    <!-- Username Modal -->
+    <div id="username-modal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+        <div class="bg-gray-800 rounded-lg p-8 max-w-sm w-full text-center shadow-xl">
+            <h2 class="text-2xl font-bold mb-4">Welcome!</h2>
+            <p class="text-gray-400 mb-6">Please enter a username to continue.</p>
+            <input type="text" id="username-input" placeholder="Your Name" class="w-full bg-gray-700 text-white border border-gray-600 rounded-lg px-4 py-3 mb-4 focus:outline-none focus:ring-2 focus:ring-indigo-500" maxlength="20">
+            <button id="set-username-btn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg transition">Start Chatting</button>
+            <p id="username-error" class="text-red-400 text-center mt-4 hidden"></p>
+        </div>
+    </div>
+
+    <!-- Main App Container -->
+    <div id="app" class="hidden w-full max-w-4xl h-full md:h-auto md:max-h-[90vh] bg-gray-800 rounded-lg shadow-xl flex-col p-4 sm:p-6">
 
         <!-- Lobby Selection / Creation -->
         <div id="lobby-view" class="flex flex-col items-center justify-center h-full">
-            <h1 class="text-4xl font-bold mb-8 text-center">Chat Lobbies</h1>
+            <h1 class="text-4xl font-bold mb-2 text-center">Chat Lobbies</h1>
+            <p class="text-lg text-gray-400 mb-8">Welcome, <span id="welcome-username" class="font-bold text-indigo-400"></span></p>
             <div class="w-full max-w-sm">
                 <button id="create-lobby-btn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg text-lg transition duration-300 ease-in-out transform hover:scale-105">
                     Create New Lobby
@@ -47,7 +60,6 @@
                 <div>
                     <h2 class="text-2xl font-bold">Chat Room</h2>
                     <p class="text-sm text-gray-400">Room Code: <span id="room-code-display" class="font-mono cursor-pointer" title="Click to copy"></span></p>
-                    <p class="text-sm text-gray-400">Your User ID: <span id="user-id-display" class="font-mono"></span></p>
                 </div>
                 <button id="leave-lobby-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition">
                     Leave
@@ -83,28 +95,14 @@
         // Firebase Imports
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, getDoc, setDoc, addDoc, collection, query, onSnapshot, serverTimestamp, where, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, getDoc, setDoc, addDoc, collection, query, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- Firebase Configuration ---
-        // IMPORTANT: To run this code outside the original environment (e.g., on GitHub Pages),
-        // you MUST create your own Firebase project and paste your configuration here.
-        // 1. Go to https://firebase.google.com/ and create a new project.
-        // 2. In your project, create a new "Web App".
-        // 3. Copy the firebaseConfig object and paste it below, replacing the empty {}.
-        // 4. In your Firebase project, go to Firestore Database, create a database in test mode.
         let userFirebaseConfig = {
-             apiKey: "AIzaSyAflXtpfodNrcyLzYBGoXVdTlaUYcxSNn0",
-             authDomain: "chat-app-7c620.firebaseapp.com",
-             projectId: "chat-app-7c620",
-             storageBucket: "chat-app-7c620.firebasestorage.app",
-             messagingSenderId: "300905208973",
-             appId: "1:300905208973:web:ac1f41de55a1bb235556c4"
+            // PASTE YOUR FIREBASE CONFIG OBJECT HERE
         };
-
-        // This logic checks if we are in the original environment or using the user's config.
         const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : userFirebaseConfig;
         const appId = typeof __app_id !== 'undefined' ? __app_id : firebaseConfig.projectId || 'default-chat-app';
-
 
         // --- Initialize Firebase ---
         const app = initializeApp(firebaseConfig);
@@ -112,6 +110,13 @@
         const db = getFirestore(app);
 
         // --- DOM Elements ---
+        const appContainer = document.getElementById('app');
+        const usernameModal = document.getElementById('username-modal');
+        const usernameInput = document.getElementById('username-input');
+        const setUsernameBtn = document.getElementById('set-username-btn');
+        const usernameError = document.getElementById('username-error');
+        const welcomeUsername = document.getElementById('welcome-username');
+
         const lobbyView = document.getElementById('lobby-view');
         const chatView = document.getElementById('chat-view');
         const createLobbyBtn = document.getElementById('create-lobby-btn');
@@ -122,10 +127,8 @@
         const messageInput = document.getElementById('message-input');
         const chatMessages = document.getElementById('chat-messages');
         const roomCodeDisplay = document.getElementById('room-code-display');
-        const userIdDisplay = document.getElementById('user-id-display');
         const errorMessage = document.getElementById('error-message');
         
-        // Modal elements
         const roomCodeModal = document.getElementById('room-code-modal');
         const modalRoomCode = document.getElementById('modal-room-code');
         const copyCodeBtn = document.getElementById('copy-code-btn');
@@ -133,43 +136,54 @@
 
         // --- App State ---
         let currentUserId = null;
+        let currentUsername = null;
         let currentLobbyId = null;
         let unsubscribeMessages = null;
 
-        // --- Authentication ---
-        onAuthStateChanged(auth, async (user) => {
-            if (user) {
-                currentUserId = user.uid;
-                userIdDisplay.textContent = currentUserId;
-                console.log("User authenticated:", currentUserId);
+        // --- Initialization ---
+        function initialize() {
+            // Check for username in session storage
+            currentUsername = sessionStorage.getItem('chat-username');
+            if (currentUsername) {
+                showApp();
             } else {
-                try {
-                    // Use custom token if provided (for the original environment)
-                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                         await signInWithCustomToken(auth, __initial_auth_token);
-                    } else { // Otherwise, sign in anonymously (for standalone hosting)
-                         await signInAnonymously(auth);
-                    }
-                } catch (error) {
-                    console.error("Authentication failed:", error);
-                    errorMessage.textContent = "Authentication failed. Check Firebase config and rules.";
-                    errorMessage.classList.remove('hidden');
-                }
+                usernameModal.classList.remove('hidden');
+                usernameInput.focus();
             }
-        });
+
+            // Authenticate user
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    currentUserId = user.uid;
+                    console.log("User authenticated:", currentUserId);
+                } else {
+                    try {
+                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                            await signInWithCustomToken(auth, __initial_auth_token);
+                        } else {
+                            await signInAnonymously(auth);
+                        }
+                    } catch (error) {
+                        console.error("Authentication failed:", error);
+                        showError("Authentication failed. Check Firebase config and rules.");
+                    }
+                }
+            });
+        }
+
+        function showApp() {
+            welcomeUsername.textContent = currentUsername;
+            usernameModal.classList.add('hidden');
+            appContainer.classList.remove('hidden');
+            appContainer.classList.add('flex');
+        }
 
         // --- Core Functions ---
 
-        /**
-         * Generates a random 6-character room code.
-         */
         function generateRoomCode() {
             return Math.random().toString(36).substring(2, 8).toUpperCase();
         }
 
-        /**
-         * Creates a new chat lobby in Firestore.
-         */
         async function createLobby() {
             if (!currentUserId) {
                 showError("You are not authenticated. Please wait or refresh.");
@@ -189,7 +203,6 @@
                 currentLobbyId = roomCode;
                 modalRoomCode.textContent = roomCode;
                 roomCodeModal.classList.remove('hidden');
-
             } catch (error) {
                 console.error("Error creating lobby:", error);
                 showError("Could not create lobby. Is your Firebase config correct?");
@@ -199,9 +212,6 @@
             }
         }
         
-        /**
-         * Joins an existing chat lobby.
-         */
         async function joinLobby() {
             const roomCode = roomCodeInput.value.trim().toUpperCase();
             if (!roomCode) {
@@ -235,25 +245,19 @@
             }
         }
 
-        /**
-         * Leaves the current lobby and returns to the lobby view.
-         */
         function leaveLobby() {
             if (unsubscribeMessages) {
                 unsubscribeMessages();
                 unsubscribeMessages = null;
             }
             currentLobbyId = null;
-            chatMessages.innerHTML = ''; // Clear messages
+            chatMessages.innerHTML = '';
             switchToLobbyView();
         }
 
-        /**
-         * Sends a chat message to the current lobby.
-         */
         async function sendMessage() {
             const messageText = messageInput.value.trim();
-            if (!messageText || !currentLobbyId || !currentUserId) return;
+            if (!messageText || !currentLobbyId || !currentUserId || !currentUsername) return;
             
             sendMessageBtn.disabled = true;
             messageInput.disabled = true;
@@ -263,6 +267,7 @@
                 await addDoc(messagesColRef, {
                     text: messageText,
                     senderId: currentUserId,
+                    username: currentUsername, // Add username to the message
                     timestamp: serverTimestamp()
                 });
                 messageInput.value = '';
@@ -276,11 +281,8 @@
             }
         }
 
-        /**
-         * Listens for new messages in the current lobby and displays them.
-         */
         function listenForMessages() {
-            if (unsubscribeMessages) unsubscribeMessages(); // Unsubscribe from previous listener
+            if (unsubscribeMessages) unsubscribeMessages();
 
             const messagesQuery = query(collection(db, `artifacts/${appId}/public/data/lobbies/${currentLobbyId}/messages`));
             
@@ -289,9 +291,7 @@
                 snapshot.forEach(doc => {
                     allMessages.push({ id: doc.id, ...doc.data() });
                 });
-                // Simple sort by timestamp in memory. For large chats, cursor-based pagination is better.
                 allMessages.sort((a, b) => (a.timestamp?.toMillis() || 0) - (b.timestamp?.toMillis() || 0));
-                
                 displayMessages(allMessages);
             }, (error) => {
                 console.error("Error listening for messages:", error);
@@ -299,27 +299,24 @@
             });
         }
         
-        /**
-         * Displays messages in the chat window.
-         */
         function displayMessages(messages) {
-            chatMessages.innerHTML = ''; // Clear existing messages
+            chatMessages.innerHTML = '';
             messages.forEach(msg => {
                 const isCurrentUser = msg.senderId === currentUserId;
                 const messageElement = document.createElement('div');
                 messageElement.classList.add('flex', 'flex-col', isCurrentUser ? 'items-end' : 'items-start');
                 
-                const shortSenderId = msg.senderId.substring(0, 8);
+                // Use the stored username, fallback for older messages
+                const senderName = msg.username || `User...${msg.senderId.substring(0,4)}`;
 
                 messageElement.innerHTML = `
-                    <div class="text-xs text-gray-400 mb-1 ${isCurrentUser ? 'mr-2' : 'ml-2'}">${isCurrentUser ? 'You' : `User...${shortSenderId}`}</div>
+                    <div class="text-xs text-gray-400 mb-1 ${isCurrentUser ? 'mr-2' : 'ml-2'}">${isCurrentUser ? 'You' : senderName}</div>
                     <div class="max-w-xs md:max-w-md lg:max-w-lg px-4 py-3 rounded-2xl ${isCurrentUser ? 'bg-indigo-600 rounded-br-none' : 'bg-gray-700 rounded-bl-none'}">
                         <p class="text-white">${msg.text}</p>
                     </div>
                 `;
                 chatMessages.appendChild(messageElement);
             });
-            // Scroll to the bottom
             chatMessages.scrollTop = chatMessages.scrollHeight;
         }
 
@@ -327,6 +324,7 @@
 
         function switchToChatView() {
             roomCodeDisplay.textContent = currentLobbyId;
+            lobbyView.classList.remove('flex');
             lobbyView.classList.add('hidden');
             chatView.classList.remove('hidden');
             chatView.classList.add('flex');
@@ -338,23 +336,20 @@
             chatView.classList.add('hidden');
             chatView.classList.remove('flex');
             lobbyView.classList.remove('hidden');
+            lobbyView.classList.add('flex');
             roomCodeInput.value = '';
         }
         
-        function showError(message) {
-            errorMessage.textContent = message;
-            errorMessage.classList.remove('hidden');
+        function showError(message, onUsernameModal = false) {
+            const errorElement = onUsernameModal ? usernameError : errorMessage;
+            errorElement.textContent = message;
+            errorElement.classList.remove('hidden');
             setTimeout(() => {
-                errorMessage.classList.add('hidden');
+                errorElement.classList.add('hidden');
             }, 3000);
         }
         
-        /**
-         * Copies the room code from the modal to the clipboard using a fallback method.
-         */
-        function copyRoomCodeToClipboard() {
-            const code = modalRoomCode.textContent;
-            // Use fallback method which is more reliable in iFrames
+        function copyRoomCodeToClipboard(button, code) {
             const textArea = document.createElement("textarea");
             textArea.value = code;
             document.body.appendChild(textArea);
@@ -362,18 +357,30 @@
             textArea.select();
             try {
                 document.execCommand('copy');
-                copyCodeBtn.textContent = 'Copied!';
-                setTimeout(() => copyCodeBtn.textContent = 'Copy Code', 2000);
+                const originalText = button.textContent;
+                button.textContent = 'Copied!';
+                setTimeout(() => button.textContent = originalText, 2000);
             } catch (err) {
                 console.error('Fallback: Oops, unable to copy', err);
-                copyCodeBtn.textContent = 'Failed to copy';
-                 setTimeout(() => copyCodeBtn.textContent = 'Copy Code', 2000);
             }
             document.body.removeChild(textArea);
         }
 
-
         // --- Event Listeners ---
+        setUsernameBtn.addEventListener('click', () => {
+            const username = usernameInput.value.trim();
+            if (username) {
+                currentUsername = username;
+                sessionStorage.setItem('chat-username', username);
+                showApp();
+            } else {
+                showError("Username cannot be empty.", true);
+            }
+        });
+        usernameInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') setUsernameBtn.click();
+        });
+
         createLobbyBtn.addEventListener('click', createLobby);
         joinLobbyBtn.addEventListener('click', joinLobby);
         leaveLobbyBtn.addEventListener('click', leaveLobby);
@@ -385,20 +392,15 @@
             }
         });
         
-        // Modal listeners
-        copyCodeBtn.addEventListener('click', copyRoomCodeToClipboard);
+        copyCodeBtn.addEventListener('click', () => copyRoomCodeToClipboard(copyCodeBtn, modalRoomCode.textContent));
         startChattingBtn.addEventListener('click', () => {
              roomCodeModal.classList.add('hidden');
              switchToChatView();
         });
         
-        /**
-         * Copies the room code from the header to the clipboard.
-         */
         roomCodeDisplay.addEventListener('click', () => {
             const code = roomCodeDisplay.textContent;
             const originalTitle = roomCodeDisplay.title;
-
             const textArea = document.createElement("textarea");
             textArea.value = code;
             document.body.appendChild(textArea);
@@ -406,16 +408,16 @@
             textArea.select();
             try {
                 document.execCommand('copy');
-                // Provide visual feedback by changing the title attribute (tooltip)
                 roomCodeDisplay.title = 'Copied!';
                 setTimeout(() => { roomCodeDisplay.title = originalTitle; }, 2000);
             } catch (err) {
                 console.error('Fallback: Oops, unable to copy', err);
-                roomCodeDisplay.title = 'Failed to copy';
-                setTimeout(() => { roomCodeDisplay.title = originalTitle; }, 2000);
             }
             document.body.removeChild(textArea);
         });
+
+        // --- Start the App ---
+        initialize();
 
     </script>
 </body>
