@@ -33,7 +33,7 @@
     </div>
 
     <!-- Main App Container -->
-    <div id="app" class="hidden w-full max-w-4xl h-full md:h-auto md:max-h-[90vh] bg-gray-800 rounded-lg shadow-xl flex-col p-4 sm:p-6">
+    <div id="app" class="hidden w-full max-w-4xl h-full md:h-auto md:max-h-[90vh] bg-gray-800 rounded-lg shadow-xl flex flex-col p-4 sm:p-6">
 
         <!-- Lobby Selection / Creation -->
         <div id="lobby-view" class="flex flex-col items-center justify-center h-full">
@@ -59,8 +59,8 @@
         </div>
 
         <!-- Chat View -->
-        <div id="chat-view" class="hidden flex-col h-full">
-            <div class="flex items-center justify-between mb-4 border-b border-gray-700 pb-4">
+        <div id="chat-view" class="hidden flex-col flex-grow">
+            <div class="flex items-center justify-between mb-4 border-b border-gray-700 pb-4 flex-shrink-0">
                 <div>
                     <h2 class="text-2xl font-bold">Chat Room</h2>
                     <p class="text-sm text-gray-400">Room Code: <span id="room-code-display" class="font-mono cursor-pointer" title="Click to copy"></span></p>
@@ -72,7 +72,7 @@
             <div id="chat-messages" class="flex-grow min-h-0 overflow-y-auto mb-4 p-4 bg-gray-900 rounded-lg space-y-4">
                 <!-- Messages will be appended here -->
             </div>
-            <div class="flex gap-4 items-start">
+            <div class="flex gap-4 items-start flex-shrink-0">
                 <textarea id="message-input" placeholder="Type your message..." class="flex-grow bg-gray-700 text-white border border-gray-600 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 h-12 max-h-32" rows="1"></textarea>
                 <button id="send-message-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg transition self-center">
                     Send
@@ -96,7 +96,7 @@
 
     <!-- Version Number -->
     <div class="fixed bottom-4 left-4 text-xs text-gray-500 font-mono">
-        v1.4
+        v1.5
     </div>
 
 
@@ -180,8 +180,8 @@
             try {
                 const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : userFirebaseConfig;
                 // Check if config is empty
-                if (Object.keys(firebaseConfig).length === 0 && typeof __firebase_config === 'undefined') {
-                    throw new Error("Firebase config is empty.");
+                if (Object.keys(firebaseConfig).length < 5 && typeof __firebase_config === 'undefined') {
+                    throw new Error("Firebase config is incomplete.");
                 }
                 app = initializeApp(firebaseConfig);
                 auth = getAuth(app);
