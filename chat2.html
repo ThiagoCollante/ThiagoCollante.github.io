@@ -54,7 +54,7 @@
                 </div>
                  <p id="error-message" class="text-red-400 text-center mt-4 hidden"></p>
             </div>
-             <div class="fixed bottom-4 left-4 text-xs text-gray-500 font-mono">v2.6</div>
+             <div class="fixed bottom-4 left-4 text-xs text-gray-500 font-mono">v2.5</div>
         </div>
 
         <!-- Chat View (Canvas) -->
@@ -239,48 +239,31 @@
                 ctx.textBaseline = 'alphabetic';
                 ctx.fillText(player.username, player.x, player.y + 35);
                 
-                const lastMessage = player.messages && player.messages.length > 0 ? player.messages[player.messages.length - 1] : null;
-                if (lastMessage && Date.now() - lastMessage.timestamp < 5000) {
-                    drawChatBubble(ctx, player.x, player.y - 30, player.messages);
+                if (player.message && Date.now() - player.messageTimestamp < 5000) {
+                    drawChatBubble(ctx, player.x, player.y - 30, player.message);
                 }
             }
         }
         
-        function drawChatBubble(ctx, x, y, messages) {
+        function drawChatBubble(ctx, x, y, text) {
             const padding = 10;
-            const lineHeight = 20;
-            const bubbleRadius = 10;
             ctx.font = '14px Inter';
-
-            let maxWidth = 0;
-            messages.forEach(msg => {
-                const width = ctx.measureText(msg.text).width;
-                if (width > maxWidth) {
-                    maxWidth = width;
-                }
-            });
-
-            const bubbleWidth = maxWidth + (padding * 2);
-            const bubbleHeight = (messages.length * lineHeight) + (padding * 2);
-            const startY = y - bubbleHeight;
-
-            // Bubble rectangle
+            const textWidth = ctx.measureText(text).width;
+            const bubbleWidth = textWidth + (padding * 2);
+            const bubbleHeight = 20 + (padding * 2);
+            
             ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
             ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
             ctx.lineWidth = 1;
             ctx.beginPath();
-            ctx.roundRect(x - bubbleWidth / 2, startY, bubbleWidth, bubbleHeight, bubbleRadius);
+            ctx.roundRect(x - bubbleWidth / 2, y - bubbleHeight, bubbleWidth, bubbleHeight, 10);
             ctx.fill();
             ctx.stroke();
 
-            // Draw messages
             ctx.fillStyle = 'black';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            messages.forEach((msg, index) => {
-                const messageY = startY + padding + (index * lineHeight) + (lineHeight / 2);
-                ctx.fillText(msg.text, x, messageY);
-            });
+            ctx.fillText(text, x, y - bubbleHeight / 2 + 5);
         }
 
         function updatePlayerPositions() {
@@ -362,7 +345,8 @@
                         targetX: startX,
                         targetY: startY,
                         color: `hsl(${Math.random() * 360}, 70%, 60%)`,
-                        messages: [],
+                        message: '',
+                        messageTimestamp: 0
                     };
                     players[currentUserId] = newPlayer;
 
@@ -463,18 +447,13 @@
             if (text.startsWith('/')) {
                 handleCommand(text);
             } else {
-                const self = players[currentUserId];
-                if (!self) return;
-
-                const newMessage = { text: text, timestamp: Date.now() };
-                
-                // Keep the message list to a max of 4
-                const updatedMessages = [...(self.messages || []), newMessage].slice(-4);
-
-                self.messages = updatedMessages; // Optimistic local update
-
+                const now = Date.now();
+                if (players[currentUserId]) {
+                    players[currentUserId].message = text;
+                    players[currentUserId].messageTimestamp = now;
+                }
                 const playerRef = doc(db, `artifacts/${app.options.projectId}/public/data/lobbies/${currentLobbyId}/players`, currentUserId);
-                await updateDoc(playerRef, { messages: updatedMessages });
+                await updateDoc(playerRef, { message: text, messageTimestamp: now });
             }
         }
 
