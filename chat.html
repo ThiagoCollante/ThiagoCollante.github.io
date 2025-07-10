@@ -18,7 +18,7 @@
 <body class="bg-gray-900 text-white flex items-center justify-center h-screen">
 
     <!-- Username Modal -->
-    <div id="username-modal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+    <div id="username-modal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
         <div class="bg-gray-800 rounded-lg p-8 max-w-sm w-full text-center shadow-xl">
             <h2 class="text-2xl font-bold mb-4">Welcome!</h2>
             <p class="text-gray-400 mb-6">Please enter a username to continue.</p>
@@ -140,18 +140,34 @@
         let currentLobbyId = null;
         let unsubscribeMessages = null;
 
-        // --- Initialization ---
-        function initialize() {
-            // Check for username in session storage
+        // --- App Initialization Flow ---
+
+        /**
+         * The main entry point for the application.
+         * Checks for a username in session storage and decides whether to show the app or the username modal.
+         */
+        function main() {
             currentUsername = sessionStorage.getItem('chat-username');
             if (currentUsername) {
-                showApp();
+                startApp();
             } else {
                 usernameModal.classList.remove('hidden');
                 usernameInput.focus();
             }
+        }
 
-            // Authenticate user
+        /**
+         * Handles the final setup: shows the main app UI and authenticates the user with Firebase.
+         * This is called either on page load if a username exists, or after a new username is entered.
+         */
+        function startApp() {
+            // 1. Show the main application UI
+            welcomeUsername.textContent = currentUsername;
+            usernameModal.classList.add('hidden');
+            appContainer.classList.remove('hidden');
+            appContainer.classList.add('flex');
+
+            // 2. Authenticate the user with Firebase
             onAuthStateChanged(auth, async (user) => {
                 if (user) {
                     currentUserId = user.uid;
@@ -166,16 +182,12 @@
                     } catch (error) {
                         console.error("Authentication failed:", error);
                         showError("Authentication failed. Check Firebase config and rules.");
+                        // Disable core functionality if auth fails
+                        createLobbyBtn.disabled = true;
+                        joinLobbyBtn.disabled = true;
                     }
                 }
             });
-        }
-
-        function showApp() {
-            welcomeUsername.textContent = currentUsername;
-            usernameModal.classList.add('hidden');
-            appContainer.classList.remove('hidden');
-            appContainer.classList.add('flex');
         }
 
         // --- Core Functions ---
@@ -306,7 +318,6 @@
                 const messageElement = document.createElement('div');
                 messageElement.classList.add('flex', 'flex-col', isCurrentUser ? 'items-end' : 'items-start');
                 
-                // Use the stored username, fallback for older messages
                 const senderName = msg.username || `User...${msg.senderId.substring(0,4)}`;
 
                 messageElement.innerHTML = `
@@ -372,7 +383,7 @@
             if (username) {
                 currentUsername = username;
                 sessionStorage.setItem('chat-username', username);
-                showApp();
+                startApp();
             } else {
                 showError("Username cannot be empty.", true);
             }
@@ -417,7 +428,7 @@
         });
 
         // --- Start the App ---
-        initialize();
+        main();
 
     </script>
 </body>
