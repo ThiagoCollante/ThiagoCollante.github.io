@@ -54,7 +54,7 @@
                 </div>
                  <p id="error-message" class="text-red-400 text-center mt-4 hidden"></p>
             </div>
-             <div class="fixed bottom-4 left-4 text-xs text-gray-500 font-mono">v2.1</div>
+             <div class="fixed bottom-4 left-4 text-xs text-gray-500 font-mono">v2.2</div>
         </div>
 
         <!-- Chat View (Canvas) -->
@@ -311,16 +311,22 @@
                     const playerRef = doc(db, `artifacts/${app.options.projectId}/public/data/lobbies/${currentLobbyId}/players`, currentUserId);
                     const startX = Math.random() * 500 + 50;
                     const startY = Math.random() * 300 + 50;
-                    await setDoc(playerRef, {
+                    
+                    // **THE FIX**: Create the player object and add it to the local state *before* writing to the database.
+                    // This prevents a race condition where the game loop starts before the player object is ready.
+                    const newPlayer = {
                         username: currentUsername,
                         x: startX,
                         y: startY,
-                        targetX: startX, // Initialize target positions
+                        targetX: startX,
                         targetY: startY,
                         color: `hsl(${Math.random() * 360}, 70%, 60%)`,
                         message: '',
                         messageTimestamp: 0
-                    });
+                    };
+                    players[currentUserId] = newPlayer; // Add to local state immediately
+
+                    await setDoc(playerRef, newPlayer); // Write the object to Firestore
 
                     switchToChatView();
                 } else {
@@ -352,11 +358,19 @@
         
         async function sendMessage() {
             const text = messageInput.value.trim();
-            if (!text) return;
+            if (!text || !currentLobbyId || !currentUserId) return;
             
+            const now = Date.now();
             messageInput.value = '';
+
+            // Optimistic local update for instant feedback
+            if (players[currentUserId]) {
+                players[currentUserId].message = text;
+                players[currentUserId].messageTimestamp = now;
+            }
+
             const playerRef = doc(db, `artifacts/${app.options.projectId}/public/data/lobbies/${currentLobbyId}/players`, currentUserId);
-            await updateDoc(playerRef, { message: text, messageTimestamp: Date.now() });
+            await updateDoc(playerRef, { message: text, messageTimestamp: now });
         }
 
         function listenForPlayers() {
@@ -369,11 +383,14 @@
                     const docId = change.doc.id;
 
                     if (change.type === "added") {
-                        players[docId] = {
-                            ...docData,
-                            targetX: docData.x, // Set initial target
-                            targetY: docData.y
-                        };
+                        // Only add if it doesn't already exist (to avoid overwriting the local player)
+                        if (!players[docId]) {
+                             players[docId] = {
+                                ...docData,
+                                targetX: docData.x,
+                                targetY: docData.y
+                            };
+                        }
                     }
                     if (change.type === "modified") {
                         if (players[docId]) {
