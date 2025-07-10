@@ -54,7 +54,7 @@
                 </div>
                  <p id="error-message" class="text-red-400 text-center mt-4 hidden"></p>
             </div>
-             <div class="fixed bottom-4 left-4 text-xs text-gray-500 font-mono">v2.4</div>
+             <div class="fixed bottom-4 left-4 text-xs text-gray-500 font-mono">v2.5</div>
         </div>
 
         <!-- Chat View (Canvas) -->
@@ -64,7 +64,7 @@
                  <button id="leave-lobby-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition">
                     Leave
                 </button>
-                <input id="message-input" placeholder="Type /user 'name' or /avatar 'txt'" class="flex-grow bg-gray-700 text-white border border-gray-600 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <input id="message-input" placeholder="Try /shape 'triangle' or /colour '#ff00ff'" class="flex-grow bg-gray-700 text-white border border-gray-600 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500">
                 <div class="text-sm text-gray-400">Room: <span id="room-code-display" class="font-mono cursor-pointer" title="Click to copy"></span></div>
             </div>
         </div>
@@ -114,7 +114,7 @@
         let currentUserId = null;
         let currentUsername = null;
         let currentLobbyId = null;
-        let players = {}; // Store all player data { id: { x, y, targetX, targetY, username, avatar, color, message, messageTimestamp } }
+        let players = {}; 
         let unsubPlayers = null;
         let animationFrameId;
         let lastUpdateTime = 0;
@@ -201,16 +201,31 @@
             for (const id in players) {
                 const player = players[id];
                 
-                // Draw player circle
-                ctx.beginPath();
-                ctx.arc(player.x, player.y, 20, 0, Math.PI * 2);
+                // Draw player shape
                 ctx.fillStyle = player.color;
+                ctx.beginPath();
+                switch(player.shape) {
+                    case 'square':
+                        ctx.rect(player.x - 20, player.y - 20, 40, 40);
+                        break;
+                    case 'triangle':
+                        const sideLength = 40;
+                        const height = sideLength * (Math.sqrt(3) / 2);
+                        ctx.moveTo(player.x, player.y - height / 2);
+                        ctx.lineTo(player.x - sideLength / 2, player.y + height / 2);
+                        ctx.lineTo(player.x + sideLength / 2, player.y + height / 2);
+                        ctx.closePath();
+                        break;
+                    case 'circle':
+                    default:
+                        ctx.arc(player.x, player.y, 20, 0, Math.PI * 2);
+                        break;
+                }
                 ctx.fill();
-                ctx.closePath();
 
                 // Draw avatar text if it exists
                 if (player.avatar) {
-                    ctx.fillStyle = 'white';
+                    ctx.fillStyle = player.avatarColor || '#FFFFFF';
                     ctx.font = 'bold 16px Inter';
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
@@ -322,7 +337,9 @@
                     
                     const newPlayer = {
                         username: currentUsername,
-                        avatar: '', // Initialize avatar
+                        avatar: '',
+                        avatarColor: '#FFFFFF',
+                        shape: 'circle',
                         x: startX,
                         y: startY,
                         targetX: startX,
@@ -364,46 +381,60 @@
         }
         
         async function handleCommand(commandText) {
-            const commandRegex = /^\/(\w+)\s"([^"]+)"$/;
-            const match = commandText.match(commandRegex);
+            const args = commandText.match(/"[^"]+"|\S+/g) || [];
+            const command = (args.shift() || '').toLowerCase();
+            const values = args.map(arg => arg.replace(/"/g, ''));
 
-            if (!match) {
-                 const basicMatch = /^\/(\w+)\s+(.*)$/;
-                const basic = commandText.match(basicMatch);
-                if (basic && basic[2] && !basic[2].startsWith('"')) {
-                    showError(`Invalid format. Did you mean: /${basic[1]} "${basic[2]}"?`);
-                } else {
-                    showError("Invalid command format. Use /command \"value\"");
-                }
-                return;
-            }
+            if (!command) return;
 
-            const command = match[1].toLowerCase();
-            const value = match[2];
             const playerRef = doc(db, `artifacts/${app.options.projectId}/public/data/lobbies/${currentLobbyId}/players`, currentUserId);
+            const updates = {};
 
             switch (command) {
-                case 'user':
-                    if (value.length > 20) {
-                        showError("Username must be 20 characters or less.");
-                        return;
-                    }
-                    currentUsername = value;
-                    sessionStorage.setItem('chat-username', value);
-                    welcomeUsername.textContent = value;
-                    if(players[currentUserId]) players[currentUserId].username = value;
-                    await updateDoc(playerRef, { username: value });
+                case '/user':
+                    if (!values[0]) return showError("Usage: /user \"new name\"");
+                    if (values[0].length > 20) return showError("Username must be 20 characters or less.");
+                    
+                    currentUsername = values[0];
+                    sessionStorage.setItem('chat-username', values[0]);
+                    welcomeUsername.textContent = values[0];
+                    updates.username = values[0];
                     break;
-                case 'avatar':
-                    if (value.length > 3) {
-                        showError("Avatar must be 3 characters or less.");
-                        return;
+
+                case '/avatar':
+                    if (!values[0]) return showError("Usage: /avatar \"text\" \"#hexcode\" (color is optional)");
+                    if (values[0].length > 3) return showError("Avatar text must be 3 characters or less.");
+                    
+                    updates.avatar = values[0];
+                    if (values[1]) {
+                        if (!/^#[0-9a-fA-F]{6}$/.test(values[1])) return showError("Invalid hex color. Use #RRGGBB format.");
+                        updates.avatarColor = values[1];
+                    } else {
+                        updates.avatarColor = '#FFFFFF'; // Default
                     }
-                    if(players[currentUserId]) players[currentUserId].avatar = value;
-                    await updateDoc(playerRef, { avatar: value });
                     break;
+
+                case '/colour':
+                case '/color':
+                    if (!values[0] || !/^#[0-9a-fA-F]{6}$/.test(values[0])) return showError("Usage: /colour \"#RRGGBB\"");
+                    updates.color = values[0];
+                    break;
+                
+                case '/shape':
+                    const validShapes = ['circle', 'square', 'triangle'];
+                    if (!values[0] || !validShapes.includes(values[0].toLowerCase())) return showError("Usage: /shape \"circle|square|triangle\"");
+                    updates.shape = values[0].toLowerCase();
+                    break;
+
                 default:
-                    showError(`Unknown command: /${command}`);
+                    return showError(`Unknown command: ${command}`);
+            }
+
+            if (Object.keys(updates).length > 0) {
+                 if(players[currentUserId]) {
+                    Object.assign(players[currentUserId], updates);
+                 }
+                await updateDoc(playerRef, updates);
             }
         }
 
@@ -416,7 +447,6 @@
             if (text.startsWith('/')) {
                 handleCommand(text);
             } else {
-                // It's a regular chat message
                 const now = Date.now();
                 if (players[currentUserId]) {
                     players[currentUserId].message = text;
@@ -449,10 +479,7 @@
                         if (players[docId]) {
                             players[docId].targetX = docData.x;
                             players[docId].targetY = docData.y;
-                            players[docId].message = docData.message;
-                            players[docId].messageTimestamp = docData.messageTimestamp;
-                            players[docId].username = docData.username;
-                            players[docId].avatar = docData.avatar;
+                            Object.assign(players[docId], docData); // Sync all properties
                         }
                     }
                     if (change.type === "removed") {
