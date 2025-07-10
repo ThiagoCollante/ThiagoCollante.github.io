@@ -54,7 +54,7 @@
                 </div>
                  <p id="error-message" class="text-red-400 text-center mt-4 hidden"></p>
             </div>
-             <div class="fixed bottom-4 left-4 text-xs text-gray-500 font-mono">v2.2</div>
+             <div class="fixed bottom-4 left-4 text-xs text-gray-500 font-mono">v2.3</div>
         </div>
 
         <!-- Chat View (Canvas) -->
@@ -64,7 +64,7 @@
                  <button id="leave-lobby-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition">
                     Leave
                 </button>
-                <input id="message-input" placeholder="Type your message and press Enter..." class="flex-grow bg-gray-700 text-white border border-gray-600 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <input id="message-input" placeholder="Type /user 'name' or /avatar 'txt'" class="flex-grow bg-gray-700 text-white border border-gray-600 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500">
                 <div class="text-sm text-gray-400">Room: <span id="room-code-display" class="font-mono cursor-pointer" title="Click to copy"></span></div>
             </div>
         </div>
@@ -114,7 +114,7 @@
         let currentUserId = null;
         let currentUsername = null;
         let currentLobbyId = null;
-        let players = {}; // Store all player data { id: { x, y, targetX, targetY, username, color, message, messageTimestamp } }
+        let players = {}; // Store all player data { id: { x, y, targetX, targetY, username, avatar, color, message, messageTimestamp } }
         let unsubPlayers = null;
         let animationFrameId;
         let lastUpdateTime = 0;
@@ -187,7 +187,6 @@
             updatePlayerPositions();
             draw();
             
-            // Throttle Firestore updates
             if (timestamp - lastUpdateTime > UPDATE_INTERVAL) {
                 updateSelfInFirestore();
                 lastUpdateTime = timestamp;
@@ -202,15 +201,27 @@
             for (const id in players) {
                 const player = players[id];
                 
+                // Draw player circle
                 ctx.beginPath();
                 ctx.arc(player.x, player.y, 20, 0, Math.PI * 2);
                 ctx.fillStyle = player.color;
                 ctx.fill();
                 ctx.closePath();
 
+                // Draw avatar text if it exists
+                if (player.avatar) {
+                    ctx.fillStyle = 'white';
+                    ctx.font = 'bold 16px Inter';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(player.avatar, player.x, player.y);
+                }
+
+                // Draw username
                 ctx.fillStyle = 'white';
                 ctx.font = '12px Inter';
                 ctx.textAlign = 'center';
+                ctx.textBaseline = 'alphabetic';
                 ctx.fillText(player.username, player.x, player.y + 35);
                 
                 if (player.message && Date.now() - player.messageTimestamp < 5000) {
@@ -236,11 +247,11 @@
 
             ctx.fillStyle = 'black';
             ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
             ctx.fillText(text, x, y - bubbleHeight / 2 + 5);
         }
 
         function updatePlayerPositions() {
-            // Update our own player directly from input
             const self = players[currentUserId];
             if (!self) return;
 
@@ -253,11 +264,9 @@
             self.x = Math.max(20, Math.min(canvas.width - 20, self.x));
             self.y = Math.max(20, Math.min(canvas.height - 20, self.y));
 
-            // **OPTIMIZATION: Interpolate other players**
             for (const id in players) {
-                if (id === currentUserId) continue; // Don't interpolate ourselves
+                if (id === currentUserId) continue;
                 const player = players[id];
-                // Linearly interpolate (lerp) current position towards target position
                 player.x += (player.targetX - player.x) * 0.1;
                 player.y += (player.targetY - player.y) * 0.1;
             }
@@ -268,7 +277,6 @@
         async function updateSelfInFirestore() {
              if (!currentLobbyId || !currentUserId || !players[currentUserId]) return;
              const playerRef = doc(db, `artifacts/${app.options.projectId}/public/data/lobbies/${currentLobbyId}/players`, currentUserId);
-             // Only send position data
              await updateDoc(playerRef, { 
                 x: players[currentUserId].x,
                 y: players[currentUserId].y
@@ -312,10 +320,9 @@
                     const startX = Math.random() * 500 + 50;
                     const startY = Math.random() * 300 + 50;
                     
-                    // **THE FIX**: Create the player object and add it to the local state *before* writing to the database.
-                    // This prevents a race condition where the game loop starts before the player object is ready.
                     const newPlayer = {
                         username: currentUsername,
+                        avatar: '', // Initialize avatar
                         x: startX,
                         y: startY,
                         targetX: startX,
@@ -324,9 +331,9 @@
                         message: '',
                         messageTimestamp: 0
                     };
-                    players[currentUserId] = newPlayer; // Add to local state immediately
+                    players[currentUserId] = newPlayer;
 
-                    await setDoc(playerRef, newPlayer); // Write the object to Firestore
+                    await setDoc(playerRef, newPlayer);
 
                     switchToChatView();
                 } else {
@@ -356,21 +363,58 @@
             switchToLobbyView();
         }
         
-        async function sendMessage() {
+        async function handleCommand(commandText) {
+            const commandRegex = /^\/(\w+)\s+"([^"]+)"$/;
+            const match = commandText.match(commandRegex);
+
+            if (!match) {
+                showError("Invalid command format. Use /command \"value\"");
+                return;
+            }
+
+            const command = match[1].toLowerCase();
+            const value = match[2];
+            const playerRef = doc(db, `artifacts/${app.options.projectId}/public/data/lobbies/${currentLobbyId}/players`, currentUserId);
+
+            switch (command) {
+                case 'user':
+                    currentUsername = value;
+                    sessionStorage.setItem('chat-username', value);
+                    welcomeUsername.textContent = value;
+                    if(players[currentUserId]) players[currentUserId].username = value;
+                    await updateDoc(playerRef, { username: value });
+                    break;
+                case 'avatar':
+                    if (value.length > 3) {
+                        showError("Avatar must be 3 characters or less.");
+                        return;
+                    }
+                    if(players[currentUserId]) players[currentUserId].avatar = value;
+                    await updateDoc(playerRef, { avatar: value });
+                    break;
+                default:
+                    showError(`Unknown command: /${command}`);
+            }
+        }
+
+        async function processInput() {
             const text = messageInput.value.trim();
             if (!text || !currentLobbyId || !currentUserId) return;
             
-            const now = Date.now();
             messageInput.value = '';
 
-            // Optimistic local update for instant feedback
-            if (players[currentUserId]) {
-                players[currentUserId].message = text;
-                players[currentUserId].messageTimestamp = now;
+            if (text.startsWith('/')) {
+                handleCommand(text);
+            } else {
+                // It's a regular chat message
+                const now = Date.now();
+                if (players[currentUserId]) {
+                    players[currentUserId].message = text;
+                    players[currentUserId].messageTimestamp = now;
+                }
+                const playerRef = doc(db, `artifacts/${app.options.projectId}/public/data/lobbies/${currentLobbyId}/players`, currentUserId);
+                await updateDoc(playerRef, { message: text, messageTimestamp: now });
             }
-
-            const playerRef = doc(db, `artifacts/${app.options.projectId}/public/data/lobbies/${currentLobbyId}/players`, currentUserId);
-            await updateDoc(playerRef, { message: text, messageTimestamp: now });
         }
 
         function listenForPlayers() {
@@ -383,7 +427,6 @@
                     const docId = change.doc.id;
 
                     if (change.type === "added") {
-                        // Only add if it doesn't already exist (to avoid overwriting the local player)
                         if (!players[docId]) {
                              players[docId] = {
                                 ...docData,
@@ -394,12 +437,12 @@
                     }
                     if (change.type === "modified") {
                         if (players[docId]) {
-                            // Update target positions for interpolation
                             players[docId].targetX = docData.x;
                             players[docId].targetY = docData.y;
-                            // Update other properties directly
                             players[docId].message = docData.message;
                             players[docId].messageTimestamp = docData.messageTimestamp;
+                            players[docId].username = docData.username;
+                            players[docId].avatar = docData.avatar;
                         }
                     }
                     if (change.type === "removed") {
@@ -450,7 +493,7 @@
         createLobbyBtn.addEventListener('click', createLobby);
         joinLobbyBtn.addEventListener('click', () => joinLobby());
         leaveLobbyBtn.addEventListener('click', leaveLobby);
-        messageInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendMessage(); });
+        messageInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') processInput(); });
 
         window.addEventListener('resize', resizeCanvas);
         window.addEventListener('keydown', (e) => { if (e.key in keys) keys[e.key] = true; });
