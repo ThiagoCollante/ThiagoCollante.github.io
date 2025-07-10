@@ -101,13 +101,9 @@
         let userFirebaseConfig = {
             // PASTE YOUR FIREBASE CONFIG OBJECT HERE
         };
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : userFirebaseConfig;
-        const appId = typeof __app_id !== 'undefined' ? __app_id : firebaseConfig.projectId || 'default-chat-app';
-
-        // --- Initialize Firebase ---
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
+        
+        // --- Firebase Services (will be initialized later) ---
+        let app, auth, db;
 
         // --- DOM Elements ---
         const appContainer = document.getElementById('app');
@@ -157,8 +153,7 @@
         }
 
         /**
-         * Handles the final setup: shows the main app UI and authenticates the user with Firebase.
-         * This is called either on page load if a username exists, or after a new username is entered.
+         * Handles the final setup: initializes Firebase, authenticates the user, and shows the main app UI.
          */
         function startApp() {
             // 1. Show the main application UI
@@ -167,7 +162,21 @@
             appContainer.classList.remove('hidden');
             appContainer.classList.add('flex');
 
-            // 2. Authenticate the user with Firebase
+            // 2. Initialize Firebase
+            try {
+                const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : userFirebaseConfig;
+                app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+            } catch (e) {
+                console.error("Firebase initialization failed:", e);
+                showError("Firebase config is invalid. Please check your config and refresh.");
+                createLobbyBtn.disabled = true;
+                joinLobbyBtn.disabled = true;
+                return; // Stop execution if firebase fails
+            }
+
+            // 3. Authenticate the user
             onAuthStateChanged(auth, async (user) => {
                 if (user) {
                     currentUserId = user.uid;
@@ -182,7 +191,6 @@
                     } catch (error) {
                         console.error("Authentication failed:", error);
                         showError("Authentication failed. Check Firebase config and rules.");
-                        // Disable core functionality if auth fails
                         createLobbyBtn.disabled = true;
                         joinLobbyBtn.disabled = true;
                     }
@@ -206,6 +214,7 @@
             
             const roomCode = generateRoomCode();
             try {
+                const appId = app.options.projectId || 'default-chat-app';
                 const lobbyRef = doc(db, `artifacts/${appId}/public/data/lobbies`, roomCode);
                 await setDoc(lobbyRef, {
                     createdAt: serverTimestamp(),
@@ -239,6 +248,7 @@
             joinLobbyBtn.textContent = 'Joining...';
 
             try {
+                const appId = app.options.projectId || 'default-chat-app';
                 const lobbyRef = doc(db, `artifacts/${appId}/public/data/lobbies`, roomCode);
                 const lobbySnap = await getDoc(lobbyRef);
 
@@ -275,11 +285,12 @@
             messageInput.disabled = true;
 
             try {
+                const appId = app.options.projectId || 'default-chat-app';
                 const messagesColRef = collection(db, `artifacts/${appId}/public/data/lobbies/${currentLobbyId}/messages`);
                 await addDoc(messagesColRef, {
                     text: messageText,
                     senderId: currentUserId,
-                    username: currentUsername, // Add username to the message
+                    username: currentUsername,
                     timestamp: serverTimestamp()
                 });
                 messageInput.value = '';
@@ -296,6 +307,7 @@
         function listenForMessages() {
             if (unsubscribeMessages) unsubscribeMessages();
 
+            const appId = app.options.projectId || 'default-chat-app';
             const messagesQuery = query(collection(db, `artifacts/${appId}/public/data/lobbies/${currentLobbyId}/messages`));
             
             unsubscribeMessages = onSnapshot(messagesQuery, (snapshot) => {
