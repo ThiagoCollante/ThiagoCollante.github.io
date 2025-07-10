@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2D Chat Environment</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overflow: hidden; /* Prevent scrollbars from appearing */
+        }
+        canvas {
+            background-color: #1a202c; /* dark gray */
+            display: block;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white flex items-center justify-center h-screen">
+
+    <!-- Username Modal -->
+    <div id="username-modal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+        <div class="bg-gray-800 rounded-lg p-8 max-w-sm w-full text-center shadow-xl">
+            <h2 class="text-2xl font-bold mb-4">Welcome!</h2>
+            <p class="text-gray-400 mb-6">Please enter a username to continue.</p>
+            <input type="text" id="username-input" placeholder="Your Name" class="w-full bg-gray-700 text-white border border-gray-600 rounded-lg px-4 py-3 mb-4 focus:outline-none focus:ring-2 focus:ring-indigo-500" maxlength="20">
+            <button id="set-username-btn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg transition">Start Chatting</button>
+            <p id="username-error" class="text-red-400 text-center mt-4 hidden"></p>
+        </div>
+    </div>
+
+    <!-- Main App Container -->
+    <div id="app" class="hidden w-full h-full bg-gray-800 flex flex-col">
+
+        <!-- Lobby Selection / Creation -->
+        <div id="lobby-view" class="flex flex-col items-center justify-center h-full p-4">
+            <h1 class="text-4xl font-bold mb-2 text-center">2D Chat Lobbies</h1>
+            <p class="text-lg text-gray-400 mb-8">Welcome, <span id="welcome-username" class="font-bold text-indigo-400"></span></p>
+            <div class="w-full max-w-sm">
+                <button id="create-lobby-btn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg text-lg transition duration-300 ease-in-out transform hover:scale-105">
+                    Create New Lobby
+                </button>
+                <div class="my-6 flex items-center">
+                    <hr class="w-full border-gray-600">
+                    <span class="p-2 text-gray-400">OR</span>
+                    <hr class="w-full border-gray-600">
+                </div>
+                <div class="flex flex-col sm:flex-row gap-4">
+                    <input type="text" id="room-code-input" placeholder="Enter Room Code" class="flex-grow bg-gray-700 text-white border border-gray-600 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <button id="join-lobby-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition duration-300 ease-in-out">
+                        Join Lobby
+                    </button>
+                </div>
+                 <p id="error-message" class="text-red-400 text-center mt-4 hidden"></p>
+            </div>
+             <div class="fixed bottom-4 left-4 text-xs text-gray-500 font-mono">v2.0</div>
+        </div>
+
+        <!-- Chat View (Canvas) -->
+        <div id="chat-view" class="hidden flex-grow flex-col w-full h-full">
+            <canvas id="game-canvas" class="flex-grow"></canvas>
+            <div class="flex-shrink-0 p-4 bg-gray-800 border-t border-gray-700 flex items-center gap-4">
+                 <button id="leave-lobby-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition">
+                    Leave
+                </button>
+                <input id="message-input" placeholder="Type your message and press Enter..." class="flex-grow bg-gray-700 text-white border border-gray-600 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <div class="text-sm text-gray-400">Room: <span id="room-code-display" class="font-mono cursor-pointer" title="Click to copy"></span></div>
+            </div>
+        </div>
+    </div>
+    
+    <script type="module">
+        // Firebase Imports
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, addDoc, collection, query, onSnapshot, serverTimestamp, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- Firebase Configuration ---
+        let userFirebaseConfig = {
+            apiKey: "AIzaSyAflXtpfodNrcyLzYBGoXVdTlaUYcxSNn0",
+            authDomain: "chat-app-7c620.firebaseapp.com",
+            projectId: "chat-app-7c620",
+            storageBucket: "chat-app-7c620.appspot.com",
+            messagingSenderId: "300905208973",
+            appId: "1:300905208973:web:ac1f41de55a1bb235556c4"
+        };
+        
+        // --- Firebase Services (will be initialized later) ---
+        let app, auth, db;
+
+        // --- DOM Elements ---
+        const appContainer = document.getElementById('app');
+        const usernameModal = document.getElementById('username-modal');
+        const usernameInput = document.getElementById('username-input');
+        const setUsernameBtn = document.getElementById('set-username-btn');
+        const usernameError = document.getElementById('username-error');
+        const welcomeUsername = document.getElementById('welcome-username');
+
+        const lobbyView = document.getElementById('lobby-view');
+        const chatView = document.getElementById('chat-view');
+        const createLobbyBtn = document.getElementById('create-lobby-btn');
+        const joinLobbyBtn = document.getElementById('join-lobby-btn');
+        const leaveLobbyBtn = document.getElementById('leave-lobby-btn');
+        const messageInput = document.getElementById('message-input');
+        const roomCodeInput = document.getElementById('room-code-input');
+        const roomCodeDisplay = document.getElementById('room-code-display');
+        const errorMessage = document.getElementById('error-message');
+        
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+
+        // --- App State ---
+        let currentUserId = null;
+        let currentUsername = null;
+        let currentLobbyId = null;
+        let players = {}; // Store all player data { id: { x, y, username, color, message, messageTimestamp } }
+        let unsubPlayers = null;
+        let animationFrameId;
+
+        const keys = { w: false, a: false, s: false, d: false, ArrowUp: false, ArrowLeft: false, ArrowDown: false, ArrowRight: false };
+
+        // --- App Initialization Flow ---
+
+        function main() {
+            currentUsername = sessionStorage.getItem('chat-username');
+            if (currentUsername) {
+                startApp();
+            } else {
+                usernameModal.classList.remove('hidden');
+                usernameInput.focus();
+            }
+        }
+
+        function startApp() {
+            welcomeUsername.textContent = currentUsername;
+            usernameModal.classList.add('hidden');
+            appContainer.classList.remove('hidden');
+            appContainer.classList.add('flex');
+
+            try {
+                const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : userFirebaseConfig;
+                if (Object.keys(firebaseConfig).length < 5 && typeof __firebase_config === 'undefined') {
+                    throw new Error("Firebase config is incomplete.");
+                }
+                app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+            } catch (e) {
+                console.error("Firebase initialization failed:", e);
+                showError("Firebase config is invalid. Please paste your config and refresh.");
+                createLobbyBtn.disabled = true;
+                joinLobbyBtn.disabled = true;
+                return;
+            }
+
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    currentUserId = user.uid;
+                } else {
+                    try {
+                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                            await signInWithCustomToken(auth, __initial_auth_token);
+                        } else {
+                            await signInAnonymously(auth);
+                        }
+                    } catch (error) {
+                        console.error("Authentication failed:", error);
+                        showError("Authentication failed. Check Firebase config and rules.");
+                        createLobbyBtn.disabled = true;
+                        joinLobbyBtn.disabled = true;
+                    }
+                }
+            });
+        }
+
+        // --- Game Loop and Drawing ---
+
+        function resizeCanvas() {
+            canvas.width = canvas.clientWidth;
+            canvas.height = canvas.clientHeight;
+        }
+
+        function gameLoop() {
+            updatePlayerPosition();
+            draw();
+            animationFrameId = requestAnimationFrame(gameLoop);
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw all players
+            for (const id in players) {
+                const player = players[id];
+                
+                // Draw player circle
+                ctx.beginPath();
+                ctx.arc(player.x, player.y, 20, 0, Math.PI * 2);
+                ctx.fillStyle = player.color;
+                ctx.fill();
+                ctx.closePath();
+
+                // Draw username
+                ctx.fillStyle = 'white';
+                ctx.font = '12px Inter';
+                ctx.textAlign = 'center';
+                ctx.fillText(player.username, player.x, player.y + 35);
+                
+                // Draw chat bubble if message exists and is recent
+                if (player.message && Date.now() - player.messageTimestamp < 5000) {
+                    drawChatBubble(ctx, player.x, player.y - 30, player.message);
+                }
+            }
+        }
+        
+        function drawChatBubble(ctx, x, y, text) {
+            const padding = 10;
+            ctx.font = '14px Inter';
+            const textWidth = ctx.measureText(text).width;
+            const bubbleWidth = textWidth + (padding * 2);
+            const bubbleHeight = 20 + (padding * 2);
+            
+            // Bubble rectangle
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
+            ctx.lineWidth = 1;
+            ctx.roundRect(x - bubbleWidth / 2, y - bubbleHeight, bubbleWidth, bubbleHeight, 10);
+            ctx.fill();
+            ctx.stroke();
+
+            // Bubble text
+            ctx.fillStyle = 'black';
+            ctx.textAlign = 'center';
+            ctx.fillText(text, x, y - bubbleHeight / 2 + 5);
+        }
+
+        function updatePlayerPosition() {
+            if (!players[currentUserId]) return;
+
+            const player = players[currentUserId];
+            const speed = 3;
+            let moved = false;
+
+            if (keys.w || keys.ArrowUp) { player.y -= speed; moved = true; }
+            if (keys.s || keys.ArrowDown) { player.y += speed; moved = true; }
+            if (keys.a || keys.ArrowLeft) { player.x -= speed; moved = true; }
+            if (keys.d || keys.ArrowRight) { player.x += speed; moved = true; }
+            
+            // Boundary checks
+            player.x = Math.max(20, Math.min(canvas.width - 20, player.x));
+            player.y = Math.max(20, Math.min(canvas.height - 20, player.y));
+
+            if (moved) {
+                updatePlayerInFirestore({ x: player.x, y: player.y });
+            }
+        }
+
+        // --- Lobby and Firestore Logic ---
+        
+        async function updatePlayerInFirestore(data) {
+             if (!currentLobbyId || !currentUserId) return;
+             const playerRef = doc(db, `artifacts/${app.options.projectId}/public/data/lobbies/${currentLobbyId}/players`, currentUserId);
+             await updateDoc(playerRef, data).catch(console.error);
+        }
+
+        function generateRoomCode() {
+            return Math.random().toString(36).substring(2, 8).toUpperCase();
+        }
+
+        async function createLobby() {
+            if (!currentUserId) return showError("Not authenticated.");
+            createLobbyBtn.disabled = true;
+            const roomCode = generateRoomCode();
+            try {
+                const lobbyRef = doc(db, `artifacts/${app.options.projectId}/public/data/lobbies`, roomCode);
+                await setDoc(lobbyRef, { createdAt: serverTimestamp() });
+                await joinLobby(roomCode);
+            } catch (error) {
+                console.error("Error creating lobby:", error);
+                showError("Could not create lobby.");
+            } finally {
+                createLobbyBtn.disabled = false;
+            }
+        }
+        
+        async function joinLobby(code) {
+            const roomCode = (code || roomCodeInput.value).trim().toUpperCase();
+            if (!roomCode) return showError("Please enter a room code.");
+            if (!currentUserId) return showError("Not authenticated.");
+
+            joinLobbyBtn.disabled = true;
+            try {
+                const lobbyRef = doc(db, `artifacts/${app.options.projectId}/public/data/lobbies`, roomCode);
+                const lobbySnap = await getDoc(lobbyRef);
+
+                if (lobbySnap.exists()) {
+                    currentLobbyId = roomCode;
+                    
+                    // Add player to the lobby in Firestore
+                    const playerRef = doc(db, `artifacts/${app.options.projectId}/public/data/lobbies/${currentLobbyId}/players`, currentUserId);
+                    await setDoc(playerRef, {
+                        username: currentUsername,
+                        x: Math.random() * 500 + 50,
+                        y: Math.random() * 300 + 50,
+                        color: `hsl(${Math.random() * 360}, 70%, 60%)`,
+                        message: '',
+                        messageTimestamp: 0
+                    });
+
+                    switchToChatView();
+                } else {
+                    showError("Lobby not found.");
+                }
+            } catch (error) {
+                console.error("Error joining lobby:", error);
+                showError("An error occurred.");
+            } finally {
+                joinLobbyBtn.disabled = false;
+            }
+        }
+
+        async function leaveLobby() {
+            // Stop game loop
+            cancelAnimationFrame(animationFrameId);
+            
+            // Remove player from Firestore
+            if (currentLobbyId && currentUserId) {
+                const playerRef = doc(db, `artifacts/${app.options.projectId}/public/data/lobbies/${currentLobbyId}/players`, currentUserId);
+                await deleteDoc(playerRef);
+            }
+
+            // Unsubscribe from listeners
+            if (unsubPlayers) unsubPlayers();
+            
+            // Reset state
+            players = {};
+            currentLobbyId = null;
+            
+            switchToLobbyView();
+        }
+        
+        async function sendMessage() {
+            const text = messageInput.value.trim();
+            if (!text) return;
+            
+            messageInput.value = '';
+            await updatePlayerInFirestore({ message: text, messageTimestamp: Date.now() });
+        }
+
+        function listenForPlayers() {
+            if (unsubPlayers) unsubPlayers();
+            const playersQuery = query(collection(db, `artifacts/${app.options.projectId}/public/data/lobbies/${currentLobbyId}/players`));
+            
+            unsubPlayers = onSnapshot(playersQuery, (snapshot) => {
+                const currentPlayers = {};
+                snapshot.forEach(doc => {
+                    currentPlayers[doc.id] = doc.data();
+                });
+                players = currentPlayers;
+            });
+        }
+
+        // --- UI Switching and Helpers ---
+
+        function switchToChatView() {
+            roomCodeDisplay.textContent = currentLobbyId;
+            lobbyView.classList.add('hidden');
+            chatView.classList.remove('hidden');
+            chatView.classList.add('flex');
+            
+            resizeCanvas();
+            listenForPlayers();
+            gameLoop();
+            messageInput.focus();
+        }
+
+        function switchToLobbyView() {
+            chatView.classList.add('hidden');
+            lobbyView.classList.remove('hidden');
+            lobbyView.classList.add('flex');
+            roomCodeInput.value = '';
+        }
+        
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.classList.remove('hidden');
+            setTimeout(() => errorMessage.classList.add('hidden'), 3000);
+        }
+
+        // --- Event Listeners ---
+        setUsernameBtn.addEventListener('click', () => {
+            const username = usernameInput.value.trim();
+            if (username) {
+                currentUsername = username;
+                sessionStorage.setItem('chat-username', username);
+                startApp();
+            } else {
+                usernameError.textContent = "Username cannot be empty.";
+                usernameError.classList.remove('hidden');
+            }
+        });
+        usernameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') setUsernameBtn.click(); });
+
+        createLobbyBtn.addEventListener('click', createLobby);
+        joinLobbyBtn.addEventListener('click', () => joinLobby());
+        leaveLobbyBtn.addEventListener('click', leaveLobby);
+        messageInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendMessage(); });
+
+        window.addEventListener('resize', resizeCanvas);
+        window.addEventListener('keydown', (e) => { if (e.key in keys) keys[e.key] = true; });
+        window.addEventListener('keyup', (e) => { if (e.key in keys) keys[e.key] = false; });
+        
+        roomCodeDisplay.addEventListener('click', () => {
+             navigator.clipboard.writeText(roomCodeDisplay.textContent).then(() => {
+                roomCodeDisplay.title = 'Copied!';
+                setTimeout(() => { roomCodeDisplay.title = 'Click to copy'; }, 2000);
+            });
+        });
+
+        // --- Start the App ---
+        main();
+    </script>
+</body>
+</html>
