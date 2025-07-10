@@ -54,7 +54,7 @@
                 </div>
                  <p id="error-message" class="text-red-400 text-center mt-4 hidden"></p>
             </div>
-             <div class="fixed bottom-4 left-4 text-xs text-gray-500 font-mono">v2.3</div>
+             <div class="fixed bottom-4 left-4 text-xs text-gray-500 font-mono">v2.4</div>
         </div>
 
         <!-- Chat View (Canvas) -->
@@ -364,11 +364,17 @@
         }
         
         async function handleCommand(commandText) {
-            const commandRegex = /^\/(\w+)\s+"([^"]+)"$/;
+            const commandRegex = /^\/(\w+)\s"([^"]+)"$/;
             const match = commandText.match(commandRegex);
 
             if (!match) {
-                showError("Invalid command format. Use /command \"value\"");
+                 const basicMatch = /^\/(\w+)\s+(.*)$/;
+                const basic = commandText.match(basicMatch);
+                if (basic && basic[2] && !basic[2].startsWith('"')) {
+                    showError(`Invalid format. Did you mean: /${basic[1]} "${basic[2]}"?`);
+                } else {
+                    showError("Invalid command format. Use /command \"value\"");
+                }
                 return;
             }
 
@@ -378,6 +384,10 @@
 
             switch (command) {
                 case 'user':
+                    if (value.length > 20) {
+                        showError("Username must be 20 characters or less.");
+                        return;
+                    }
                     currentUsername = value;
                     sessionStorage.setItem('chat-username', value);
                     welcomeUsername.textContent = value;
