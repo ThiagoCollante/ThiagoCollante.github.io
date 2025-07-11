@@ -54,7 +54,7 @@
                 </div>
                  <p id="error-message" class="text-red-400 text-center mt-4 hidden"></p>
             </div>
-             <div class="fixed bottom-4 left-4 text-xs text-gray-500 font-mono">v2.7</div>
+             <div class="fixed bottom-4 left-4 text-xs text-gray-500 font-mono">v2.8</div>
         </div>
 
         <!-- Chat View (Canvas) -->
@@ -119,6 +119,7 @@
         let animationFrameId;
         let lastUpdateTime = 0;
         const UPDATE_INTERVAL = 100; // ms
+        let isTyping = false;
 
         const keys = { w: false, a: false, s: false, d: false, ArrowUp: false, ArrowLeft: false, ArrowDown: false, ArrowRight: false };
 
@@ -185,7 +186,7 @@
 
         function gameLoop(timestamp) {
             updatePlayerPositions();
-            draw();
+            draw(timestamp);
             
             if (timestamp - lastUpdateTime > UPDATE_INTERVAL) {
                 updateSelfInFirestore();
@@ -195,7 +196,7 @@
             animationFrameId = requestAnimationFrame(gameLoop);
         }
 
-        function draw() {
+        function draw(timestamp) {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
             for (const id in players) {
@@ -241,6 +242,8 @@
                 
                 if (player.message && Date.now() - player.messageTimestamp < 5000) {
                     drawChatBubble(ctx, player.x, player.y - 30, player.message);
+                } else if (player.isTyping) {
+                    drawTypingIndicator(ctx, player.x, player.y - 30, timestamp);
                 }
             }
         }
@@ -266,9 +269,34 @@
             ctx.fillText(text, x, y - bubbleHeight / 2 + 5);
         }
 
+        function drawTypingIndicator(ctx, x, y, timestamp) {
+            const bubbleWidth = 60;
+            const bubbleHeight = 40;
+            
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.roundRect(x - bubbleWidth / 2, y - bubbleHeight, bubbleWidth, bubbleHeight, 10);
+            ctx.fill();
+            ctx.stroke();
+
+            // Animated dots
+            const dotRadius = 4;
+            const dotY = y - bubbleHeight / 2;
+            const speed = 0.005;
+            for (let i = 0; i < 3; i++) {
+                ctx.beginPath();
+                const alpha = (Math.sin(timestamp * speed + i * 2) + 1) / 2;
+                ctx.fillStyle = `rgba(0, 0, 0, ${alpha})`;
+                ctx.arc(x - 15 + i * 15, dotY, dotRadius, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
         function updatePlayerPositions() {
             const self = players[currentUserId];
-            if (!self) return;
+            if (!self || isTyping) return; // Don't move if typing
 
             const speed = 3;
             if (keys.w || keys.ArrowUp) { self.y -= speed; }
@@ -289,13 +317,15 @@
 
         // --- Lobby and Firestore Logic ---
         
-        async function updateSelfInFirestore() {
+        async function updateSelfInFirestore(data = {}) {
              if (!currentLobbyId || !currentUserId || !players[currentUserId]) return;
              const playerRef = doc(db, `artifacts/${app.options.projectId}/public/data/lobbies/${currentLobbyId}/players`, currentUserId);
-             await updateDoc(playerRef, { 
+             const updates = {
                 x: players[currentUserId].x,
-                y: players[currentUserId].y
-             }).catch(console.error);
+                y: players[currentUserId].y,
+                ...data
+             };
+             await updateDoc(playerRef, updates).catch(console.error);
         }
 
         function generateRoomCode() {
@@ -346,7 +376,8 @@
                         targetY: startY,
                         color: `hsl(${Math.random() * 360}, 70%, 60%)`,
                         message: '',
-                        messageTimestamp: 0
+                        messageTimestamp: 0,
+                        isTyping: false,
                     };
                     players[currentUserId] = newPlayer;
 
@@ -515,6 +546,14 @@
             errorMessage.classList.remove('hidden');
             setTimeout(() => errorMessage.classList.add('hidden'), 3000);
         }
+        
+        async function setTypingStatus(status) {
+            isTyping = status;
+            if (players[currentUserId]) {
+                players[currentUserId].isTyping = status;
+            }
+            await updateSelfInFirestore({ isTyping: status });
+        }
 
         // --- Event Listeners ---
         setUsernameBtn.addEventListener('click', () => {
@@ -530,7 +569,14 @@
         createLobbyBtn.addEventListener('click', createLobby);
         joinLobbyBtn.addEventListener('click', () => joinLobby());
         leaveLobbyBtn.addEventListener('click', leaveLobby);
-        messageInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') processInput(); });
+        messageInput.addEventListener('keydown', (e) => { 
+            if (e.key === 'Enter') {
+                processInput();
+                setTypingStatus(false);
+            }
+        });
+        messageInput.addEventListener('focus', () => setTypingStatus(true));
+        messageInput.addEventListener('blur', () => setTypingStatus(false));
 
         window.addEventListener('resize', resizeCanvas);
         window.addEventListener('keydown', (e) => { if (e.key in keys) keys[e.key] = true; });
