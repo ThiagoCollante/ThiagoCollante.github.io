@@ -54,7 +54,7 @@
                 </div>
                  <p id="error-message" class="text-red-400 text-center mt-4 hidden"></p>
             </div>
-             <div class="fixed bottom-4 left-4 text-xs text-gray-500 font-mono">v2.8</div>
+             <div class="fixed bottom-4 left-4 text-xs text-gray-500 font-mono">v2.9</div>
         </div>
 
         <!-- Chat View (Canvas) -->
@@ -64,7 +64,7 @@
                  <button id="leave-lobby-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition">
                     Leave
                 </button>
-                <input id="message-input" placeholder="Try /shape 'triangle' or /colour '#ff00ff'" class="flex-grow bg-gray-700 text-white border border-gray-600 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <input id="message-input" placeholder="Try /avatarangle '90'" class="flex-grow bg-gray-700 text-white border border-gray-600 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500">
                 <div class="text-sm text-gray-400">Room: <span id="room-code-display" class="font-mono cursor-pointer" title="Click to copy"></span></div>
             </div>
         </div>
@@ -226,11 +226,17 @@
 
                 // Draw avatar text if it exists
                 if (player.avatar) {
+                    ctx.save();
+                    ctx.translate(player.x, player.y);
+                    const angleInRadians = (player.avatarAngle || 0) * Math.PI / 180;
+                    ctx.rotate(angleInRadians);
+                    
                     ctx.fillStyle = player.avatarColor || '#FFFFFF';
                     ctx.font = 'bold 16px Inter';
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
-                    ctx.fillText(player.avatar, player.x, player.y);
+                    ctx.fillText(player.avatar, 0, 0);
+                    ctx.restore();
                 }
 
                 // Draw username
@@ -369,6 +375,7 @@
                         username: currentUsername,
                         avatar: '',
                         avatarColor: '#FFFFFF',
+                        avatarAngle: 0,
                         shape: 'circle',
                         x: startX,
                         y: startY,
@@ -443,6 +450,13 @@
                     } else {
                         updates.avatarColor = '#FFFFFF'; // Default
                     }
+                    break;
+                
+                case '/avatarangle':
+                    if (!values[0]) return showError("Usage: /avatarangle \"degrees\"");
+                    const angle = parseFloat(values[0]);
+                    if (isNaN(angle)) return showError("Angle must be a number.");
+                    updates.avatarAngle = angle;
                     break;
 
                 case '/colour':
