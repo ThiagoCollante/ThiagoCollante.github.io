@@ -112,7 +112,6 @@
 
         // --- Asset Management ---
         const cosmeticAssets = {
-            // IMPORTANT: Replace these placeholder URLs with your own image links.
             crown: { src: 'https://em-content.zobj.net/source/microsoft-teams/363/crown_1f451.png', img: new Image(), loaded: false },
             tophat: { src: 'https://em-content.zobj.net/source/microsoft-teams/363/top-hat_1f3a9.png', img: new Image(), loaded: false },
             cap: { src: 'https://em-content.zobj.net/source/microsoft-teams/363/billed-cap_1f9e2.png', img: new Image(), loaded: false }
@@ -121,7 +120,7 @@
         function loadAssets() {
             let assetsToLoad = Object.keys(cosmeticAssets).length;
             if (assetsToLoad === 0) {
-                main(); // No assets to load, start immediately
+                main(); 
                 return;
             }
             let assetsLoaded = 0;
@@ -132,12 +131,12 @@
                     cosmeticAssets[key].loaded = true;
                     assetsLoaded++;
                     if (assetsLoaded === assetsToLoad) {
-                        main(); // All assets loaded, start the app
+                        main(); 
                     }
                 };
                 cosmeticAssets[key].img.onerror = () => {
                     console.error(`Failed to load asset: ${key}`);
-                    assetsLoaded++; // Count as loaded to not block the app
+                    assetsLoaded++; 
                     if (assetsLoaded === assetsToLoad) {
                         main();
                     }
@@ -300,7 +299,7 @@
             if (!asset || !asset.loaded) return;
 
             const img = asset.img;
-            const width = 50; // Set a consistent size for cosmetics
+            const width = 50; 
             const height = (img.height / img.width) * width;
             
             ctx.drawImage(img, x - width / 2, y - 25 - height, width, height);
@@ -581,9 +580,20 @@
                     }
                     if (change.type === "modified") {
                         if (players[docId]) {
+                            // This is the key fix: only update targets and non-positional data.
+                            // The actual x/y are handled by the interpolation in the game loop.
                             players[docId].targetX = docData.x;
                             players[docId].targetY = docData.y;
-                            Object.assign(players[docId], docData); // Sync all properties
+                            players[docId].username = docData.username;
+                            players[docId].avatar = docData.avatar;
+                            players[docId].avatarColor = docData.avatarColor;
+                            players[docId].avatarAngle = docData.avatarAngle;
+                            players[docId].shape = docData.shape;
+                            players[docId].cosmetic = docData.cosmetic;
+                            players[docId].color = docData.color;
+                            players[docId].message = docData.message;
+                            players[docId].messageTimestamp = docData.messageTimestamp;
+                            players[docId].isTyping = docData.isTyping;
                         }
                     }
                     if (change.type === "removed") {
