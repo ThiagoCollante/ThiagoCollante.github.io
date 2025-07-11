@@ -54,7 +54,7 @@
                 </div>
                  <p id="error-message" class="text-red-400 text-center mt-4 hidden"></p>
             </div>
-             <div class="fixed bottom-4 left-4 text-xs text-gray-500 font-mono">v3.0</div>
+             <div class="fixed bottom-4 left-4 text-xs text-gray-500 font-mono">v3.1</div>
         </div>
 
         <!-- Chat View (Canvas) -->
@@ -261,55 +261,57 @@
         
         function drawCosmetic(ctx, x, y, cosmeticType) {
             ctx.save();
-            // Position cosmetic above the player's head
-            ctx.translate(x, y - 25); 
+            ctx.translate(x, y - 28); // Adjusted y-offset for better positioning
 
             switch(cosmeticType) {
                 case 'crown':
+                    ctx.rotate(-15 * Math.PI / 180); // Tilt slightly
                     ctx.fillStyle = '#FFD700';
-                    ctx.strokeStyle = '#DAA520';
+                    ctx.strokeStyle = '#B8860B';
                     ctx.lineWidth = 2;
                     ctx.beginPath();
                     ctx.moveTo(-20, 0);
-                    ctx.lineTo(-20, -15);
-                    ctx.lineTo(-10, -5);
-                    ctx.lineTo(0, -15);
-                    ctx.lineTo(10, -5);
-                    ctx.lineTo(20, -15);
-                    ctx.lineTo(20, 0);
+                    ctx.bezierCurveTo(-20, -15, -15, -10, -10, -20);
+                    ctx.bezierCurveTo(-5, -10, 5, -10, 0, -20);
+                    ctx.bezierCurveTo(5, -10, 15, -10, 10, -20);
+                    ctx.bezierCurveTo(15, -10, 20, -15, 20, 0);
                     ctx.closePath();
                     ctx.fill();
                     ctx.stroke();
                     break;
                 case 'tophat':
-                    ctx.fillStyle = '#333333';
-                    ctx.strokeStyle = '#111111';
-                    ctx.lineWidth = 2;
+                    ctx.fillStyle = '#1E1E1E';
+                    ctx.strokeStyle = '#000000';
+                    ctx.lineWidth = 1;
                     // Brim
                     ctx.beginPath();
-                    ctx.rect(-25, -2, 50, 4);
+                    ctx.ellipse(0, 0, 25, 8, 0, 0, Math.PI * 2);
                     ctx.fill();
                     ctx.stroke();
                     // Top part
-                    ctx.beginPath();
-                    ctx.rect(-15, -25, 30, 25);
-                    ctx.fill();
-                    ctx.stroke();
+                    ctx.fillRect(-15, -25, 30, 25);
+                    ctx.strokeRect(-15, -25, 30, 25);
+                    // Red band
+                    ctx.fillStyle = '#FF0000';
+                    ctx.fillRect(-16, -5, 32, 5);
                     break;
                 case 'cap':
-                    ctx.fillStyle = '#3B82F6'; // Blue
-                    ctx.strokeStyle = '#1E40AF'; // Darker blue
-                    ctx.lineWidth = 2;
+                    ctx.rotate(15 * Math.PI / 180); // Tilt
                     // Main part
+                    ctx.fillStyle = '#1E3A8A'; // Dark Blue
                     ctx.beginPath();
                     ctx.arc(0, -5, 18, Math.PI, 2 * Math.PI);
                     ctx.fill();
-                    ctx.stroke();
                     // Brim
+                    ctx.fillStyle = '#3B82F6'; // Lighter Blue
                     ctx.beginPath();
-                    ctx.rect(0, -7, 25, 4);
+                    ctx.ellipse(10, -5, 20, 6, -20 * Math.PI / 180, 0, Math.PI * 2);
                     ctx.fill();
-                    ctx.stroke();
+                    // Button
+                    ctx.fillStyle = '#3B82F6';
+                    ctx.beginPath();
+                    ctx.arc(0, -22, 4, 0, Math.PI * 2);
+                    ctx.fill();
                     break;
             }
             ctx.restore();
