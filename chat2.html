@@ -54,7 +54,7 @@
                 </div>
                  <p id="error-message" class="text-red-400 text-center mt-4 hidden"></p>
             </div>
-             <div class="fixed bottom-4 left-4 text-xs text-gray-500 font-mono">v2.9</div>
+             <div class="fixed bottom-4 left-4 text-xs text-gray-500 font-mono">v3.0</div>
         </div>
 
         <!-- Chat View (Canvas) -->
@@ -64,7 +64,7 @@
                  <button id="leave-lobby-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition">
                     Leave
                 </button>
-                <input id="message-input" placeholder="Try /avatarangle '90'" class="flex-grow bg-gray-700 text-white border border-gray-600 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <input id="message-input" placeholder="Try /cosmetic 'crown'" class="flex-grow bg-gray-700 text-white border border-gray-600 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500">
                 <div class="text-sm text-gray-400">Room: <span id="room-code-display" class="font-mono cursor-pointer" title="Click to copy"></span></div>
             </div>
         </div>
@@ -239,6 +239,11 @@
                     ctx.restore();
                 }
 
+                // Draw cosmetic
+                if (player.cosmetic) {
+                    drawCosmetic(ctx, player.x, player.y, player.cosmetic);
+                }
+
                 // Draw username
                 ctx.fillStyle = 'white';
                 ctx.font = '12px Inter';
@@ -254,6 +259,62 @@
             }
         }
         
+        function drawCosmetic(ctx, x, y, cosmeticType) {
+            ctx.save();
+            // Position cosmetic above the player's head
+            ctx.translate(x, y - 25); 
+
+            switch(cosmeticType) {
+                case 'crown':
+                    ctx.fillStyle = '#FFD700';
+                    ctx.strokeStyle = '#DAA520';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(-20, 0);
+                    ctx.lineTo(-20, -15);
+                    ctx.lineTo(-10, -5);
+                    ctx.lineTo(0, -15);
+                    ctx.lineTo(10, -5);
+                    ctx.lineTo(20, -15);
+                    ctx.lineTo(20, 0);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.stroke();
+                    break;
+                case 'tophat':
+                    ctx.fillStyle = '#333333';
+                    ctx.strokeStyle = '#111111';
+                    ctx.lineWidth = 2;
+                    // Brim
+                    ctx.beginPath();
+                    ctx.rect(-25, -2, 50, 4);
+                    ctx.fill();
+                    ctx.stroke();
+                    // Top part
+                    ctx.beginPath();
+                    ctx.rect(-15, -25, 30, 25);
+                    ctx.fill();
+                    ctx.stroke();
+                    break;
+                case 'cap':
+                    ctx.fillStyle = '#3B82F6'; // Blue
+                    ctx.strokeStyle = '#1E40AF'; // Darker blue
+                    ctx.lineWidth = 2;
+                    // Main part
+                    ctx.beginPath();
+                    ctx.arc(0, -5, 18, Math.PI, 2 * Math.PI);
+                    ctx.fill();
+                    ctx.stroke();
+                    // Brim
+                    ctx.beginPath();
+                    ctx.rect(0, -7, 25, 4);
+                    ctx.fill();
+                    ctx.stroke();
+                    break;
+            }
+            ctx.restore();
+        }
+
         function drawChatBubble(ctx, x, y, text) {
             const padding = 10;
             ctx.font = '14px Inter';
@@ -377,6 +438,7 @@
                         avatarColor: '#FFFFFF',
                         avatarAngle: 0,
                         shape: 'circle',
+                        cosmetic: '',
                         x: startX,
                         y: startY,
                         targetX: startX,
@@ -469,6 +531,13 @@
                     const validShapes = ['circle', 'square', 'triangle'];
                     if (!values[0] || !validShapes.includes(values[0].toLowerCase())) return showError("Usage: /shape \"circle|square|triangle\"");
                     updates.shape = values[0].toLowerCase();
+                    break;
+                
+                case '/cosmetic':
+                    const validCosmetics = ['crown', 'tophat', 'cap', 'none'];
+                    const cosmetic = values[0]?.toLowerCase();
+                    if (!cosmetic || !validCosmetics.includes(cosmetic)) return showError("Usage: /cosmetic \"crown|tophat|cap|none\"");
+                    updates.cosmetic = cosmetic === 'none' ? '' : cosmetic;
                     break;
 
                 default:
