@@ -54,7 +54,7 @@
                 </div>
                  <p id="error-message" class="text-red-400 text-center mt-4 hidden"></p>
             </div>
-             <div class="fixed bottom-4 left-4 text-xs text-gray-500 font-mono">v3.1</div>
+             <div class="fixed bottom-4 left-4 text-xs text-gray-500 font-mono">v3.2</div>
         </div>
 
         <!-- Chat View (Canvas) -->
@@ -109,6 +109,42 @@
         
         const canvas = document.getElementById('game-canvas');
         const ctx = canvas.getContext('2d');
+
+        // --- Asset Management ---
+        const cosmeticAssets = {
+            // IMPORTANT: Replace these placeholder URLs with your own image links.
+            crown: { src: 'https://em-content.zobj.net/source/microsoft-teams/363/crown_1f451.png', img: new Image(), loaded: false },
+            tophat: { src: 'https://em-content.zobj.net/source/microsoft-teams/363/top-hat_1f3a9.png', img: new Image(), loaded: false },
+            cap: { src: 'https://em-content.zobj.net/source/microsoft-teams/363/billed-cap_1f9e2.png', img: new Image(), loaded: false }
+        };
+
+        function loadAssets() {
+            let assetsToLoad = Object.keys(cosmeticAssets).length;
+            if (assetsToLoad === 0) {
+                main(); // No assets to load, start immediately
+                return;
+            }
+            let assetsLoaded = 0;
+            
+            for (const key in cosmeticAssets) {
+                cosmeticAssets[key].img.src = cosmeticAssets[key].src;
+                cosmeticAssets[key].img.onload = () => {
+                    cosmeticAssets[key].loaded = true;
+                    assetsLoaded++;
+                    if (assetsLoaded === assetsToLoad) {
+                        main(); // All assets loaded, start the app
+                    }
+                };
+                cosmeticAssets[key].img.onerror = () => {
+                    console.error(`Failed to load asset: ${key}`);
+                    assetsLoaded++; // Count as loaded to not block the app
+                    if (assetsLoaded === assetsToLoad) {
+                        main();
+                    }
+                };
+            }
+        }
+
 
         // --- App State ---
         let currentUserId = null;
@@ -240,7 +276,7 @@
                 }
 
                 // Draw cosmetic
-                if (player.cosmetic) {
+                if (player.cosmetic && cosmeticAssets[player.cosmetic]?.loaded) {
                     drawCosmetic(ctx, player.x, player.y, player.cosmetic);
                 }
 
@@ -260,61 +296,14 @@
         }
         
         function drawCosmetic(ctx, x, y, cosmeticType) {
-            ctx.save();
-            ctx.translate(x, y - 28); // Adjusted y-offset for better positioning
+            const asset = cosmeticAssets[cosmeticType];
+            if (!asset || !asset.loaded) return;
 
-            switch(cosmeticType) {
-                case 'crown':
-                    ctx.rotate(-15 * Math.PI / 180); // Tilt slightly
-                    ctx.fillStyle = '#FFD700';
-                    ctx.strokeStyle = '#B8860B';
-                    ctx.lineWidth = 2;
-                    ctx.beginPath();
-                    ctx.moveTo(-20, 0);
-                    ctx.bezierCurveTo(-20, -15, -15, -10, -10, -20);
-                    ctx.bezierCurveTo(-5, -10, 5, -10, 0, -20);
-                    ctx.bezierCurveTo(5, -10, 15, -10, 10, -20);
-                    ctx.bezierCurveTo(15, -10, 20, -15, 20, 0);
-                    ctx.closePath();
-                    ctx.fill();
-                    ctx.stroke();
-                    break;
-                case 'tophat':
-                    ctx.fillStyle = '#1E1E1E';
-                    ctx.strokeStyle = '#000000';
-                    ctx.lineWidth = 1;
-                    // Brim
-                    ctx.beginPath();
-                    ctx.ellipse(0, 0, 25, 8, 0, 0, Math.PI * 2);
-                    ctx.fill();
-                    ctx.stroke();
-                    // Top part
-                    ctx.fillRect(-15, -25, 30, 25);
-                    ctx.strokeRect(-15, -25, 30, 25);
-                    // Red band
-                    ctx.fillStyle = '#FF0000';
-                    ctx.fillRect(-16, -5, 32, 5);
-                    break;
-                case 'cap':
-                    ctx.rotate(15 * Math.PI / 180); // Tilt
-                    // Main part
-                    ctx.fillStyle = '#1E3A8A'; // Dark Blue
-                    ctx.beginPath();
-                    ctx.arc(0, -5, 18, Math.PI, 2 * Math.PI);
-                    ctx.fill();
-                    // Brim
-                    ctx.fillStyle = '#3B82F6'; // Lighter Blue
-                    ctx.beginPath();
-                    ctx.ellipse(10, -5, 20, 6, -20 * Math.PI / 180, 0, Math.PI * 2);
-                    ctx.fill();
-                    // Button
-                    ctx.fillStyle = '#3B82F6';
-                    ctx.beginPath();
-                    ctx.arc(0, -22, 4, 0, Math.PI * 2);
-                    ctx.fill();
-                    break;
-            }
-            ctx.restore();
+            const img = asset.img;
+            const width = 50; // Set a consistent size for cosmetics
+            const height = (img.height / img.width) * width;
+            
+            ctx.drawImage(img, x - width / 2, y - 25 - height, width, height);
         }
 
         function drawChatBubble(ctx, x, y, text) {
@@ -350,7 +339,6 @@
             ctx.fill();
             ctx.stroke();
 
-            // Animated dots
             const dotRadius = 4;
             const dotY = y - bubbleHeight / 2;
             const speed = 0.005;
@@ -365,7 +353,7 @@
 
         function updatePlayerPositions() {
             const self = players[currentUserId];
-            if (!self || isTyping) return; // Don't move if typing
+            if (!self || isTyping) return;
 
             const speed = 3;
             if (keys.w || keys.ArrowUp) { self.y -= speed; }
@@ -675,7 +663,7 @@
         });
 
         // --- Start the App ---
-        main();
+        loadAssets();
     </script>
 </body>
 </html>
