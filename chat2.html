@@ -38,17 +38,6 @@
     </style>
 </head>
 <body class="bg-gray-900 text-white flex items-center justify-center h-screen">
-
-    <!-- Username Modal -->
-    <div id="username-modal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
-        <div class="bg-gray-800 rounded-lg p-8 max-w-sm w-full text-center shadow-xl">
-            <h2 class="text-2xl font-bold mb-4">Welcome!</h2>
-            <p class="text-gray-400 mb-6">Please enter a username to continue.</p>
-            <input type="text" id="username-input" placeholder="Your Name" class="w-full bg-gray-700 text-white border border-gray-600 rounded-lg px-4 py-3 mb-4 focus:outline-none focus:ring-2 focus:ring-indigo-500" maxlength="20">
-            <button id="set-username-btn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg transition">Start Chatting</button>
-            <p id="username-error" class="text-red-400 text-center mt-4 hidden"></p>
-        </div>
-    </div>
     
     <!-- Help Modal -->
     <div id="help-modal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
@@ -112,7 +101,7 @@
                          <div>
                            <label class="block text-sm font-medium text-gray-400 mb-1">Avatar</label>
                             <div class="grid grid-cols-3 gap-2">
-                               <input type="text" id="avatar-text" placeholder="Text" class="col-span-2 bg-gray-700 rounded p-2">
+                               <input type="text" id="avatar-text" placeholder="Text" maxlength="3" class="col-span-2 bg-gray-700 rounded p-2">
                                <input type="color" id="avatar-color-picker">
                            </div>
                        </div>
@@ -146,7 +135,7 @@
                      </div>
                 </div>
             </div>
-             <div class="fixed bottom-4 left-4 text-xs text-gray-500 font-mono">v3.4</div>
+             <div class="fixed bottom-4 left-4 text-xs text-gray-500 font-mono">v3.5</div>
         </div>
 
         <!-- Chat View (Canvas) -->
@@ -183,10 +172,6 @@
 
         // --- DOM Elements ---
         const appContainer = document.getElementById('app');
-        const usernameModal = document.getElementById('username-modal');
-        const usernameInput = document.getElementById('username-input');
-        const setUsernameBtn = document.getElementById('set-username-btn');
-        const usernameError = document.getElementById('username-error');
         const welcomeUsername = document.getElementById('welcome-username');
         const helpModal = document.getElementById('help-modal');
         const closeHelpBtn = document.getElementById('close-help-btn');
@@ -270,17 +255,11 @@
         function main() {
             loadPlayerSettings();
             currentUsername = playerSettings.username;
-            if (currentUsername) {
-                startApp();
-            } else {
-                usernameModal.classList.remove('hidden');
-                usernameInput.focus();
-            }
+            startApp();
         }
 
         function startApp() {
             welcomeUsername.textContent = currentUsername;
-            usernameModal.classList.add('hidden');
             appContainer.classList.remove('hidden');
             appContainer.classList.add('flex');
             updateCustomizationUI();
@@ -778,16 +757,7 @@
         }
 
         // --- Event Listeners ---
-        setUsernameBtn.addEventListener('click', () => {
-            const username = usernameInput.value.trim();
-            if (username) {
-                playerSettings.username = username;
-                savePlayerSettings();
-                startApp();
-            }
-        });
-        usernameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') setUsernameBtn.click(); });
-
+        
         createLobbyBtn.addEventListener('click', createLobby);
         joinLobbyBtn.addEventListener('click', () => joinLobby());
         leaveLobbyBtn.addEventListener('click', leaveLobby);
@@ -825,6 +795,7 @@
         // Customization Listeners
         usernameEdit.addEventListener('input', (e) => { 
             playerSettings.username = e.target.value;
+            currentUsername = e.target.value;
             welcomeUsername.textContent = e.target.value;
             savePlayerSettings();
             drawPreview();
