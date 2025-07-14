@@ -20,20 +20,24 @@
             -webkit-appearance: none;
             -moz-appearance: none;
             appearance: none;
-            width: 44px;
-            height: 44px;
+            width: 100%;
+            height: 40px;
             padding: 0;
             border: none;
-            border-radius: 50%;
+            border-radius: 0.5rem;
             cursor: pointer;
         }
         input[type="color"]::-webkit-color-swatch-wrapper {
             padding: 0;
-            border-radius: 50%;
+            border-radius: 0.5rem;
         }
         input[type="color"]::-webkit-color-swatch {
             border: 2px solid #4A5568;
-            border-radius: 50%;
+            border-radius: 0.5rem;
+        }
+        input[type=number]::-webkit-inner-spin-button, 
+        input[type=number]::-webkit-outer-spin-button { 
+            opacity: 1;
         }
     </style>
 </head>
@@ -77,7 +81,7 @@
                        </div>
                        <div>
                            <label for="shape-select" class="block text-sm font-medium text-gray-400 mb-1">Shape</label>
-                           <select id="shape-select" class="w-full bg-gray-700 rounded p-2">
+                           <select id="shape-select" class="w-full bg-gray-700 rounded p-2 h-[40px]">
                                <option>circle</option>
                                <option>square</option>
                                <option>triangle</option>
@@ -86,16 +90,19 @@
                     </div>
                     
                     <!-- Avatar Settings -->
-                     <div>
-                       <label class="block text-sm font-medium text-gray-400 mb-1">Avatar</label>
-                        <div class="grid grid-cols-3 gap-2">
-                           <input type="text" id="avatar-text" placeholder="Text" maxlength="3" class="col-span-2 bg-gray-700 rounded p-2">
+                     <div class="grid grid-cols-2 gap-4">
+                       <div>
+                           <label class="block text-sm font-medium text-gray-400 mb-1">Avatar Text</label>
+                           <input type="text" id="avatar-text" placeholder="ABC" maxlength="3" class="w-full bg-gray-700 rounded p-2">
+                       </div>
+                       <div>
+                           <label class="block text-sm font-medium text-gray-400 mb-1">Avatar Color</label>
                            <input type="color" id="avatar-color-picker">
                        </div>
                    </div>
                     <div>
-                       <label for="avatar-angle" class="block text-sm font-medium text-gray-400 mb-1">Avatar Angle (<span id="avatar-angle-value">0</span>°)</label>
-                       <input type="range" id="avatar-angle" min="0" max="360" value="0" class="w-full">
+                       <label for="avatar-angle" class="block text-sm font-medium text-gray-400 mb-1">Avatar Angle (°)</label>
+                       <input type="number" id="avatar-angle" value="0" class="w-full bg-gray-700 rounded p-2">
                    </div>
 
                     <!-- Cosmetic Settings -->
@@ -103,7 +110,7 @@
                         <div class="grid grid-cols-2 gap-4">
                             <div>
                                <label for="cosmetic-select" class="block text-sm font-medium text-gray-400 mb-1">Cosmetic</label>
-                               <select id="cosmetic-select" class="w-full bg-gray-700 rounded p-2">
+                               <select id="cosmetic-select" class="w-full bg-gray-700 rounded p-2 h-[40px]">
                                    <option value="">none</option>
                                    <option>crown</option>
                                    <option>tophat</option>
@@ -115,22 +122,24 @@
                                <input type="color" id="color-picker" class="w-full">
                            </div>
                         </div>
-                        <div>
-                           <label for="cosmetic-size" class="block text-sm font-medium text-gray-400 mb-1">Cosmetic Size (<span id="cosmetic-size-value">50</span>)</label>
-                           <input type="range" id="cosmetic-size" min="20" max="80" value="50" class="w-full">
-                       </div>
-                       <div>
-                           <label for="cosmetic-rotation" class="block text-sm font-medium text-gray-400 mb-1">Cosmetic Angle (<span id="cosmetic-rotation-value">0</span>°)</label>
-                           <input type="range" id="cosmetic-rotation" min="-45" max="45" value="0" class="w-full">
-                       </div>
-                       <div class="grid grid-cols-2 gap-4">
+                        <div class="grid grid-cols-2 gap-4">
                            <div>
-                               <label for="cosmetic-x" class="block text-sm font-medium text-gray-400 mb-1">Cosmetic X Offset (<span id="cosmetic-x-value">0</span>)</label>
-                               <input type="range" id="cosmetic-x" min="-20" max="20" value="0" class="w-full">
+                               <label for="cosmetic-size" class="block text-sm font-medium text-gray-400 mb-1">Cosmetic Size</label>
+                               <input type="number" id="cosmetic-size" value="50" class="w-full bg-gray-700 rounded p-2">
                            </div>
                            <div>
-                               <label for="cosmetic-y" class="block text-sm font-medium text-gray-400 mb-1">Cosmetic Y Offset (<span id="cosmetic-y-value">0</span>)</label>
-                               <input type="range" id="cosmetic-y" min="-20" max="20" value="0" class="w-full">
+                               <label for="cosmetic-rotation" class="block text-sm font-medium text-gray-400 mb-1">Cosmetic Angle (°)</label>
+                               <input type="number" id="cosmetic-rotation" value="0" class="w-full bg-gray-700 rounded p-2">
+                           </div>
+                        </div>
+                       <div class="grid grid-cols-2 gap-4">
+                           <div>
+                               <label for="cosmetic-x" class="block text-sm font-medium text-gray-400 mb-1">Cosmetic X Offset</label>
+                               <input type="number" id="cosmetic-x" value="0" class="w-full bg-gray-700 rounded p-2">
+                           </div>
+                           <div>
+                               <label for="cosmetic-y" class="block text-sm font-medium text-gray-400 mb-1">Cosmetic Y Offset</label>
+                               <input type="number" id="cosmetic-y" value="0" class="w-full bg-gray-700 rounded p-2">
                            </div>
                        </div>
                     </div>
@@ -159,7 +168,7 @@
                      </div>
                 </div>
             </div>
-             <div class="fixed bottom-4 left-4 text-xs text-gray-500 font-mono">v3.6</div>
+             <div class="fixed bottom-4 left-4 text-xs text-gray-500 font-mono">v3.7</div>
         </div>
 
         <!-- Chat View (Canvas) -->
@@ -223,15 +232,10 @@
         const avatarText = document.getElementById('avatar-text');
         const avatarColorPicker = document.getElementById('avatar-color-picker');
         const avatarAngle = document.getElementById('avatar-angle');
-        const avatarAngleValue = document.getElementById('avatar-angle-value');
         const cosmeticSizeSlider = document.getElementById('cosmetic-size');
-        const cosmeticSizeValue = document.getElementById('cosmetic-size-value');
         const cosmeticRotationSlider = document.getElementById('cosmetic-rotation');
-        const cosmeticRotationValue = document.getElementById('cosmetic-rotation-value');
         const cosmeticXSlider = document.getElementById('cosmetic-x');
-        const cosmeticXValue = document.getElementById('cosmetic-x-value');
         const cosmeticYSlider = document.getElementById('cosmetic-y');
-        const cosmeticYValue = document.getElementById('cosmetic-y-value');
 
         // --- Asset Management ---
         const cosmeticAssets = {
@@ -716,24 +720,11 @@
                     }
                     if (change.type === "modified") {
                         if (players[docId]) {
-                            // This is the key fix: only update targets and non-positional data.
-                            // The actual x/y are handled by the interpolation in the game loop.
                             players[docId].targetX = docData.x;
                             players[docId].targetY = docData.y;
-                            players[docId].username = docData.username;
-                            players[docId].avatar = docData.avatar;
-                            players[docId].avatarColor = docData.avatarColor;
-                            players[docId].avatarAngle = docData.avatarAngle;
-                            players[docId].shape = docData.shape;
-                            players[docId].cosmetic = docData.cosmetic;
-                            players[docId].cosmeticX = docData.cosmeticX;
-                            players[docId].cosmeticY = docData.cosmeticY;
-                            players[docId].cosmeticSize = docData.cosmeticSize;
-                            players[docId].cosmeticRotation = docData.cosmeticRotation;
-                            players[docId].color = docData.color;
-                            players[docId].message = docData.message;
-                            players[docId].messageTimestamp = docData.messageTimestamp;
-                            players[docId].isTyping = docData.isTyping;
+                            // Avoid overwriting the local player's position which is handled by the game loop
+                            const { x, y, ...rest } = docData;
+                            Object.assign(players[docId], rest);
                         }
                     }
                     if (change.type === "removed") {
@@ -748,7 +739,7 @@
         function loadPlayerSettings() {
             const savedSettings = JSON.parse(sessionStorage.getItem('playerSettings'));
             playerSettings = {
-                username: 'Player',
+                username: `Player${Math.floor(Math.random() * 1000)}`,
                 shape: 'circle',
                 color: '#FFFFFF',
                 avatar: '',
@@ -775,15 +766,10 @@
             avatarText.value = playerSettings.avatar;
             avatarColorPicker.value = playerSettings.avatarColor;
             avatarAngle.value = playerSettings.avatarAngle;
-            avatarAngleValue.textContent = playerSettings.avatarAngle;
             cosmeticSizeSlider.value = playerSettings.cosmeticSize;
-            cosmeticSizeValue.textContent = playerSettings.cosmeticSize;
             cosmeticRotationSlider.value = playerSettings.cosmeticRotation;
-            cosmeticRotationValue.textContent = playerSettings.cosmeticRotation;
             cosmeticXSlider.value = playerSettings.cosmeticX;
-            cosmeticXValue.textContent = playerSettings.cosmeticX;
             cosmeticYSlider.value = playerSettings.cosmeticY;
-            cosmeticYValue.textContent = playerSettings.cosmeticY;
         }
 
         function switchToChatView() {
@@ -870,31 +856,26 @@
         avatarColorPicker.addEventListener('input', (e) => { playerSettings.avatarColor = e.target.value; savePlayerSettings(); drawPreview(); });
         avatarAngle.addEventListener('input', (e) => { 
             playerSettings.avatarAngle = e.target.value;
-            avatarAngleValue.textContent = e.target.value;
             savePlayerSettings(); 
             drawPreview(); 
         });
         cosmeticSizeSlider.addEventListener('input', (e) => {
-            playerSettings.cosmeticSize = e.target.value;
-            cosmeticSizeValue.textContent = e.target.value;
+            playerSettings.cosmeticSize = parseInt(e.target.value);
             savePlayerSettings();
             drawPreview();
         });
         cosmeticRotationSlider.addEventListener('input', (e) => {
-            playerSettings.cosmeticRotation = e.target.value;
-            cosmeticRotationValue.textContent = e.target.value;
+            playerSettings.cosmeticRotation = parseInt(e.target.value);
             savePlayerSettings();
             drawPreview();
         });
         cosmeticXSlider.addEventListener('input', (e) => {
             playerSettings.cosmeticX = parseInt(e.target.value);
-            cosmeticXValue.textContent = e.target.value;
             savePlayerSettings();
             drawPreview();
         });
         cosmeticYSlider.addEventListener('input', (e) => {
             playerSettings.cosmeticY = parseInt(e.target.value);
-            cosmeticYValue.textContent = e.target.value;
             savePlayerSettings();
             drawPreview();
         });
