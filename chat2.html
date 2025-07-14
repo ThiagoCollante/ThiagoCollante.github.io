@@ -168,7 +168,7 @@
                      </div>
                 </div>
             </div>
-             <div class="fixed bottom-4 left-4 text-xs text-gray-500 font-mono">v3.7</div>
+             <div class="fixed bottom-4 left-4 text-xs text-gray-500 font-mono">v3.8</div>
         </div>
 
         <!-- Chat View (Canvas) -->
@@ -395,7 +395,7 @@
                 const angleInRadians = (player.avatarAngle || 0) * Math.PI / 180;
                 context.rotate(angleInRadians);
                 
-                context.fillStyle = player.avatarColor || '#FFFFFF';
+                context.fillStyle = player.avatarColor || '#000000';
                 context.font = 'bold 16px Inter';
                 context.textAlign = 'center';
                 context.textBaseline = 'middle';
@@ -634,6 +634,8 @@
                     if (values[1]) {
                         if (!/^#[0-9a-fA-F]{6}$/.test(values[1])) return showError("Invalid hex color. Use #RRGGBB format.");
                         updates.avatarColor = values[1];
+                    } else {
+                        updates.avatarColor = '#000000'; // Default
                     }
                     break;
                 
@@ -722,9 +724,21 @@
                         if (players[docId]) {
                             players[docId].targetX = docData.x;
                             players[docId].targetY = docData.y;
-                            // Avoid overwriting the local player's position which is handled by the game loop
-                            const { x, y, ...rest } = docData;
-                            Object.assign(players[docId], rest);
+                            // Manually assign non-positional data to prevent overwriting interpolated values
+                            players[docId].username = docData.username;
+                            players[docId].avatar = docData.avatar;
+                            players[docId].avatarColor = docData.avatarColor;
+                            players[docId].avatarAngle = docData.avatarAngle;
+                            players[docId].shape = docData.shape;
+                            players[docId].cosmetic = docData.cosmetic;
+                            players[docId].cosmeticX = docData.cosmeticX;
+                            players[docId].cosmeticY = docData.cosmeticY;
+                            players[docId].cosmeticSize = docData.cosmeticSize;
+                            players[docId].cosmeticRotation = docData.cosmeticRotation;
+                            players[docId].color = docData.color;
+                            players[docId].message = docData.message;
+                            players[docId].messageTimestamp = docData.messageTimestamp;
+                            players[docId].isTyping = docData.isTyping;
                         }
                     }
                     if (change.type === "removed") {
@@ -743,7 +757,7 @@
                 shape: 'circle',
                 color: '#FFFFFF',
                 avatar: '',
-                avatarColor: '#FFFFFF',
+                avatarColor: '#000000',
                 avatarAngle: 0,
                 cosmetic: '',
                 cosmeticX: 0,
