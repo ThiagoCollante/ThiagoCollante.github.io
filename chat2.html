@@ -15,6 +15,26 @@
             background-color: #1a202c; /* dark gray */
             display: block;
         }
+        /* Custom styles for the color input */
+        input[type="color"] {
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            width: 44px;
+            height: 44px;
+            padding: 0;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        input[type="color"]::-webkit-color-swatch-wrapper {
+            padding: 0;
+            border-radius: 50%;
+        }
+        input[type="color"]::-webkit-color-swatch {
+            border: 2px solid #4A5568;
+            border-radius: 50%;
+        }
     </style>
 </head>
 <body class="bg-gray-900 text-white flex items-center justify-center h-screen">
@@ -29,32 +49,104 @@
             <p id="username-error" class="text-red-400 text-center mt-4 hidden"></p>
         </div>
     </div>
+    
+    <!-- Help Modal -->
+    <div id="help-modal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+        <div class="bg-gray-800 rounded-lg p-8 max-w-2xl w-full text-left shadow-xl">
+            <h2 class="text-2xl font-bold mb-6 text-center">Command List</h2>
+            <ul class="space-y-4 text-gray-300">
+                <li><code class="bg-gray-700 rounded px-2 py-1 font-mono">/user "name"</code> - Changes your username.</li>
+                <li><code class="bg-gray-700 rounded px-2 py-1 font-mono">/shape "shape"</code> - Changes your shape. Options: circle, square, triangle.</li>
+                <li><code class="bg-gray-700 rounded px-2 py-1 font-mono">/color "#hex"</code> - Changes your shape's color (e.g., "#FF0000").</li>
+                <li><code class="bg-gray-700 rounded px-2 py-1 font-mono">/avatar "text" "#hex"</code> - Sets avatar text and optional color.</li>
+                <li><code class="bg-gray-700 rounded px-2 py-1 font-mono">/avatarangle "deg"</code> - Rotates your avatar text.</li>
+                <li><code class="bg-gray-700 rounded px-2 py-1 font-mono">/cosmetic "name"</code> - Equips a cosmetic. Options: crown, tophat, cap, none.</li>
+            </ul>
+            <div class="text-center mt-8">
+                <button id="close-help-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-6 rounded-lg transition">Close</button>
+            </div>
+        </div>
+    </div>
+
 
     <!-- Main App Container -->
     <div id="app" class="hidden w-full h-full bg-gray-800 flex flex-col">
 
         <!-- Lobby Selection / Creation -->
         <div id="lobby-view" class="flex flex-col items-center justify-center h-full p-4">
-            <h1 class="text-4xl font-bold mb-2 text-center">2D Chat Lobbies</h1>
-            <p class="text-lg text-gray-400 mb-8">Welcome, <span id="welcome-username" class="font-bold text-indigo-400"></span></p>
-            <div class="w-full max-w-sm">
-                <button id="create-lobby-btn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg text-lg transition duration-300 ease-in-out transform hover:scale-105">
-                    Create New Lobby
-                </button>
-                <div class="my-6 flex items-center">
-                    <hr class="w-full border-gray-600">
-                    <span class="p-2 text-gray-400">OR</span>
-                    <hr class="w-full border-gray-600">
+             <div class="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-6xl mx-auto items-center">
+                <!-- Left Column: Customization -->
+                <div id="customization-view" class="bg-gray-900 p-6 rounded-lg">
+                    <h2 class="text-2xl font-bold mb-4 text-center">Customize Your Character</h2>
+                    <canvas id="preview-canvas" width="200" height="200" class="mx-auto bg-gray-800 rounded-lg mb-6"></canvas>
+                    <div class="space-y-4">
+                        <div class="grid grid-cols-2 gap-4">
+                           <div>
+                               <label for="username-edit" class="block text-sm font-medium text-gray-400 mb-1">Username</label>
+                               <input type="text" id="username-edit" class="w-full bg-gray-700 rounded p-2">
+                           </div>
+                           <div>
+                               <label for="shape-select" class="block text-sm font-medium text-gray-400 mb-1">Shape</label>
+                               <select id="shape-select" class="w-full bg-gray-700 rounded p-2">
+                                   <option>circle</option>
+                                   <option>square</option>
+                                   <option>triangle</option>
+                               </select>
+                           </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                           <div>
+                               <label class="block text-sm font-medium text-gray-400 mb-1">Color</label>
+                               <input type="color" id="color-picker" class="w-full">
+                           </div>
+                           <div>
+                                <label for="cosmetic-select" class="block text-sm font-medium text-gray-400 mb-1">Cosmetic</label>
+                               <select id="cosmetic-select" class="w-full bg-gray-700 rounded p-2">
+                                   <option value="">none</option>
+                                   <option>crown</option>
+                                   <option>tophat</option>
+                                   <option>cap</option>
+                               </select>
+                           </div>
+                        </div>
+                         <div>
+                           <label class="block text-sm font-medium text-gray-400 mb-1">Avatar</label>
+                            <div class="grid grid-cols-3 gap-2">
+                               <input type="text" id="avatar-text" placeholder="Text" class="col-span-2 bg-gray-700 rounded p-2">
+                               <input type="color" id="avatar-color-picker">
+                           </div>
+                       </div>
+                        <div>
+                           <label for="avatar-angle" class="block text-sm font-medium text-gray-400 mb-1">Avatar Angle (<span id="angle-value">0</span>°)</label>
+                           <input type="range" id="avatar-angle" min="0" max="360" value="0" class="w-full">
+                       </div>
+                    </div>
                 </div>
-                <div class="flex flex-col sm:flex-row gap-4">
-                    <input type="text" id="room-code-input" placeholder="Enter Room Code" class="flex-grow bg-gray-700 text-white border border-gray-600 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                    <button id="join-lobby-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition duration-300 ease-in-out">
-                        Join Lobby
-                    </button>
+
+                <!-- Right Column: Lobby -->
+                <div id="lobby-actions" class="text-center">
+                     <h1 class="text-4xl font-bold mb-2 text-center">2D Chat Lobbies</h1>
+                     <p class="text-lg text-gray-400 mb-8">Welcome, <span id="welcome-username" class="font-bold text-indigo-400"></span></p>
+                     <div class="w-full max-w-sm mx-auto">
+                        <button id="create-lobby-btn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg text-lg transition duration-300 ease-in-out transform hover:scale-105">
+                            Create New Lobby
+                        </button>
+                        <div class="my-6 flex items-center">
+                            <hr class="w-full border-gray-600">
+                            <span class="p-2 text-gray-400">OR</span>
+                            <hr class="w-full border-gray-600">
+                        </div>
+                        <div class="flex flex-col sm:flex-row gap-4">
+                            <input type="text" id="room-code-input" placeholder="Enter Room Code" class="flex-grow bg-gray-700 text-white border border-gray-600 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            <button id="join-lobby-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition duration-300 ease-in-out">
+                                Join Lobby
+                            </button>
+                        </div>
+                         <p id="error-message" class="text-red-400 text-center mt-4 hidden"></p>
+                     </div>
                 </div>
-                 <p id="error-message" class="text-red-400 text-center mt-4 hidden"></p>
             </div>
-             <div class="fixed bottom-4 left-4 text-xs text-gray-500 font-mono">v3.2</div>
+             <div class="fixed bottom-4 left-4 text-xs text-gray-500 font-mono">v3.4</div>
         </div>
 
         <!-- Chat View (Canvas) -->
@@ -64,7 +156,7 @@
                  <button id="leave-lobby-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition">
                     Leave
                 </button>
-                <input id="message-input" placeholder="Try /cosmetic 'crown'" class="flex-grow bg-gray-700 text-white border border-gray-600 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <input id="message-input" placeholder="Type /help for commands" class="flex-grow bg-gray-700 text-white border border-gray-600 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500">
                 <div class="text-sm text-gray-400">Room: <span id="room-code-display" class="font-mono cursor-pointer" title="Click to copy"></span></div>
             </div>
         </div>
@@ -96,6 +188,8 @@
         const setUsernameBtn = document.getElementById('set-username-btn');
         const usernameError = document.getElementById('username-error');
         const welcomeUsername = document.getElementById('welcome-username');
+        const helpModal = document.getElementById('help-modal');
+        const closeHelpBtn = document.getElementById('close-help-btn');
 
         const lobbyView = document.getElementById('lobby-view');
         const chatView = document.getElementById('chat-view');
@@ -109,6 +203,18 @@
         
         const canvas = document.getElementById('game-canvas');
         const ctx = canvas.getContext('2d');
+        const previewCanvas = document.getElementById('preview-canvas');
+        const previewCtx = previewCanvas.getContext('2d');
+
+        // Customization UI Elements
+        const usernameEdit = document.getElementById('username-edit');
+        const shapeSelect = document.getElementById('shape-select');
+        const colorPicker = document.getElementById('color-picker');
+        const cosmeticSelect = document.getElementById('cosmetic-select');
+        const avatarText = document.getElementById('avatar-text');
+        const avatarColorPicker = document.getElementById('avatar-color-picker');
+        const avatarAngle = document.getElementById('avatar-angle');
+        const angleValue = document.getElementById('angle-value');
 
         // --- Asset Management ---
         const cosmeticAssets = {
@@ -150,6 +256,7 @@
         let currentUsername = null;
         let currentLobbyId = null;
         let players = {}; 
+        let playerSettings = {};
         let unsubPlayers = null;
         let animationFrameId;
         let lastUpdateTime = 0;
@@ -161,7 +268,8 @@
         // --- App Initialization Flow ---
 
         function main() {
-            currentUsername = sessionStorage.getItem('chat-username');
+            loadPlayerSettings();
+            currentUsername = playerSettings.username;
             if (currentUsername) {
                 startApp();
             } else {
@@ -175,6 +283,8 @@
             usernameModal.classList.add('hidden');
             appContainer.classList.remove('hidden');
             appContainer.classList.add('flex');
+            updateCustomizationUI();
+            drawPreview();
 
             try {
                 const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : userFirebaseConfig;
@@ -236,62 +346,75 @@
 
             for (const id in players) {
                 const player = players[id];
-                
-                // Draw player shape
-                ctx.fillStyle = player.color;
-                ctx.beginPath();
-                switch(player.shape) {
-                    case 'square':
-                        ctx.rect(player.x - 20, player.y - 20, 40, 40);
-                        break;
-                    case 'triangle':
-                        const sideLength = 40;
-                        const height = sideLength * (Math.sqrt(3) / 2);
-                        ctx.moveTo(player.x, player.y - height / 2);
-                        ctx.lineTo(player.x - sideLength / 2, player.y + height / 2);
-                        ctx.lineTo(player.x + sideLength / 2, player.y + height / 2);
-                        ctx.closePath();
-                        break;
-                    case 'circle':
-                    default:
-                        ctx.arc(player.x, player.y, 20, 0, Math.PI * 2);
-                        break;
-                }
-                ctx.fill();
-
-                // Draw avatar text if it exists
-                if (player.avatar) {
-                    ctx.save();
-                    ctx.translate(player.x, player.y);
-                    const angleInRadians = (player.avatarAngle || 0) * Math.PI / 180;
-                    ctx.rotate(angleInRadians);
-                    
-                    ctx.fillStyle = player.avatarColor || '#FFFFFF';
-                    ctx.font = 'bold 16px Inter';
-                    ctx.textAlign = 'center';
-                    ctx.textBaseline = 'middle';
-                    ctx.fillText(player.avatar, 0, 0);
-                    ctx.restore();
-                }
-
-                // Draw cosmetic
-                if (player.cosmetic && cosmeticAssets[player.cosmetic]?.loaded) {
-                    drawCosmetic(ctx, player.x, player.y, player.cosmetic);
-                }
-
-                // Draw username
-                ctx.fillStyle = 'white';
-                ctx.font = '12px Inter';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'alphabetic';
-                ctx.fillText(player.username, player.x, player.y + 35);
-                
-                if (player.message && Date.now() - player.messageTimestamp < 5000) {
-                    drawChatBubble(ctx, player.x, player.y - 30, player.message);
-                } else if (player.isTyping) {
-                    drawTypingIndicator(ctx, player.x, player.y - 30, timestamp);
-                }
+                drawPlayer(ctx, player, timestamp);
             }
+        }
+        
+        function drawPlayer(context, player, timestamp) {
+            // Draw player shape
+            context.fillStyle = player.color;
+            context.beginPath();
+            switch(player.shape) {
+                case 'square':
+                    context.rect(player.x - 20, player.y - 20, 40, 40);
+                    break;
+                case 'triangle':
+                    const sideLength = 40;
+                    const height = sideLength * (Math.sqrt(3) / 2);
+                    context.moveTo(player.x, player.y - height / 2);
+                    context.lineTo(player.x - sideLength / 2, player.y + height / 2);
+                    context.lineTo(player.x + sideLength / 2, player.y + height / 2);
+                    context.closePath();
+                    break;
+                case 'circle':
+                default:
+                    context.arc(player.x, player.y, 20, 0, Math.PI * 2);
+                    break;
+            }
+            context.fill();
+
+            // Draw avatar text if it exists
+            if (player.avatar) {
+                context.save();
+                context.translate(player.x, player.y);
+                const angleInRadians = (player.avatarAngle || 0) * Math.PI / 180;
+                context.rotate(angleInRadians);
+                
+                context.fillStyle = player.avatarColor || '#FFFFFF';
+                context.font = 'bold 16px Inter';
+                context.textAlign = 'center';
+                context.textBaseline = 'middle';
+                context.fillText(player.avatar, 0, 0);
+                context.restore();
+            }
+
+            // Draw cosmetic
+            if (player.cosmetic && cosmeticAssets[player.cosmetic]?.loaded) {
+                drawCosmetic(context, player.x, player.y, player.cosmetic);
+            }
+
+            // Draw username
+            context.fillStyle = 'white';
+            context.font = '12px Inter';
+            context.textAlign = 'center';
+            context.textBaseline = 'alphabetic';
+            context.fillText(player.username, player.x, player.y + 35);
+            
+            if (player.message && Date.now() - player.messageTimestamp < 5000) {
+                drawChatBubble(context, player.x, player.y - 30, player.message);
+            } else if (player.isTyping) {
+                drawTypingIndicator(context, player.x, player.y - 30, timestamp);
+            }
+        }
+
+        function drawPreview() {
+            const previewPlayer = {
+                ...playerSettings,
+                x: previewCanvas.width / 2,
+                y: previewCanvas.height / 2,
+            };
+            previewCtx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
+            drawPlayer(previewCtx, previewPlayer, performance.now());
         }
         
         function drawCosmetic(ctx, x, y, cosmeticType) {
@@ -422,17 +545,11 @@
                     const startY = Math.random() * 300 + 50;
                     
                     const newPlayer = {
-                        username: currentUsername,
-                        avatar: '',
-                        avatarColor: '#FFFFFF',
-                        avatarAngle: 0,
-                        shape: 'circle',
-                        cosmetic: '',
+                        ...playerSettings,
                         x: startX,
                         y: startY,
                         targetX: startX,
                         targetY: startY,
-                        color: `hsl(${Math.random() * 360}, 70%, 60%)`,
                         message: '',
                         messageTimestamp: 0,
                         isTyping: false,
@@ -475,6 +592,11 @@
             const values = args.map(arg => arg.replace(/"/g, ''));
 
             if (!command) return;
+            
+            if (command === '/help') {
+                helpModal.classList.remove('hidden');
+                return;
+            }
 
             const playerRef = doc(db, `artifacts/${app.options.projectId}/public/data/lobbies/${currentLobbyId}/players`, currentUserId);
             const updates = {};
@@ -483,24 +605,22 @@
                 case '/user':
                     if (!values[0]) return showError("Usage: /user \"new name\"");
                     if (values[0].length > 20) return showError("Username must be 20 characters or less.");
-                    
-                    currentUsername = values[0];
-                    sessionStorage.setItem('chat-username', values[0]);
-                    welcomeUsername.textContent = values[0];
                     updates.username = values[0];
                     break;
 
                 case '/avatar':
-                    if (!values[0]) return showError("Usage: /avatar \"text\" \"#hexcode\" (color is optional)");
+                    if (!values[0]) return showError("Usage: /avatar \"text\" \"#hexcode\" (color optional)");
                     if (values[0].length > 3) return showError("Avatar text must be 3 characters or less.");
-                    
                     updates.avatar = values[0];
                     if (values[1]) {
                         if (!/^#[0-9a-fA-F]{6}$/.test(values[1])) return showError("Invalid hex color. Use #RRGGBB format.");
                         updates.avatarColor = values[1];
-                    } else {
-                        updates.avatarColor = '#FFFFFF'; // Default
                     }
+                    break;
+                
+                case '/avatarcolor':
+                    if (!values[0] || !/^#[0-9a-fA-F]{6}$/.test(values[0])) return showError("Usage: /avatarcolor \"#RRGGBB\"");
+                    updates.avatarColor = values[0];
                     break;
                 
                 case '/avatarangle':
@@ -510,9 +630,8 @@
                     updates.avatarAngle = angle;
                     break;
 
-                case '/colour':
                 case '/color':
-                    if (!values[0] || !/^#[0-9a-fA-F]{6}$/.test(values[0])) return showError("Usage: /colour \"#RRGGBB\"");
+                    if (!values[0] || !/^#[0-9a-fA-F]{6}$/.test(values[0])) return showError("Usage: /color \"#RRGGBB\"");
                     updates.color = values[0];
                     break;
                 
@@ -534,9 +653,11 @@
             }
 
             if (Object.keys(updates).length > 0) {
-                 if(players[currentUserId]) {
+                Object.assign(playerSettings, updates);
+                savePlayerSettings();
+                if(players[currentUserId]) {
                     Object.assign(players[currentUserId], updates);
-                 }
+                }
                 await updateDoc(playerRef, updates);
             }
         }
@@ -580,20 +701,9 @@
                     }
                     if (change.type === "modified") {
                         if (players[docId]) {
-                            // This is the key fix: only update targets and non-positional data.
-                            // The actual x/y are handled by the interpolation in the game loop.
                             players[docId].targetX = docData.x;
                             players[docId].targetY = docData.y;
-                            players[docId].username = docData.username;
-                            players[docId].avatar = docData.avatar;
-                            players[docId].avatarColor = docData.avatarColor;
-                            players[docId].avatarAngle = docData.avatarAngle;
-                            players[docId].shape = docData.shape;
-                            players[docId].cosmetic = docData.cosmetic;
-                            players[docId].color = docData.color;
-                            players[docId].message = docData.message;
-                            players[docId].messageTimestamp = docData.messageTimestamp;
-                            players[docId].isTyping = docData.isTyping;
+                            Object.assign(players[docId], docData);
                         }
                     }
                     if (change.type === "removed") {
@@ -604,6 +714,35 @@
         }
 
         // --- UI Switching and Helpers ---
+        
+        function loadPlayerSettings() {
+            const savedSettings = JSON.parse(sessionStorage.getItem('playerSettings'));
+            playerSettings = {
+                username: 'Player',
+                shape: 'circle',
+                color: '#FFFFFF',
+                avatar: '',
+                avatarColor: '#FFFFFF',
+                avatarAngle: 0,
+                cosmetic: '',
+                ...savedSettings
+            };
+        }
+
+        function savePlayerSettings() {
+            sessionStorage.setItem('playerSettings', JSON.stringify(playerSettings));
+        }
+
+        function updateCustomizationUI() {
+            usernameEdit.value = playerSettings.username;
+            shapeSelect.value = playerSettings.shape;
+            colorPicker.value = playerSettings.color;
+            cosmeticSelect.value = playerSettings.cosmetic;
+            avatarText.value = playerSettings.avatar;
+            avatarColorPicker.value = playerSettings.avatarColor;
+            avatarAngle.value = playerSettings.avatarAngle;
+            angleValue.textContent = playerSettings.avatarAngle;
+        }
 
         function switchToChatView() {
             roomCodeDisplay.textContent = currentLobbyId;
@@ -642,8 +781,8 @@
         setUsernameBtn.addEventListener('click', () => {
             const username = usernameInput.value.trim();
             if (username) {
-                currentUsername = username;
-                sessionStorage.setItem('chat-username', username);
+                playerSettings.username = username;
+                savePlayerSettings();
                 startApp();
             }
         });
@@ -660,10 +799,21 @@
         });
         messageInput.addEventListener('focus', () => setTypingStatus(true));
         messageInput.addEventListener('blur', () => setTypingStatus(false));
-
-        window.addEventListener('resize', resizeCanvas);
-        window.addEventListener('keydown', (e) => { if (e.key in keys) keys[e.key] = true; });
-        window.addEventListener('keyup', (e) => { if (e.key in keys) keys[e.key] = false; });
+        
+        closeHelpBtn.addEventListener('click', () => helpModal.classList.add('hidden'));
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                helpModal.classList.add('hidden');
+            }
+            if (e.key in keys) {
+                keys[e.key] = true;
+            }
+        });
+        window.addEventListener('keyup', (e) => {
+            if (e.key in keys) {
+                keys[e.key] = false;
+            }
+        });
         
         roomCodeDisplay.addEventListener('click', () => {
              navigator.clipboard.writeText(roomCodeDisplay.textContent).then(() => {
@@ -671,6 +821,26 @@
                 setTimeout(() => { roomCodeDisplay.title = 'Click to copy'; }, 2000);
             });
         });
+
+        // Customization Listeners
+        usernameEdit.addEventListener('input', (e) => { 
+            playerSettings.username = e.target.value;
+            welcomeUsername.textContent = e.target.value;
+            savePlayerSettings();
+            drawPreview();
+        });
+        shapeSelect.addEventListener('change', (e) => { playerSettings.shape = e.target.value; savePlayerSettings(); drawPreview(); });
+        colorPicker.addEventListener('input', (e) => { playerSettings.color = e.target.value; savePlayerSettings(); drawPreview(); });
+        cosmeticSelect.addEventListener('change', (e) => { playerSettings.cosmetic = e.target.value; savePlayerSettings(); drawPreview(); });
+        avatarText.addEventListener('input', (e) => { playerSettings.avatar = e.target.value.substring(0,3); savePlayerSettings(); drawPreview(); });
+        avatarColorPicker.addEventListener('input', (e) => { playerSettings.avatarColor = e.target.value; savePlayerSettings(); drawPreview(); });
+        avatarAngle.addEventListener('input', (e) => { 
+            playerSettings.avatarAngle = e.target.value;
+            angleValue.textContent = e.target.value;
+            savePlayerSettings(); 
+            drawPreview(); 
+        });
+
 
         // --- Start the App ---
         loadAssets();
