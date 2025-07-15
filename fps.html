@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Multiplayer Environment with Lobbies</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Inter', sans-serif;
+            color: white;
+            background-color: #111;
+        }
+        canvas {
+            display: block;
+        }
+        #info-container {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            padding: 10px;
+            background-color: rgba(0, 0, 0, 0.5);
+            border-radius: 8px;
+            font-size: 12px;
+            z-index: 10;
+        }
+        #blocker {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        #lobby-ui {
+            width: 90%;
+            max-width: 450px;
+            padding: 25px;
+            background-color: #222;
+            border-radius: 12px;
+            text-align: center;
+            border: 1px solid #444;
+        }
+        .lobby-input {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 6px;
+            border: 1px solid #555;
+            background-color: #333;
+            color: white;
+            text-align: center;
+            font-size: 1rem;
+        }
+        .lobby-button {
+            width: 100%;
+            padding: 12px;
+            margin-top: 10px;
+            border-radius: 6px;
+            border: none;
+            background-color: #4a90e2;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .lobby-button:hover {
+            background-color: #357abd;
+        }
+        #lobby-id-display {
+            margin-top: 15px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            color: #a5d6a7; /* Light green */
+        }
+        #error-message {
+            color: #ef5350; /* Light red */
+            margin-top: 10px;
+            min-height: 20px;
+        }
+        .crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 10px;
+            height: 10px;
+            border: 1px solid white;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            mix-blend-mode: difference;
+        }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="blocker">
+        <div id="lobby-ui">
+            <h1 class="text-2xl font-bold mb-4">Join a Lobby</h1>
+            <button id="create-lobby-btn" class="lobby-button">Create New Lobby</button>
+            <div id="lobby-id-display"></div>
+            <hr class="my-4 border-gray-600">
+            <input type="text" id="join-lobby-input" class="lobby-input" placeholder="Enter Lobby ID">
+            <button id="join-lobby-btn" class="lobby-button">Join Lobby</button>
+            <p id="error-message"></p>
+        </div>
+    </div>
+
+    <div id="info-container">
+        Your User ID: <span id="userId">Loading...</span><br>
+        Lobby ID: <span id="lobbyId">N/A</span>
+    </div>
+    
+    <div class="crosshair" style="display: none;"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <script type="module">
+        // Firebase Imports
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- GLOBAL VARIABLES ---
+        let scene, camera, renderer;
+        let db, auth;
+        let userId, currentLobbyId;
+        let playerRef;
+
+        const playerMeshes = {}; // To store Three.js meshes of players
+
+        const moveState = { forward: false, backward: false, left: false, right: false };
+        const playerVelocity = new THREE.Vector3();
+        const playerDirection = new THREE.Vector3();
+        const speed = 8.0;
+        let lastTime = performance.now();
+        let isGameStarted = false;
+
+        // --- INITIALIZATION ---
+        
+        async function init() {
+            await initFirebase();
+            initLobbyUI();
+        }
+
+        async function initFirebase() {
+            // User-provided Firebase configuration
+            const firebaseConfig = {
+              apiKey: "AIzaSyBTiB7WELSoTqU6LpfQhSULAJQrHpRmjn4",
+              authDomain: "beanfight-c358b.firebaseapp.com",
+              projectId: "beanfight-c358b",
+              storageBucket: "beanfight-c358b.firebasestorage.app",
+              messagingSenderId: "737331189210",
+              appId: "1:737331189210:web:22cf3c5d8b284fb80ddce3"
+            };
+
+            const app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app);
+
+            onAuthStateChanged(auth, (user) => {
+                if (user) {
+                    userId = user.uid;
+                    document.getElementById('userId').textContent = userId;
+                }
+            });
+
+            await signInAnonymously(auth);
+        }
+
+        function initLobbyUI() {
+            const createBtn = document.getElementById('create-lobby-btn');
+            const joinBtn = document.getElementById('join-lobby-btn');
+            const lobbyInput = document.getElementById('join-lobby-input');
+            
+            createBtn.addEventListener('click', createLobby);
+            joinBtn.addEventListener('click', () => joinLobby(lobbyInput.value));
+        }
+
+        function startGame(lobbyId) {
+            if (isGameStarted) return;
+            
+            currentLobbyId = lobbyId;
+            document.getElementById('lobbyId').textContent = lobbyId;
+            
+            // Hide lobby UI and show game elements
+            document.getElementById('blocker').style.display = 'none';
+            document.querySelector('.crosshair').style.display = 'block';
+
+            // Initialize 3D environment
+            initThree();
+            initGameEventListeners();
+            
+            // Set up player in Firestore
+            const playersCollectionPath = `/artifacts/${auth.app.options.appId}/public/data/lobbies/${currentLobbyId}/players`;
+            playerRef = doc(db, playersCollectionPath, userId);
+            setDoc(playerRef, {
+                x: 0, y: 1, z: 5,
+                qx: 0, qy: 0, qz: 0, qw: 1,
+                timestamp: Date.now()
+            });
+
+            listenForPlayers(playersCollectionPath);
+
+            isGameStarted = true;
+            animate();
+        }
+
+        function initThree() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87ceeb);
+            scene.fog = new THREE.Fog(0x87ceeb, 0, 100);
+
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 1.7, 5);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.shadowMap.enabled = true;
+            document.body.appendChild(renderer.domElement);
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(10, 20, 5);
+            directionalLight.castShadow = true;
+            scene.add(directionalLight);
+
+            const groundGeo = new THREE.PlaneGeometry(200, 200);
+            const groundMat = new THREE.MeshLambertMaterial({ color: 0x999999 });
+            const ground = new THREE.Mesh(groundGeo, groundMat);
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true;
+            scene.add(ground);
+        }
+
+        function initGameEventListeners() {
+            document.body.requestPointerLock();
+
+            document.addEventListener('pointerlockchange', () => {
+                if (document.pointerLockElement !== document.body) {
+                    document.addEventListener('mousemove', onMouseMove, false);
+                } else {
+                    document.removeEventListener('mousemove', onMouseMove, false);
+                    Object.keys(moveState).forEach(key => moveState[key] = false);
+                }
+            });
+
+            document.addEventListener('keydown', (event) => {
+                switch (event.code) {
+                    case 'KeyW': moveState.forward = true; break;
+                    case 'KeyA': moveState.left = true; break;
+                    case 'KeyS': moveState.backward = true; break;
+                    case 'KeyD': moveState.right = true; break;
+                }
+            });
+
+            document.addEventListener('keyup', (event) => {
+                switch (event.code) {
+                    case 'KeyW': moveState.forward = false; break;
+                    case 'KeyA': moveState.left = false; break;
+                    case 'KeyS': moveState.backward = false; break;
+                    case 'KeyD': moveState.right = false; break;
+                }
+            });
+
+            window.addEventListener('resize', onWindowResize);
+            window.addEventListener('beforeunload', () => {
+                if (playerRef) deleteDoc(playerRef);
+            });
+        }
+
+        // --- LOBBY MANAGEMENT ---
+
+        async function createLobby() {
+            const lobbyId = Math.random().toString(36).substring(2, 8).toUpperCase();
+            const lobbyRef = doc(db, `/artifacts/${auth.app.options.appId}/public/data/lobbies`, lobbyId);
+            
+            await setDoc(lobbyRef, {
+                createdAt: Date.now(),
+                owner: userId
+            });
+            
+            document.getElementById('lobby-id-display').textContent = `Lobby ID: ${lobbyId}`;
+            document.getElementById('error-message').textContent = 'Lobby created! Starting game...';
+            
+            setTimeout(() => startGame(lobbyId), 1500);
+        }
+
+        async function joinLobby(lobbyId) {
+            if (!lobbyId) {
+                document.getElementById('error-message').textContent = 'Please enter a Lobby ID.';
+                return;
+            }
+            const lobbyRef = doc(db, `/artifacts/${auth.app.options.appId}/public/data/lobbies`, lobbyId);
+            const lobbySnap = await getDoc(lobbyRef);
+
+            if (lobbySnap.exists()) {
+                document.getElementById('error-message').textContent = 'Lobby found! Joining...';
+                setTimeout(() => startGame(lobbyId), 1000);
+            } else {
+                document.getElementById('error-message').textContent = 'Lobby not found. Please check the ID.';
+            }
+        }
+
+        // --- REAL-TIME FUNCTIONALITY ---
+
+        function listenForPlayers(collectionPath) {
+            const playersCollection = collection(db, collectionPath);
+            onSnapshot(playersCollection, (snapshot) => {
+                snapshot.docChanges().forEach((change) => {
+                    const docId = change.doc.id;
+                    const data = change.doc.data();
+
+                    if (docId === userId) return;
+
+                    if (change.type === "added" || change.type === "modified") {
+                        if (!playerMeshes[docId]) {
+                            const geometry = new THREE.CylinderGeometry(0.5, 0.5, 2, 3);
+                            const material = new THREE.MeshStandardMaterial({ color: Math.random() * 0xffffff });
+                            const mesh = new THREE.Mesh(geometry, material);
+                            mesh.castShadow = true;
+                            playerMeshes[docId] = mesh;
+                            scene.add(mesh);
+                        }
+                        const mesh = playerMeshes[docId];
+                        mesh.position.set(data.x, data.y, data.z);
+                        mesh.quaternion.set(data.qx, data.qy, data.qz, data.qw);
+                    } else if (change.type === "removed") {
+                        if (playerMeshes[docId]) {
+                            scene.remove(playerMeshes[docId]);
+                            delete playerMeshes[docId];
+                        }
+                    }
+                });
+            });
+        }
+
+        // --- EVENT HANDLERS & CONTROLS ---
+
+        function onMouseMove(event) {
+            if (document.pointerLockElement !== document.body) return;
+            const euler = new THREE.Euler(0, 0, 0, 'YXZ');
+            euler.setFromQuaternion(camera.quaternion);
+            euler.y -= (event.movementX || 0) * 0.002;
+            euler.x -= (event.movementY || 0) * 0.002;
+            euler.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, euler.x));
+            camera.quaternion.setFromEuler(euler);
+        }
+
+        function onWindowResize() {
+            if (!isGameStarted) return;
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+        
+        function updatePlayer(deltaTime) {
+            camera.getWorldDirection(playerDirection);
+            playerDirection.y = 0;
+            playerDirection.normalize();
+
+            playerVelocity.x -= playerVelocity.x * 10.0 * deltaTime;
+            playerVelocity.z -= playerVelocity.z * 10.0 * deltaTime;
+
+            if (moveState.forward) playerVelocity.z -= speed * deltaTime;
+            if (moveState.backward) playerVelocity.z += speed * deltaTime;
+            if (moveState.left) playerVelocity.x -= speed * deltaTime;
+            if (moveState.right) playerVelocity.x += speed * deltaTime;
+
+            const moveX = -playerVelocity.x;
+            const moveZ = -playerVelocity.z;
+
+            camera.position.x += moveZ * playerDirection.x + moveX * playerDirection.z;
+            camera.position.z += moveZ * playerDirection.z - moveX * playerDirection.x;
+
+            if (playerRef) {
+                setDoc(playerRef, {
+                    x: camera.position.x,
+                    y: 1,
+                    z: camera.position.z,
+                    qx: camera.quaternion.x,
+                    qy: camera.quaternion.y,
+                    qz: camera.quaternion.z,
+                    qw: camera.quaternion.w,
+                    timestamp: Date.now()
+                }, { merge: true });
+            }
+        }
+
+        // --- ANIMATION LOOP ---
+
+        function animate() {
+            if (!isGameStarted) return;
+            requestAnimationFrame(animate);
+            const time = performance.now();
+            const deltaTime = (time - lastTime) / 1000;
+            if (document.pointerLockElement === document.body) {
+                updatePlayer(deltaTime);
+            }
+            lastTime = time;
+            renderer.render(scene, camera);
+        }
+
+        // --- START THE APP ---
+        init();
+    </script>
+</body>
+</html>
