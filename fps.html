@@ -125,7 +125,7 @@
         Lobby ID: <span id="lobbyId">N/A</span>
     </div>
     
-    <div id="version-info">Version 1.6</div>
+    <div id="version-info">Version 1.8</div>
 
     <div class="crosshair" style="display: none;"></div>
 
@@ -153,18 +153,22 @@
         let lastTime = performance.now();
         let isGameStarted = false;
 
+        // Network Optimization Variables
+        const updateInterval = 50; // ms, so 1000/50 = 20 updates per second
+        let lastUpdateTime = 0;
+
         // --- INITIALIZATION ---
         
         async function init() {
             await initFirebase();
             initLobbyUI();
+            initEventListeners(); // Set up all event listeners once.
         }
 
         async function initFirebase() {
-            // Use environment-provided config if available, otherwise fallback.
             const firebaseConfig = typeof __firebase_config !== 'undefined' 
                 ? JSON.parse(__firebase_config)
-                : { // Fallback config
+                : { 
                     apiKey: "AIzaSyBTiB7WELSoTqU6LpfQhSULAJQrHpRmjn4",
                     authDomain: "beanfight-c358b.firebaseapp.com",
                     projectId: "beanfight-c358b",
@@ -186,7 +190,6 @@
                 }
             });
 
-            // Use the platform's authentication method
             try {
                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                     await signInWithCustomToken(auth, __initial_auth_token);
@@ -214,15 +217,12 @@
             currentLobbyId = lobbyId;
             document.getElementById('lobbyId').textContent = lobbyId;
             
-            // Hide lobby UI and show game elements
             document.getElementById('blocker').style.display = 'none';
             document.querySelector('.crosshair').style.display = 'block';
 
-            // Initialize 3D environment
             initThree();
-            initGameEventListeners();
+            document.body.requestPointerLock(); // Request pointer lock to start game controls.
             
-            // Set up player in Firestore
             const playersCollectionPath = `/artifacts/${appId}/public/data/lobbies/${currentLobbyId}/players`;
             playerRef = doc(db, playersCollectionPath, userId);
             setDoc(playerRef, {
@@ -266,21 +266,22 @@
             scene.add(ground);
         }
 
-        function initGameEventListeners() {
-            document.body.requestPointerLock();
-
+        function initEventListeners() {
+            // This function is called once to set up all necessary event listeners for the application.
+            
+            // Pointer Lock Logic
             document.addEventListener('pointerlockchange', () => {
                 if (document.pointerLockElement === document.body) {
-                    // Pointer is locked, listen for movement
                     document.addEventListener('mousemove', onMouseMove, false);
                 } else {
-                    // Pointer is unlocked, stop listening and reset movement
                     document.removeEventListener('mousemove', onMouseMove, false);
                     Object.keys(moveState).forEach(key => moveState[key] = false);
                 }
             });
 
+            // Keyboard Controls
             document.addEventListener('keydown', (event) => {
+                if (document.pointerLockElement !== document.body) return; // Only process keys if pointer is locked
                 switch (event.code) {
                     case 'KeyW': moveState.forward = true; break;
                     case 'KeyA': moveState.left = true; break;
@@ -298,6 +299,7 @@
                 }
             });
 
+            // Window Events
             window.addEventListener('resize', onWindowResize);
             window.addEventListener('beforeunload', () => {
                 if (playerRef) deleteDoc(playerRef);
@@ -310,10 +312,7 @@
             const lobbyId = Math.random().toString(36).substring(2, 8).toUpperCase();
             const lobbyRef = doc(db, `/artifacts/${appId}/public/data/lobbies`, lobbyId);
             
-            await setDoc(lobbyRef, {
-                createdAt: Date.now(),
-                owner: userId
-            });
+            await setDoc(lobbyRef, { createdAt: Date.now(), owner: userId });
             
             document.getElementById('lobby-id-display').textContent = `Lobby ID: ${lobbyId}`;
             document.getElementById('error-message').textContent = 'Lobby created! Starting game...';
@@ -350,7 +349,6 @@
 
                     if (change.type === "added" || change.type === "modified") {
                         if (!playerMeshes[docId]) {
-                            // Create a new player object if it doesn't exist
                             const geometry = new THREE.CylinderGeometry(0.5, 0.5, 2, 3);
                             const material = new THREE.MeshStandardMaterial({ color: Math.random() * 0xffffff });
                             const mesh = new THREE.Mesh(geometry, material);
@@ -365,7 +363,6 @@
                             };
                             scene.add(mesh);
                         } else {
-                            // If player exists, just update their target state for interpolation
                             playerMeshes[docId].targetPosition.set(data.x, data.y, data.z);
                             playerMeshes[docId].targetQuaternion.set(data.qx, data.qy, data.qz, data.qw);
                         }
@@ -382,7 +379,6 @@
         // --- EVENT HANDLERS & CONTROLS ---
 
         function onMouseMove(event) {
-            if (document.pointerLockElement !== document.body) return;
             const euler = new THREE.Euler(0, 0, 0, 'YXZ');
             euler.setFromQuaternion(camera.quaternion);
             euler.y -= (event.movementX || 0) * 0.002;
@@ -398,7 +394,7 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         }
         
-        function updatePlayer(deltaTime) {
+        function updatePlayerState(deltaTime) {
             camera.getWorldDirection(playerDirection);
             playerDirection.y = 0;
             playerDirection.normalize();
@@ -416,13 +412,13 @@
 
             camera.position.x += moveZ * playerDirection.x + moveX * playerDirection.z;
             camera.position.z += moveZ * playerDirection.z - moveX * playerDirection.x;
+        }
 
+        function sendPlayerStateToServer() {
             if (playerRef) {
-                // Create a quaternion that only represents the body's yaw (left-right rotation)
-                // and not the camera's pitch (up-down look).
                 const bodyEuler = new THREE.Euler(0, 0, 0, 'YXZ');
                 bodyEuler.setFromQuaternion(camera.quaternion, 'YXZ');
-                bodyEuler.x = 0; // Zero out the pitch (up-down rotation)
+                bodyEuler.x = 0;
 
                 const bodyQuaternion = new THREE.Quaternion().setFromEuler(bodyEuler);
 
@@ -440,8 +436,7 @@
         }
 
         function updateRemotePlayers(deltaTime) {
-            // This function smoothly interpolates remote players to their target states
-            const interpolationFactor = Math.min(deltaTime * 15, 1.0); // Adjust speed of interpolation
+            const interpolationFactor = Math.min(deltaTime * 15, 1.0);
             for (const id in playerMeshes) {
                 const player = playerMeshes[id];
                 player.mesh.position.lerp(player.targetPosition, interpolationFactor);
@@ -449,20 +444,25 @@
             }
         }
 
-
         // --- ANIMATION LOOP ---
 
         function animate() {
             if (!isGameStarted) return;
             requestAnimationFrame(animate);
+            
             const time = performance.now();
             const deltaTime = (time - lastTime) / 1000;
             
             if (document.pointerLockElement === document.body) {
-                updatePlayer(deltaTime);
+                updatePlayerState(deltaTime);
+
+                if (time - lastUpdateTime > updateInterval) {
+                    sendPlayerStateToServer();
+                    lastUpdateTime = time;
+                }
             }
 
-            updateRemotePlayers(deltaTime); // Interpolate other players' movements
+            updateRemotePlayers(deltaTime);
 
             lastTime = time;
             renderer.render(scene, camera);
