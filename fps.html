@@ -125,7 +125,7 @@
         Lobby ID: <span id="lobbyId">N/A</span>
     </div>
     
-    <div id="version-info">Version 1.3</div>
+    <div id="version-info">Version 1.6</div>
 
     <div class="crosshair" style="display: none;"></div>
 
@@ -135,17 +135,16 @@
     <script type="module">
         // Firebase Imports
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- GLOBAL VARIABLES ---
         let scene, camera, renderer;
         let db, auth;
-        let userId, currentLobbyId;
+        let userId, currentLobbyId, appId;
         let playerRef;
-        let firebaseConfig; // Make config global
 
-        const playerMeshes = {}; // To store Three.js meshes of players
+        const playerMeshes = {}; // To store remote player objects { mesh, targetPosition, targetQuaternion }
 
         const moveState = { forward: false, backward: false, left: false, right: false };
         const playerVelocity = new THREE.Vector3();
@@ -162,15 +161,19 @@
         }
 
         async function initFirebase() {
-            // User-provided Firebase configuration
-            firebaseConfig = {
-              apiKey: "AIzaSyBTiB7WELSoTqU6LpfQhSULAJQrHpRmjn4",
-              authDomain: "beanfight-c358b.firebaseapp.com",
-              projectId: "beanfight-c358b",
-              storageBucket: "beanfight-c358b.firebasestorage.app",
-              messagingSenderId: "737331189210",
-              appId: "1:737331189210:web:22cf3c5d8b284fb80ddce3"
-            };
+            // Use environment-provided config if available, otherwise fallback.
+            const firebaseConfig = typeof __firebase_config !== 'undefined' 
+                ? JSON.parse(__firebase_config)
+                : { // Fallback config
+                    apiKey: "AIzaSyBTiB7WELSoTqU6LpfQhSULAJQrHpRmjn4",
+                    authDomain: "beanfight-c358b.firebaseapp.com",
+                    projectId: "beanfight-c358b",
+                    storageBucket: "beanfight-c358b.firebasestorage.app",
+                    messagingSenderId: "737331189210",
+                    appId: "1:737331189210:web:22cf3c5d8b284fb80ddce3"
+                };
+            
+            appId = typeof __app_id !== 'undefined' ? __app_id : firebaseConfig.projectId;
 
             const app = initializeApp(firebaseConfig);
             db = getFirestore(app);
@@ -183,7 +186,17 @@
                 }
             });
 
-            await signInAnonymously(auth);
+            // Use the platform's authentication method
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (error) {
+                console.error("Firebase authentication failed:", error);
+                document.getElementById('error-message').textContent = "Authentication failed. Please refresh.";
+            }
         }
 
         function initLobbyUI() {
@@ -210,7 +223,7 @@
             initGameEventListeners();
             
             // Set up player in Firestore
-            const playersCollectionPath = `/artifacts/${firebaseConfig.projectId}/public/data/lobbies/${currentLobbyId}/players`;
+            const playersCollectionPath = `/artifacts/${appId}/public/data/lobbies/${currentLobbyId}/players`;
             playerRef = doc(db, playersCollectionPath, userId);
             setDoc(playerRef, {
                 x: 0, y: 1, z: 5,
@@ -295,7 +308,7 @@
 
         async function createLobby() {
             const lobbyId = Math.random().toString(36).substring(2, 8).toUpperCase();
-            const lobbyRef = doc(db, `/artifacts/${firebaseConfig.projectId}/public/data/lobbies`, lobbyId);
+            const lobbyRef = doc(db, `/artifacts/${appId}/public/data/lobbies`, lobbyId);
             
             await setDoc(lobbyRef, {
                 createdAt: Date.now(),
@@ -313,7 +326,7 @@
                 document.getElementById('error-message').textContent = 'Please enter a Lobby ID.';
                 return;
             }
-            const lobbyRef = doc(db, `/artifacts/${firebaseConfig.projectId}/public/data/lobbies`, lobbyId);
+            const lobbyRef = doc(db, `/artifacts/${appId}/public/data/lobbies`, lobbyId);
             const lobbySnap = await getDoc(lobbyRef);
 
             if (lobbySnap.exists()) {
@@ -337,19 +350,28 @@
 
                     if (change.type === "added" || change.type === "modified") {
                         if (!playerMeshes[docId]) {
+                            // Create a new player object if it doesn't exist
                             const geometry = new THREE.CylinderGeometry(0.5, 0.5, 2, 3);
                             const material = new THREE.MeshStandardMaterial({ color: Math.random() * 0xffffff });
                             const mesh = new THREE.Mesh(geometry, material);
                             mesh.castShadow = true;
-                            playerMeshes[docId] = mesh;
+                            mesh.position.set(data.x, data.y, data.z);
+                            mesh.quaternion.set(data.qx, data.qy, data.qz, data.qw);
+                            
+                            playerMeshes[docId] = {
+                                mesh: mesh,
+                                targetPosition: new THREE.Vector3().copy(mesh.position),
+                                targetQuaternion: new THREE.Quaternion().copy(mesh.quaternion)
+                            };
                             scene.add(mesh);
+                        } else {
+                            // If player exists, just update their target state for interpolation
+                            playerMeshes[docId].targetPosition.set(data.x, data.y, data.z);
+                            playerMeshes[docId].targetQuaternion.set(data.qx, data.qy, data.qz, data.qw);
                         }
-                        const mesh = playerMeshes[docId];
-                        mesh.position.set(data.x, data.y, data.z);
-                        mesh.quaternion.set(data.qx, data.qy, data.qz, data.qw);
                     } else if (change.type === "removed") {
                         if (playerMeshes[docId]) {
-                            scene.remove(playerMeshes[docId]);
+                            scene.remove(playerMeshes[docId].mesh);
                             delete playerMeshes[docId];
                         }
                     }
@@ -396,18 +418,37 @@
             camera.position.z += moveZ * playerDirection.z - moveX * playerDirection.x;
 
             if (playerRef) {
+                // Create a quaternion that only represents the body's yaw (left-right rotation)
+                // and not the camera's pitch (up-down look).
+                const bodyEuler = new THREE.Euler(0, 0, 0, 'YXZ');
+                bodyEuler.setFromQuaternion(camera.quaternion, 'YXZ');
+                bodyEuler.x = 0; // Zero out the pitch (up-down rotation)
+
+                const bodyQuaternion = new THREE.Quaternion().setFromEuler(bodyEuler);
+
                 setDoc(playerRef, {
                     x: camera.position.x,
                     y: 1,
                     z: camera.position.z,
-                    qx: camera.quaternion.x,
-                    qy: camera.quaternion.y,
-                    qz: camera.quaternion.z,
-                    qw: camera.quaternion.w,
+                    qx: bodyQuaternion.x,
+                    qy: bodyQuaternion.y,
+                    qz: bodyQuaternion.z,
+                    qw: bodyQuaternion.w,
                     timestamp: Date.now()
                 }, { merge: true });
             }
         }
+
+        function updateRemotePlayers(deltaTime) {
+            // This function smoothly interpolates remote players to their target states
+            const interpolationFactor = Math.min(deltaTime * 15, 1.0); // Adjust speed of interpolation
+            for (const id in playerMeshes) {
+                const player = playerMeshes[id];
+                player.mesh.position.lerp(player.targetPosition, interpolationFactor);
+                player.mesh.quaternion.slerp(player.targetQuaternion, interpolationFactor);
+            }
+        }
+
 
         // --- ANIMATION LOOP ---
 
@@ -416,9 +457,13 @@
             requestAnimationFrame(animate);
             const time = performance.now();
             const deltaTime = (time - lastTime) / 1000;
+            
             if (document.pointerLockElement === document.body) {
                 updatePlayer(deltaTime);
             }
+
+            updateRemotePlayers(deltaTime); // Interpolate other players' movements
+
             lastTime = time;
             renderer.render(scene, camera);
         }
