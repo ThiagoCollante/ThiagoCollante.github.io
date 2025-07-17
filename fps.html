@@ -25,6 +25,17 @@
             font-size: 12px;
             z-index: 10;
         }
+        #version-info {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            padding: 5px;
+            background-color: rgba(0, 0, 0, 0.5);
+            border-radius: 5px;
+            font-size: 10px;
+            color: white;
+            z-index: 10;
+        }
         #blocker {
             position: absolute;
             width: 100%;
@@ -114,6 +125,8 @@
         Lobby ID: <span id="lobbyId">N/A</span>
     </div>
     
+    <div id="version-info">Version 1.3</div>
+
     <div class="crosshair" style="display: none;"></div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -130,6 +143,7 @@
         let db, auth;
         let userId, currentLobbyId;
         let playerRef;
+        let firebaseConfig; // Make config global
 
         const playerMeshes = {}; // To store Three.js meshes of players
 
@@ -149,7 +163,7 @@
 
         async function initFirebase() {
             // User-provided Firebase configuration
-            const firebaseConfig = {
+            firebaseConfig = {
               apiKey: "AIzaSyBTiB7WELSoTqU6LpfQhSULAJQrHpRmjn4",
               authDomain: "beanfight-c358b.firebaseapp.com",
               projectId: "beanfight-c358b",
@@ -196,7 +210,7 @@
             initGameEventListeners();
             
             // Set up player in Firestore
-            const playersCollectionPath = `/artifacts/${auth.app.options.appId}/public/data/lobbies/${currentLobbyId}/players`;
+            const playersCollectionPath = `/artifacts/${firebaseConfig.projectId}/public/data/lobbies/${currentLobbyId}/players`;
             playerRef = doc(db, playersCollectionPath, userId);
             setDoc(playerRef, {
                 x: 0, y: 1, z: 5,
@@ -243,9 +257,11 @@
             document.body.requestPointerLock();
 
             document.addEventListener('pointerlockchange', () => {
-                if (document.pointerLockElement !== document.body) {
+                if (document.pointerLockElement === document.body) {
+                    // Pointer is locked, listen for movement
                     document.addEventListener('mousemove', onMouseMove, false);
                 } else {
+                    // Pointer is unlocked, stop listening and reset movement
                     document.removeEventListener('mousemove', onMouseMove, false);
                     Object.keys(moveState).forEach(key => moveState[key] = false);
                 }
@@ -279,7 +295,7 @@
 
         async function createLobby() {
             const lobbyId = Math.random().toString(36).substring(2, 8).toUpperCase();
-            const lobbyRef = doc(db, `/artifacts/${auth.app.options.appId}/public/data/lobbies`, lobbyId);
+            const lobbyRef = doc(db, `/artifacts/${firebaseConfig.projectId}/public/data/lobbies`, lobbyId);
             
             await setDoc(lobbyRef, {
                 createdAt: Date.now(),
@@ -297,7 +313,7 @@
                 document.getElementById('error-message').textContent = 'Please enter a Lobby ID.';
                 return;
             }
-            const lobbyRef = doc(db, `/artifacts/${auth.app.options.appId}/public/data/lobbies`, lobbyId);
+            const lobbyRef = doc(db, `/artifacts/${firebaseConfig.projectId}/public/data/lobbies`, lobbyId);
             const lobbySnap = await getDoc(lobbyRef);
 
             if (lobbySnap.exists()) {
