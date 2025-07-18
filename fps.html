@@ -77,8 +77,12 @@
             cursor: pointer;
             transition: background-color 0.2s;
         }
-        .lobby-button:hover {
+        .lobby-button:hover:not(:disabled) {
             background-color: #357abd;
+        }
+        .lobby-button:disabled {
+            background-color: #555;
+            cursor: not-allowed;
         }
         #lobby-id-display {
             margin-top: 15px;
@@ -111,12 +115,12 @@
     <div id="blocker">
         <div id="lobby-ui">
             <h1 class="text-2xl font-bold mb-4">Join a Lobby</h1>
-            <button id="create-lobby-btn" class="lobby-button">Create New Lobby</button>
+            <button id="create-lobby-btn" class="lobby-button" disabled>Create New Lobby</button>
             <div id="lobby-id-display"></div>
             <hr class="my-4 border-gray-600">
-            <input type="text" id="join-lobby-input" class="lobby-input" placeholder="Enter Lobby ID">
-            <button id="join-lobby-btn" class="lobby-button">Join Lobby</button>
-            <p id="error-message"></p>
+            <input type="text" id="join-lobby-input" class="lobby-input" placeholder="Enter Lobby ID" disabled>
+            <button id="join-lobby-btn" class="lobby-button" disabled>Join Lobby</button>
+            <p id="error-message">Connecting to server...</p>
         </div>
     </div>
 
@@ -125,7 +129,7 @@
         Lobby ID: <span id="lobbyId">N/A</span>
     </div>
     
-    <div id="version-info">Version 1.8</div>
+    <div id="version-info">Version 2.0</div>
 
     <div class="crosshair" style="display: none;"></div>
 
@@ -149,7 +153,7 @@
         const moveState = { forward: false, backward: false, left: false, right: false };
         const playerVelocity = new THREE.Vector3();
         const playerDirection = new THREE.Vector3();
-        const speed = 8.0;
+        const speed = 3.5;
         let lastTime = performance.now();
         let isGameStarted = false;
 
@@ -160,9 +164,9 @@
         // --- INITIALIZATION ---
         
         async function init() {
-            await initFirebase();
             initLobbyUI();
-            initEventListeners(); // Set up all event listeners once.
+            initEventListeners();
+            await initFirebase();
         }
 
         async function initFirebase() {
@@ -184,9 +188,18 @@
             auth = getAuth(app);
 
             onAuthStateChanged(auth, (user) => {
+                const errorMessage = document.getElementById('error-message');
                 if (user) {
                     userId = user.uid;
                     document.getElementById('userId').textContent = userId;
+                    // Enable UI now that we are authenticated
+                    document.getElementById('create-lobby-btn').disabled = false;
+                    document.getElementById('join-lobby-btn').disabled = false;
+                    document.getElementById('join-lobby-input').disabled = false;
+                    errorMessage.textContent = '';
+                } else {
+                    // Handle case where user is not signed in
+                    errorMessage.textContent = "Authentication failed. You are not signed in.";
                 }
             });
 
@@ -221,7 +234,7 @@
             document.querySelector('.crosshair').style.display = 'block';
 
             initThree();
-            document.body.requestPointerLock(); // Request pointer lock to start game controls.
+            document.body.requestPointerLock();
             
             const playersCollectionPath = `/artifacts/${appId}/public/data/lobbies/${currentLobbyId}/players`;
             playerRef = doc(db, playersCollectionPath, userId);
@@ -267,9 +280,6 @@
         }
 
         function initEventListeners() {
-            // This function is called once to set up all necessary event listeners for the application.
-            
-            // Pointer Lock Logic
             document.addEventListener('pointerlockchange', () => {
                 if (document.pointerLockElement === document.body) {
                     document.addEventListener('mousemove', onMouseMove, false);
@@ -279,9 +289,8 @@
                 }
             });
 
-            // Keyboard Controls
             document.addEventListener('keydown', (event) => {
-                if (document.pointerLockElement !== document.body) return; // Only process keys if pointer is locked
+                if (document.pointerLockElement !== document.body) return;
                 switch (event.code) {
                     case 'KeyW': moveState.forward = true; break;
                     case 'KeyA': moveState.left = true; break;
@@ -299,7 +308,6 @@
                 }
             });
 
-            // Window Events
             window.addEventListener('resize', onWindowResize);
             window.addEventListener('beforeunload', () => {
                 if (playerRef) deleteDoc(playerRef);
@@ -309,6 +317,10 @@
         // --- LOBBY MANAGEMENT ---
 
         async function createLobby() {
+            if (!userId) {
+                document.getElementById('error-message').textContent = 'Not authenticated. Cannot create lobby.';
+                return;
+            }
             const lobbyId = Math.random().toString(36).substring(2, 8).toUpperCase();
             const lobbyRef = doc(db, `/artifacts/${appId}/public/data/lobbies`, lobbyId);
             
@@ -321,6 +333,10 @@
         }
 
         async function joinLobby(lobbyId) {
+            if (!userId) {
+                document.getElementById('error-message').textContent = 'Not authenticated. Cannot join lobby.';
+                return;
+            }
             if (!lobbyId) {
                 document.getElementById('error-message').textContent = 'Please enter a Lobby ID.';
                 return;
