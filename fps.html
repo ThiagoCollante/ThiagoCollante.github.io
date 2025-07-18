@@ -129,7 +129,7 @@
         Lobby ID: <span id="lobbyId">N/A</span>
     </div>
     
-    <div id="version-info">Version 2.0</div>
+    <div id="version-info">Version 2.2</div>
 
     <div class="crosshair" style="display: none;"></div>
 
@@ -147,13 +147,17 @@
         let db, auth;
         let userId, currentLobbyId, appId;
         let playerRef;
+        let collidableObjects = []; // Array to hold objects for collision detection
 
         const playerMeshes = {}; // To store remote player objects { mesh, targetPosition, targetQuaternion }
 
-        const moveState = { forward: false, backward: false, left: false, right: false };
+        const moveState = { forward: false, backward: false, left: false, right: false, jump: false };
         const playerVelocity = new THREE.Vector3();
         const playerDirection = new THREE.Vector3();
         const speed = 3.5;
+        const gravity = -9.8;
+        const jumpHeight = 6;
+        let canJump = false;
         let lastTime = performance.now();
         let isGameStarted = false;
 
@@ -192,13 +196,11 @@
                 if (user) {
                     userId = user.uid;
                     document.getElementById('userId').textContent = userId;
-                    // Enable UI now that we are authenticated
                     document.getElementById('create-lobby-btn').disabled = false;
                     document.getElementById('join-lobby-btn').disabled = false;
                     document.getElementById('join-lobby-input').disabled = false;
                     errorMessage.textContent = '';
                 } else {
-                    // Handle case where user is not signed in
                     errorMessage.textContent = "Authentication failed. You are not signed in.";
                 }
             });
@@ -239,7 +241,7 @@
             const playersCollectionPath = `/artifacts/${appId}/public/data/lobbies/${currentLobbyId}/players`;
             playerRef = doc(db, playersCollectionPath, userId);
             setDoc(playerRef, {
-                x: 0, y: 1, z: 5,
+                x: 0, y: 1.7, z: 10, // Start position
                 qx: 0, qy: 0, qz: 0, qw: 1,
                 timestamp: Date.now()
             });
@@ -253,10 +255,10 @@
         function initThree() {
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0x87ceeb);
-            scene.fog = new THREE.Fog(0x87ceeb, 0, 100);
+            scene.fog = new THREE.Fog(0x87ceeb, 0, 150);
 
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            camera.position.set(0, 1.7, 5);
+            camera.position.set(0, 1.7, 10);
 
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
@@ -267,16 +269,46 @@
             const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
             scene.add(ambientLight);
             const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-            directionalLight.position.set(10, 20, 5);
+            directionalLight.position.set(50, 50, 50);
             directionalLight.castShadow = true;
             scene.add(directionalLight);
 
+            // Golf-style grid floor
+            const gridHelper = new THREE.GridHelper(200, 100, 0x00ff00, 0x90ee90);
+            scene.add(gridHelper);
+
+            // Invisible ground plane for physics
             const groundGeo = new THREE.PlaneGeometry(200, 200);
-            const groundMat = new THREE.MeshLambertMaterial({ color: 0x999999 });
+            const groundMat = new THREE.MeshBasicMaterial({ visible: false });
             const ground = new THREE.Mesh(groundGeo, groundMat);
             ground.rotation.x = -Math.PI / 2;
-            ground.receiveShadow = true;
             scene.add(ground);
+
+            // Create walls
+            const wallMaterial = new THREE.MeshStandardMaterial({ color: 0x888888 });
+            const wallHeight = 5;
+            const wallThickness = 0.5;
+
+            // Border walls
+            createWall(new THREE.Vector3(0, wallHeight / 2, -50), 100, wallHeight, wallThickness, wallMaterial);
+            createWall(new THREE.Vector3(0, wallHeight / 2, 50), 100, wallHeight, wallThickness, wallMaterial);
+            createWall(new THREE.Vector3(-50, wallHeight / 2, 0), wallThickness, wallHeight, 100, wallMaterial);
+            createWall(new THREE.Vector3(50, wallHeight / 2, 0), wallThickness, wallHeight, 100, wallMaterial);
+            
+            // Internal maze walls
+            createWall(new THREE.Vector3(0, wallHeight / 2, 25), 60, wallHeight, wallThickness, wallMaterial);
+            createWall(new THREE.Vector3(-20, wallHeight / 2, 0), wallThickness, wallHeight, 50, wallMaterial);
+            createWall(new THREE.Vector3(20, wallHeight / 2, -15), wallThickness, wallHeight, 70, wallMaterial);
+        }
+
+        function createWall(position, width, height, depth, material) {
+            const wallGeo = new THREE.BoxGeometry(width, height, depth);
+            const wall = new THREE.Mesh(wallGeo, material);
+            wall.position.copy(position);
+            wall.receiveShadow = true;
+            wall.castShadow = true;
+            scene.add(wall);
+            collidableObjects.push(wall);
         }
 
         function initEventListeners() {
@@ -296,6 +328,7 @@
                     case 'KeyA': moveState.left = true; break;
                     case 'KeyS': moveState.backward = true; break;
                     case 'KeyD': moveState.right = true; break;
+                    case 'Space': if (canJump) moveState.jump = true; break;
                 }
             });
 
@@ -411,6 +444,7 @@
         }
         
         function updatePlayerState(deltaTime) {
+            // Horizontal Movement
             camera.getWorldDirection(playerDirection);
             playerDirection.y = 0;
             playerDirection.normalize();
@@ -422,12 +456,43 @@
             if (moveState.backward) playerVelocity.z += speed * deltaTime;
             if (moveState.left) playerVelocity.x -= speed * deltaTime;
             if (moveState.right) playerVelocity.x += speed * deltaTime;
-
+            
             const moveX = -playerVelocity.x;
             const moveZ = -playerVelocity.z;
 
+            // Vertical Movement (Jumping and Gravity)
+            playerVelocity.y += gravity * deltaTime;
+            if (moveState.jump) {
+                playerVelocity.y = jumpHeight;
+                moveState.jump = false;
+                canJump = false;
+            }
+
+            // Store position before applying movement for collision detection
+            const prevPosition = camera.position.clone();
+
+            // Apply movement
             camera.position.x += moveZ * playerDirection.x + moveX * playerDirection.z;
             camera.position.z += moveZ * playerDirection.z - moveX * playerDirection.x;
+            camera.position.y += playerVelocity.y * deltaTime;
+
+            // Simple Collision Detection
+            const playerBox = new THREE.Box3().setFromCenterAndSize(camera.position, new THREE.Vector3(1, 1.7, 1));
+            for (const wall of collidableObjects) {
+                const wallBox = new THREE.Box3().setFromObject(wall);
+                if (playerBox.intersectsBox(wallBox)) {
+                    camera.position.copy(prevPosition); // Revert position if collision
+                    playerVelocity.y = 0; // Stop vertical movement on collision
+                    break;
+                }
+            }
+            
+            // Ground check
+            if (camera.position.y <= 1.7) {
+                playerVelocity.y = 0;
+                camera.position.y = 1.7;
+                canJump = true;
+            }
         }
 
         function sendPlayerStateToServer() {
@@ -440,7 +505,7 @@
 
                 setDoc(playerRef, {
                     x: camera.position.x,
-                    y: 1,
+                    y: camera.position.y - 0.7, // Adjust prism position to be centered
                     z: camera.position.z,
                     qx: bodyQuaternion.x,
                     qy: bodyQuaternion.y,
