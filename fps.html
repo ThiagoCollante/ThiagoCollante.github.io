@@ -145,7 +145,7 @@
         Lobby ID: <span id="lobbyId">N/A</span>
     </div>
     
-    <div id="version-info">Version 3.1</div>
+    <div id="version-info">Version 3.2</div>
     <div id="minimapContainer">
         <div id="minimapRenderer"></div>
     </div>
@@ -430,9 +430,9 @@
                 if (document.pointerLockElement !== document.body) return;
                 switch (event.code) {
                     case 'KeyW': moveState.forward = true; break;
-                    case 'KeyA': moveState.left = true; break;
+                    case 'KeyD': moveState.left = true; break; // Swapped
                     case 'KeyS': moveState.backward = true; break;
-                    case 'KeyD': moveState.right = true; break;
+                    case 'KeyA': moveState.right = true; break; // Swapped
                     case 'ShiftLeft': case 'ShiftRight': moveState.run = true; break;
                     case 'Space': if (canJump) moveState.jump = true; break;
                 }
@@ -441,9 +441,9 @@
             document.addEventListener('keyup', (event) => {
                 switch (event.code) {
                     case 'KeyW': moveState.forward = false; break;
-                    case 'KeyA': moveState.left = false; break;
+                    case 'KeyD': moveState.left = false; break; // Swapped
                     case 'KeyS': moveState.backward = false; break;
-                    case 'KeyD': moveState.right = false; break;
+                    case 'KeyA': moveState.right = false; break; // Swapped
                     case 'ShiftLeft': case 'ShiftRight': moveState.run = false; break;
                 }
             });
@@ -506,7 +506,7 @@
                             const mesh = new THREE.Mesh(geometry, material);
                             mesh.castShadow = true;
                             
-                            const minimapIndicatorGeo = new THREE.SphereGeometry(2, 16, 16);
+                            const minimapIndicatorGeo = new THREE.SphereGeometry(1, 16, 16); // Made smaller
                             const minimapIndicatorMat = new THREE.MeshBasicMaterial({ color: 0x0000ff });
                             const minimapIndicator = new THREE.Mesh(minimapIndicatorGeo, minimapIndicatorMat);
 
@@ -665,7 +665,7 @@
                 player.mesh.position.lerp(player.targetPosition, interpolationFactor);
                 player.mesh.quaternion.slerp(player.targetQuaternion, interpolationFactor);
                 player.minimapIndicator.position.copy(player.mesh.position);
-                player.minimapIndicator.position.y = 1;
+                player.minimapIndicator.position.y = player.mesh.position.y + 1.5; // Position at head
             }
         }
 
