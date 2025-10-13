@@ -106,6 +106,7 @@
             border-radius: 50%;
             transform: translate(-50%, -50%);
             mix-blend-mode: difference;
+            display: none; /* Crosshair not really needed in 3rd person */
         }
         #minimapContainer {
             position: absolute;
@@ -146,11 +147,11 @@
         Lobby ID: <span id="lobbyId">N/A</span>
     </div>
     
-    <div id="version-info">Version 3.3-3rd-person</div>
+    <div id="version-info">Version 3.4.1-hotfix</div>
     <div id="minimapContainer">
         <div id="minimapRenderer"></div>
     </div>
-    <div class="crosshair" style="display: none;"></div>
+    <div class="crosshair"></div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
@@ -180,8 +181,11 @@
         let isGameStarted = false;
 
         // Camera control
-        const cameraOffset = new THREE.Vector3(0, 5, 10);
+        let cameraYaw = 0;
+        let cameraPitch = 0.3; // Start slightly looking down
+        const cameraDistance = 10;
         const cameraTarget = new THREE.Vector3();
+
 
         const mapGrid = [
             [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
@@ -221,7 +225,8 @@
                 appId: "1:427246041879:web:b455c681ee7b952edc9552"
             };
             
-            appId = typeof __app_id !== 'undefined' ? __app_id : firebaseConfig.projectId;
+            // FIX: Force appId to be consistent for all players, ignoring environment variables.
+            appId = firebaseConfig.projectId;
 
             const app = initializeApp(firebaseConfig);
             db = getFirestore(app);
@@ -265,7 +270,6 @@
             document.getElementById('lobbyId').textContent = lobbyId;
             
             document.getElementById('blocker').style.display = 'none';
-            document.querySelector('.crosshair').style.display = 'block';
 
             initThree();
             document.body.requestPointerLock();
@@ -303,10 +307,10 @@
             top.position.y = 0.25;
             group.add(top);
 
-            const directionIndicatorMat = new THREE.MeshBasicMaterial({ color: 0x333333 });
-            const directionIndicatorGeo = new THREE.CylinderGeometry(0.1, 0.1, 0.1, 16);
+            const directionIndicatorMat = new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.8 });
+            const directionIndicatorGeo = new THREE.BoxGeometry(0.1, 0.1, 0.5);
             const directionIndicator = new THREE.Mesh(directionIndicatorGeo, directionIndicatorMat);
-            directionIndicator.position.set(0, 0.35, -0.4);
+            directionIndicator.position.set(0, 0.25, -0.4);
             group.add(directionIndicator);
 
             return group;
@@ -555,7 +559,9 @@
 
         function onMouseMove(event) {
             if (document.pointerLockElement !== document.body) return;
-            playerModel.rotation.y -= (event.movementX || 0) * 0.002;
+            cameraYaw -= (event.movementX || 0) * 0.002;
+            cameraPitch -= (event.movementY || 0) * 0.002;
+            cameraPitch = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, cameraPitch)); // Clamp pitch
         }
 
         function onWindowResize() {
@@ -569,18 +575,28 @@
             const currentSpeed = moveState.run ? runSpeed : walkSpeed;
             playerVelocity.y += gravity * deltaTime;
 
-            const moveDirection = new THREE.Vector3();
-            if (moveState.forward) moveDirection.z = -1;
-            if (moveState.backward) moveDirection.z = 1;
+            const cameraForward = new THREE.Vector3();
+            camera.getWorldDirection(cameraForward);
+            cameraForward.y = 0;
+            cameraForward.normalize();
             
-            // Strafe controls
-            if (moveState.left) moveDirection.x = -1;
-            if (moveState.right) moveDirection.x = 1;
+            const cameraRight = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), cameraForward).normalize();
 
+            const moveDirection = new THREE.Vector3();
+            if (moveState.forward) moveDirection.add(cameraForward);
+            if (moveState.backward) moveDirection.sub(cameraForward);
+            if (moveState.left) moveDirection.sub(cameraRight);
+            if (moveState.right) moveDirection.add(cameraRight);
+            
             if (moveDirection.lengthSq() > 0) {
-                 moveDirection.normalize().applyQuaternion(playerModel.quaternion);
+                 moveDirection.normalize();
                  playerVelocity.x = moveDirection.x * currentSpeed;
                  playerVelocity.z = moveDirection.z * currentSpeed;
+
+                 // Rotate player model to face movement direction
+                 const targetQuaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, -1), moveDirection);
+                 playerModel.quaternion.slerp(targetQuaternion, 0.2);
+
             } else {
                 playerVelocity.x *= (1 - 10 * deltaTime);
                 playerVelocity.z *= (1 - 10 * deltaTime);
@@ -603,17 +619,20 @@
             }
             
             updatePlayerShadow();
-            updateCamera();
         }
 
         function updateCamera() {
-             const idealOffset = cameraOffset.clone().applyQuaternion(playerModel.quaternion);
-             const idealLookat = playerModel.position.clone().add(new THREE.Vector3(0, 2.0, 0)); // Look slightly above the player model
-             
-             const newCameraPosition = playerModel.position.clone().add(idealOffset);
-             camera.position.lerp(newCameraPosition, 0.1);
-             cameraTarget.lerp(idealLookat, 0.1);
-             camera.lookAt(cameraTarget);
+            const targetPosition = playerModel.position.clone().add(new THREE.Vector3(0, 1.5, 0));
+            cameraTarget.lerp(targetPosition, 0.2);
+
+            const offset = new THREE.Vector3(0, 0, cameraDistance);
+            const rotation = new THREE.Euler(cameraPitch, cameraYaw, 0, 'YXZ');
+            offset.applyEuler(rotation);
+            
+            const newCameraPosition = playerModel.position.clone().add(offset);
+            camera.position.lerp(newCameraPosition, 0.1);
+            
+            camera.lookAt(cameraTarget);
         }
 
         function handleCollisions(deltaPosition) {
@@ -676,7 +695,7 @@
                 player.mesh.position.lerp(player.targetPosition, interpolationFactor);
                 player.mesh.quaternion.slerp(player.targetQuaternion, interpolationFactor);
                 player.minimapIndicator.position.copy(player.mesh.position);
-                player.minimapIndicator.position.y = player.mesh.position.y + 1.5;
+                player.minimapIndicator.position.y = 200; // Keep remote indicators high as well
             }
         }
 
@@ -684,7 +703,7 @@
             if (!isGameStarted) return;
             minimapCamera.position.set(playerModel.position.x, 150, playerModel.position.z);
             playerIndicator.position.copy(playerModel.position);
-            playerIndicator.position.y = 1;
+            playerIndicator.position.y = 200; // Move indicator very high up
             minimapRenderer.render(scene, minimapCamera);
         }
 
@@ -702,11 +721,10 @@
                     sendPlayerStateToServer();
                     lastUpdateTime = time;
                 }
-            } else {
-                 // Smooth camera back to idle position if pointer is not locked
-                 updateCamera();
             }
-
+            
+            // Always update camera, remote players, and minimap
+            updateCamera();
             updateRemotePlayers(deltaTime);
             updateMinimap();
 
