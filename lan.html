@@ -285,8 +285,9 @@
             // Update player state from Firestore data
             updateFromState(state) {
                  if (this.isLocal) return; // Don't snap local player
-                 this.x = state.x;
-                 this.y = state.y;
+                 // Lerp for smoother movement
+                 this.x += (state.x - this.x) * 0.1;
+                 this.y += (state.y - this.y) * 0.1;
                  this.vx = state.vx;
                  this.vy = state.vy;
             }
@@ -346,6 +347,10 @@
             const startX = Math.random() * (canvas.width - 100) + 50;
             const startY = Math.random() * (canvas.height - 100) + 50;
             players[userId] = new Player(userId, startX, startY, playerColor, true);
+
+            // Immediately create the player document in Firestore to prevent race conditions
+            await updatePlayerInFirestore();
+            
             updatePlayerListUI(); // Initial update for local player
 
             // Listen for changes to all players in the game
@@ -360,7 +365,8 @@
                         }
                     }
                     if (change.type === "modified") {
-                        if (players[playerId]) {
+                         // Explicitly ignore updates for the local player to prevent snapping
+                        if (playerId !== userId && players[playerId]) {
                            players[playerId].updateFromState(playerData);
                         }
                     }
@@ -375,30 +381,31 @@
             gameLoop();
         }
 
-        function updatePlayerInFirestore() {
+        async function updatePlayerInFirestore() {
             const localPlayer = players[userId];
             if (!localPlayer || !gameId) return;
 
             const playerDocRef = doc(db, `/lan-games/${appIdForPath}/${gameId}/players/${userId}`);
-            setDoc(playerDocRef, {
+            await setDoc(playerDocRef, {
                 x: localPlayer.x,
                 y: localPlayer.y,
                 vx: localPlayer.vx,
                 vy: localPlayer.vy,
                 color: localPlayer.color
-            }, { merge: true });
+            });
         }
 
 
         // --- Game Loop ---
         function gameLoop() {
-            ctx.fillStyle = 'rgba(44, 44, 44, 0.5)';
+            // Clear canvas completely for crisp movement
+            ctx.fillStyle = '#2c2c2c';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
             const localPlayer = players[userId];
             if (localPlayer) {
                 localPlayer.updateLocal();
-                updatePlayerInFirestore();
+                updatePlayerInFirestore(); // No need to await in the loop
             }
             
             for (const id in players) {
