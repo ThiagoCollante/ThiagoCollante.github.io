@@ -62,6 +62,17 @@
         #lobby button:hover {
             background: #0062b3;
         }
+        #createGameBtn {
+            background: #2ecc40;
+        }
+        #createGameBtn:hover {
+            background: #27a837;
+        }
+        #lobby .button-container {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
         #gameInfo {
             display: none;
             position: absolute;
@@ -81,6 +92,14 @@
             height: 1.2em;
             font-size: 0.9em;
         }
+        #versionInfo {
+            display: none;
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            color: rgba(255, 255, 255, 0.3);
+            font-size: 0.8em;
+        }
     </style>
 </head>
 <body>
@@ -89,13 +108,17 @@
         <p>Ingresa un ID de juego para unirte o crear una partida.</p>
         <input type="text" id="gameIdInput" placeholder="Ingresa un ID de juego">
         <p id="lobbyError"></p>
-        <button id="joinGameBtn" disabled>Unirse al Juego</button>
+        <div class="button-container">
+            <button id="joinGameBtn" disabled>Unirse al Juego</button>
+            <button id="createGameBtn" disabled>Crear Juego</button>
+        </div>
     </div>
 
     <canvas id="gameCanvas" style="display: none;"></canvas>
     <div id="gameInfo">
         <p>Game ID: <span id="gameIdDisplay"></span></p>
     </div>
+    <div id="versionInfo">v1.1.0</div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
@@ -109,9 +132,11 @@
         const lobbyDiv = document.getElementById('lobby');
         const gameIdInput = document.getElementById('gameIdInput');
         const joinGameBtn = document.getElementById('joinGameBtn');
+        const createGameBtn = document.getElementById('createGameBtn');
         const gameInfoDiv = document.getElementById('gameInfo');
         const gameIdDisplay = document.getElementById('gameIdDisplay');
         const lobbyError = document.getElementById('lobbyError');
+        const versionInfo = document.getElementById('versionInfo');
 
         // --- Firebase Setup ---
         // Your web app's Firebase configuration is now hardcoded here
@@ -231,6 +256,7 @@
             lobbyDiv.style.display = 'none';
             canvas.style.display = 'block';
             gameInfoDiv.style.display = 'block';
+            versionInfo.style.display = 'block';
             gameIdDisplay.innerText = gameId;
 
             resizeCanvas();
@@ -319,6 +345,7 @@
                         userId = user.uid;
                         console.log("Authenticated with user ID:", userId);
                         joinGameBtn.disabled = false;
+                        createGameBtn.disabled = false;
                     }
                 });
                 
@@ -339,6 +366,13 @@
         joinGameBtn.addEventListener('click', joinGame);
         gameIdInput.addEventListener('keyup', (e) => {
             if (e.key === 'Enter') joinGame();
+        });
+
+        createGameBtn.addEventListener('click', () => {
+            // Generate a simple random ID
+            const randomId = Math.floor(100000 + Math.random() * 900000).toString();
+            gameIdInput.value = randomId;
+            joinGame();
         });
 
         window.addEventListener('beforeunload', () => {
