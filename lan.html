@@ -100,6 +100,45 @@
             color: rgba(255, 255, 255, 0.3);
             font-size: 0.8em;
         }
+        #playerListContainer {
+            display: none;
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.5);
+            padding: 5px 15px;
+            border-radius: 5px;
+            font-size: 0.9em;
+            width: 200px;
+        }
+        #playerListContainer h3 {
+            margin: 5px 0 10px;
+            text-align: center;
+            font-size: 1em;
+            border-bottom: 1px solid rgba(255,255,255,0.2);
+            padding-bottom: 5px;
+        }
+        #playerList {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        #playerList li {
+            display: flex;
+            align-items: center;
+            padding: 5px 0;
+            font-size: 0.8em;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        #playerList li .player-color-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 10px;
+            border: 1px solid rgba(255,255,255,0.5);
+        }
     </style>
 </head>
 <body>
@@ -115,9 +154,16 @@
     </div>
 
     <canvas id="gameCanvas" style="display: none;"></canvas>
+    
     <div id="gameInfo">
         <p>Game ID: <span id="gameIdDisplay"></span></p>
     </div>
+    
+    <div id="playerListContainer">
+        <h3>Jugadores Conectados</h3>
+        <ul id="playerList"></ul>
+    </div>
+
     <div id="versionInfo">v1.1.0</div>
 
     <script type="module">
@@ -137,6 +183,8 @@
         const gameIdDisplay = document.getElementById('gameIdDisplay');
         const lobbyError = document.getElementById('lobbyError');
         const versionInfo = document.getElementById('versionInfo');
+        const playerListContainer = document.getElementById('playerListContainer');
+        const playerList = document.getElementById('playerList');
 
         // --- Firebase Setup ---
         // Your web app's Firebase configuration is now hardcoded here
@@ -244,6 +292,30 @@
             }
         }
 
+        function updatePlayerListUI() {
+            if (!playerList) return;
+            playerList.innerHTML = ''; // Clear the list
+
+            for (const id in players) {
+                const player = players[id];
+                const listItem = document.createElement('li');
+
+                const colorIndicator = document.createElement('span');
+                colorIndicator.className = 'player-color-indicator';
+                colorIndicator.style.backgroundColor = player.color;
+
+                const nameSpan = document.createElement('span');
+                nameSpan.textContent = `Jugador-${id.substring(0, 6)}`;
+                if (player.isLocal) {
+                    nameSpan.textContent += " (Tú)";
+                    listItem.style.fontWeight = 'bold';
+                }
+
+                listItem.appendChild(colorIndicator);
+                listItem.appendChild(nameSpan);
+                playerList.appendChild(listItem);
+            }
+        }
 
         async function joinGame() {
             gameId = gameIdInput.value.trim();
@@ -257,6 +329,7 @@
             canvas.style.display = 'block';
             gameInfoDiv.style.display = 'block';
             versionInfo.style.display = 'block';
+            playerListContainer.style.display = 'block';
             gameIdDisplay.innerText = gameId;
 
             resizeCanvas();
@@ -273,6 +346,7 @@
             const startX = Math.random() * (canvas.width - 100) + 50;
             const startY = Math.random() * (canvas.height - 100) + 50;
             players[userId] = new Player(userId, startX, startY, playerColor, true);
+            updatePlayerListUI(); // Initial update for local player
 
             // Listen for changes to all players in the game
             unsubscribePlayerListener = onSnapshot(playersCollection, (snapshot) => {
@@ -281,7 +355,7 @@
                     const playerId = change.doc.id;
 
                     if (change.type === "added") {
-                        if (playerId !== userId) {
+                        if (playerId !== userId && !players[playerId]) {
                             players[playerId] = new Player(playerId, playerData.x, playerData.y, playerData.color);
                         }
                     }
@@ -294,6 +368,7 @@
                         delete players[playerId];
                     }
                 });
+                updatePlayerListUI(); // Update UI on any change
             });
 
             // Start the game loop
