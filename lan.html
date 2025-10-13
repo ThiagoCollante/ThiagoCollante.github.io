@@ -33,6 +33,7 @@
             background: rgba(26, 26, 26, 0.95);
             padding: 40px;
             border-radius: 10px;
+            text-align: center;
         }
         #lobby h1 {
             margin-top: 0;
@@ -75,14 +76,20 @@
             font-weight: bold;
             color: #ffdc00;
         }
+        #lobbyError {
+            color: #ff4136;
+            height: 1.2em;
+            font-size: 0.9em;
+        }
     </style>
 </head>
 <body>
     <div id="lobby">
         <h1>Vector LAN Game</h1>
-        <p>Enter a Game ID to join or create a game.</p>
-        <input type="text" id="gameIdInput" placeholder="Enter Game ID">
-        <button id="joinGameBtn">Join Game</button>
+        <p>Ingresa un ID de juego para unirte o crear una partida.</p>
+        <input type="text" id="gameIdInput" placeholder="Ingresa un ID de juego">
+        <p id="lobbyError"></p>
+        <button id="joinGameBtn" disabled>Unirse al Juego</button>
     </div>
 
     <canvas id="gameCanvas" style="display: none;"></canvas>
@@ -92,7 +99,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc, getDocs, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         const canvas = document.getElementById('gameCanvas');
@@ -104,11 +111,20 @@
         const joinGameBtn = document.getElementById('joinGameBtn');
         const gameInfoDiv = document.getElementById('gameInfo');
         const gameIdDisplay = document.getElementById('gameIdDisplay');
+        const lobbyError = document.getElementById('lobbyError');
 
         // --- Firebase Setup ---
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-        
+        // Your web app's Firebase configuration is now hardcoded here
+        const firebaseConfig = {
+            apiKey: "AIzaSyBX7Qk3hB7vNykKt9WyiDNWrqq0eXxpGMA",
+            authDomain: "lanhtml-d905d.firebaseapp.com",
+            projectId: "lanhtml-d905d",
+            storageBucket: "lanhtml-d905d.appspot.com", // Corrected storage bucket domain
+            messagingSenderId: "427246041879",
+            appId: "1:427246041879:web:b455c681ee7b952edc9552"
+        };
+        const appIdForPath = firebaseConfig.projectId; // Using projectId for the database path
+
         let app, auth, db;
         let userId;
         let gameId;
@@ -206,8 +222,9 @@
 
         async function joinGame() {
             gameId = gameIdInput.value.trim();
+            lobbyError.textContent = '';
             if (!gameId) {
-                alert("Please enter a Game ID.");
+                lobbyError.textContent = "Por favor, ingresa un ID de juego.";
                 return;
             }
 
@@ -218,7 +235,7 @@
 
             resizeCanvas();
 
-            const gameCollectionPath = `/artifacts/${appId}/public/data/lan-game/${gameId}/players`;
+            const gameCollectionPath = `/lan-games/${appIdForPath}/${gameId}/players`;
             const playersCollection = collection(db, gameCollectionPath);
 
             // Determine player color
@@ -259,9 +276,9 @@
 
         function updatePlayerInFirestore() {
             const localPlayer = players[userId];
-            if (!localPlayer) return;
+            if (!localPlayer || !gameId) return;
 
-            const playerDocRef = doc(db, `/artifacts/${appId}/public/data/lan-game/${gameId}/players/${userId}`);
+            const playerDocRef = doc(db, `/lan-games/${appIdForPath}/${gameId}/players/${userId}`);
             setDoc(playerDocRef, {
                 x: localPlayer.x,
                 y: localPlayer.y,
@@ -305,15 +322,16 @@
                     }
                 });
                 
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                   await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                   await signInAnonymously(auth);
-                }
+                await signInAnonymously(auth);
 
             } catch (error) {
                 console.error("Firebase initialization failed:", error);
-                lobbyDiv.innerHTML = "<h1>Error</h1><p>Could not connect to the game service. Please try again later.</p>";
+                lobbyDiv.innerHTML = `
+                    <h1>Error de Conexión</h1>
+                    <p>No se pudo conectar al servicio del juego.</p>
+                    <p>Verifica que la configuración de Firebase sea correcta y que tu proyecto esté activo.</p>
+                    <p>Por favor, intenta recargar la página.</p>
+                `;
             }
         }
         
@@ -325,7 +343,7 @@
 
         window.addEventListener('beforeunload', () => {
             if (userId && gameId) {
-                const playerDocRef = doc(db, `/artifacts/${appId}/public/data/lan-game/${gameId}/players/${userId}`);
+                const playerDocRef = doc(db, `/lan-games/${appIdForPath}/${gameId}/players/${userId}`);
                 deleteDoc(playerDocRef);
             }
             if (unsubscribePlayerListener) {
