@@ -106,6 +106,7 @@
             border-radius: 50%;
             transform: translate(-50%, -50%);
             mix-blend-mode: difference;
+            display: none; /* Crosshair not needed in 3rd person */
         }
         #minimapContainer {
             position: absolute;
@@ -146,11 +147,11 @@
         Lobby ID: <span id="lobbyId">N/A</span>
     </div>
     
-    <div id="version-info">Version 3.2</div>
+    <div id="version-info">Version 3.5-free-camera</div>
     <div id="minimapContainer">
         <div id="minimapRenderer"></div>
     </div>
-    <div class="crosshair" style="display: none;"></div>
+    <div class="crosshair"></div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
@@ -164,21 +165,26 @@
         let scene, camera, renderer, minimapRenderer, minimapCamera;
         let db, auth;
         let userId, currentLobbyId, appId;
-        let playerRef, playerShadow, playerIndicator;
+        let playerRef, playerModel, playerShadow, playerIndicator;
         let collidableObjects = [];
 
         const playerMeshes = {};
 
         const moveState = { forward: false, backward: false, left: false, right: false, jump: false, run: false };
         const playerVelocity = new THREE.Vector3();
-        const playerDirection = new THREE.Vector3();
-        const walkSpeed = 4.0;
-        const runSpeed = 7.0;
-        const gravity = -20.0;
-        const jumpForce = 8.0;
+        const walkSpeed = 5.0;
+        const runSpeed = 8.0;
+        const gravity = -30.0;
+        const jumpForce = 10.0;
         let canJump = false;
         let lastTime = performance.now();
         let isGameStarted = false;
+
+        // Camera control
+        let cameraYaw = 0;
+        let cameraPitch = 0.3; // Start slightly looking down
+        const cameraDistance = 10;
+        const cameraTarget = new THREE.Vector3();
 
         const mapGrid = [
             [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
@@ -218,7 +224,7 @@
                 appId: "1:427246041879:web:b455c681ee7b952edc9552"
             };
             
-            appId = typeof __app_id !== 'undefined' ? __app_id : firebaseConfig.projectId;
+            appId = firebaseConfig.projectId;
 
             const app = initializeApp(firebaseConfig);
             db = getFirestore(app);
@@ -239,7 +245,7 @@
             });
 
             try {
-                 await signInAnonymously(auth);
+                await signInAnonymously(auth);
             } catch (error) {
                 console.error("Firebase authentication failed:", error);
                 document.getElementById('error-message').textContent = "Authentication failed. Please refresh.";
@@ -262,26 +268,34 @@
             document.getElementById('lobbyId').textContent = lobbyId;
             
             document.getElementById('blocker').style.display = 'none';
-            document.querySelector('.crosshair').style.display = 'block';
 
             initThree();
             document.body.requestPointerLock();
             
             const startPos = getStartPosition();
+            playerModel.position.set(startPos.x, 1, startPos.z);
+            
             const playersCollectionPath = `/artifacts/${appId}/public/data/lobbies/${currentLobbyId}/players`;
             playerRef = doc(db, playersCollectionPath, userId);
             
             await setDoc(playerRef, {
-                x: startPos.x, y: 1.7, z: startPos.z,
-                qx: 0, qy: 0, qz: 0, qw: 1,
+                x: playerModel.position.x, y: playerModel.position.y, z: playerModel.position.z,
+                qx: playerModel.quaternion.x, qy: playerModel.quaternion.y, qz: playerModel.quaternion.z, qw: playerModel.quaternion.w,
                 timestamp: Date.now()
             });
-            camera.position.set(startPos.x, 1.7, startPos.z);
 
             listenForPlayers(playersCollectionPath);
 
             isGameStarted = true;
             animate();
+        }
+
+        function createPlayerModel(color) {
+            const geometry = new THREE.CylinderGeometry(0.5, 0.5, 2, 16);
+            const material = new THREE.MeshStandardMaterial({ color: color });
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.castShadow = true;
+            return mesh;
         }
 
         function initThree() {
@@ -290,6 +304,9 @@
             scene.fog = new THREE.Fog(0x87CEEB, 1, 250);
 
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            
+            playerModel = createPlayerModel(0xffffff); // Player is white
+            scene.add(playerModel);
             
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
@@ -371,7 +388,7 @@
             const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.3 });
             playerShadow = new THREE.Mesh(shadowGeo, shadowMat);
             playerShadow.rotation.x = -Math.PI / 2;
-            playerShadow.position.y = 0.01; // Slightly above ground
+            playerShadow.position.y = 0.01;
             scene.add(playerShadow);
         }
 
@@ -413,21 +430,19 @@
 
         function initEventListeners() {
             document.addEventListener('pointerlockchange', () => {
-                if (document.pointerLockElement === document.body) {
-                    document.addEventListener('mousemove', onMouseMove, false);
-                } else {
-                    document.removeEventListener('mousemove', onMouseMove, false);
+                if (document.pointerLockElement !== document.body) {
                     Object.keys(moveState).forEach(key => moveState[key] = false);
                 }
             });
+             document.addEventListener('mousemove', onMouseMove, false);
 
             document.addEventListener('keydown', (event) => {
                 if (document.pointerLockElement !== document.body) return;
                 switch (event.code) {
                     case 'KeyW': moveState.forward = true; break;
-                    case 'KeyD': moveState.right = true; break; 
-                    case 'KeyS': moveState.backward = true; break;
                     case 'KeyA': moveState.left = true; break;
+                    case 'KeyS': moveState.backward = true; break;
+                    case 'KeyD': moveState.right = true; break;
                     case 'ShiftLeft': case 'ShiftRight': moveState.run = true; break;
                     case 'Space': if (canJump) moveState.jump = true; break;
                 }
@@ -436,9 +451,9 @@
             document.addEventListener('keyup', (event) => {
                 switch (event.code) {
                     case 'KeyW': moveState.forward = false; break;
-                    case 'KeyD': moveState.right = false; break;
-                    case 'KeyS': moveState.backward = false; break;
                     case 'KeyA': moveState.left = false; break;
+                    case 'KeyS': moveState.backward = false; break;
+                    case 'KeyD': moveState.right = false; break;
                     case 'ShiftLeft': case 'ShiftRight': moveState.run = false; break;
                 }
             });
@@ -496,22 +511,19 @@
 
                     if (change.type === "added" || change.type === "modified") {
                         if (!playerMeshes[docId]) {
-                            const geometry = new THREE.CylinderGeometry(0.5, 0.5, 2, 16);
-                            const material = new THREE.MeshStandardMaterial({ color: Math.random() * 0xffffff });
-                            const mesh = new THREE.Mesh(geometry, material);
-                            mesh.castShadow = true;
+                            const model = createPlayerModel(Math.random() * 0xffffff);
                             
                             const minimapIndicatorGeo = new THREE.SphereGeometry(1, 16, 16);
                             const minimapIndicatorMat = new THREE.MeshBasicMaterial({ color: 0x0000ff });
                             const minimapIndicator = new THREE.Mesh(minimapIndicatorGeo, minimapIndicatorMat);
 
                             playerMeshes[docId] = {
-                                mesh: mesh,
+                                mesh: model,
                                 minimapIndicator: minimapIndicator,
                                 targetPosition: new THREE.Vector3(data.x, data.y, data.z),
                                 targetQuaternion: new THREE.Quaternion(data.qx, data.qy, data.qz, data.qw)
                             };
-                            scene.add(mesh);
+                            scene.add(model);
                             scene.add(minimapIndicator);
                         }
                         playerMeshes[docId].targetPosition.set(data.x, data.y, data.z);
@@ -528,12 +540,10 @@
         }
 
         function onMouseMove(event) {
-            const euler = new THREE.Euler(0, 0, 0, 'YXZ');
-            euler.setFromQuaternion(camera.quaternion);
-            euler.y -= (event.movementX || 0) * 0.002;
-            euler.x -= (event.movementY || 0) * 0.002;
-            euler.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, euler.x));
-            camera.quaternion.setFromEuler(euler);
+            if (document.pointerLockElement !== document.body) return;
+            cameraYaw -= (event.movementX || 0) * 0.002;
+            cameraPitch -= (event.movementY || 0) * 0.002;
+            cameraPitch = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, cameraPitch)); // Clamp pitch
         }
 
         function onWindowResize() {
@@ -545,38 +555,45 @@
         
         function updatePlayerState(deltaTime) {
             const currentSpeed = moveState.run ? runSpeed : walkSpeed;
-            
-            const localDirection = new THREE.Vector3();
-            if (moveState.forward) localDirection.z = -1;
-            if (moveState.backward) localDirection.z = 1;
-            if (moveState.left) localDirection.x = -1;
-            if (moveState.right) localDirection.x = 1;
-            
             playerVelocity.y += gravity * deltaTime;
 
+            const cameraForward = new THREE.Vector3();
+            camera.getWorldDirection(cameraForward);
+            cameraForward.y = 0;
+            cameraForward.normalize();
+            
+            const cameraRight = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), cameraForward).normalize();
+
+            const moveDirection = new THREE.Vector3();
+            if (moveState.forward) moveDirection.add(cameraForward);
+            if (moveState.backward) moveDirection.sub(cameraForward);
+            if (moveState.left) moveDirection.sub(cameraRight);
+            if (moveState.right) moveDirection.add(cameraRight);
+            
+            if (moveDirection.lengthSq() > 0) {
+                 moveDirection.normalize();
+                 playerVelocity.x = moveDirection.x * currentSpeed;
+                 playerVelocity.z = moveDirection.z * currentSpeed;
+
+                 const targetQuaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), moveDirection);
+                 playerModel.quaternion.slerp(targetQuaternion, 0.2);
+            } else {
+                playerVelocity.x *= (1 - 10 * deltaTime);
+                playerVelocity.z *= (1 - 10 * deltaTime);
+            }
+            
             if (moveState.jump) {
                 playerVelocity.y = jumpForce;
                 moveState.jump = false;
                 canJump = false;
             }
 
-            if (localDirection.lengthSq() > 0) {
-                localDirection.normalize();
-                const worldDirection = localDirection.applyQuaternion(camera.quaternion);
-                
-                playerVelocity.x = worldDirection.x * currentSpeed;
-                playerVelocity.z = worldDirection.z * currentSpeed;
-            } else {
-                playerVelocity.x *= (1 - 10 * deltaTime);
-                playerVelocity.z *= (1 - 10 * deltaTime);
-            }
-
             const deltaPosition = playerVelocity.clone().multiplyScalar(deltaTime);
             handleCollisions(deltaPosition);
-            camera.position.add(deltaPosition);
+            playerModel.position.add(deltaPosition);
             
-            if (camera.position.y < 1.7) {
-                camera.position.y = 1.7;
+            if (playerModel.position.y < 1) {
+                playerModel.position.y = 1;
                 playerVelocity.y = 0;
                 canJump = true;
             }
@@ -584,8 +601,22 @@
             updatePlayerShadow();
         }
 
+        function updateCamera() {
+            const targetPosition = playerModel.position.clone().add(new THREE.Vector3(0, 1.0, 0));
+            cameraTarget.lerp(targetPosition, 0.2);
+
+            const offset = new THREE.Vector3(0, 0, cameraDistance);
+            const rotation = new THREE.Euler(cameraPitch, cameraYaw, 0, 'YXZ');
+            offset.applyEuler(rotation);
+            
+            const newCameraPosition = playerModel.position.clone().add(offset);
+            camera.position.lerp(newCameraPosition, 0.1);
+            
+            camera.lookAt(cameraTarget);
+        }
+
         function handleCollisions(deltaPosition) {
-            const playerSphere = new THREE.Sphere(camera.position, 0.8);
+            const playerSphere = new THREE.Sphere(playerModel.position, 0.8);
             const nextPlayerSphere = new THREE.Sphere(playerSphere.center.clone().add(deltaPosition), playerSphere.radius);
 
             for (const obj of collidableObjects) {
@@ -614,9 +645,9 @@
         }
 
         function updatePlayerShadow() {
-            playerShadow.position.x = camera.position.x;
-            playerShadow.position.z = camera.position.z;
-            const heightFactor = Math.max(0, (camera.position.y - 1.7) / 10);
+            playerShadow.position.x = playerModel.position.x;
+            playerShadow.position.z = playerModel.position.z;
+            const heightFactor = Math.max(0, (playerModel.position.y - 1) / 10);
             playerShadow.material.opacity = Math.max(0.1, 0.4 - heightFactor * 0.3);
             const scale = 1 + heightFactor * 0.5;
             playerShadow.scale.set(scale, scale, scale);
@@ -624,20 +655,14 @@
 
         function sendPlayerStateToServer() {
             if (playerRef) {
-                const bodyEuler = new THREE.Euler(0, 0, 0, 'YXZ');
-                bodyEuler.setFromQuaternion(camera.quaternion, 'YXZ');
-                bodyEuler.x = 0; // Don't send pitch
-
-                const bodyQuaternion = new THREE.Quaternion().setFromEuler(bodyEuler);
-
                 setDoc(playerRef, {
-                    x: camera.position.x,
-                    y: camera.position.y - 0.7, // Position of the model's feet
-                    z: camera.position.z,
-                    qx: bodyQuaternion.x,
-                    qy: bodyQuaternion.y,
-                    qz: bodyQuaternion.z,
-                    qw: bodyQuaternion.w,
+                    x: playerModel.position.x,
+                    y: playerModel.position.y,
+                    z: playerModel.position.z,
+                    qx: playerModel.quaternion.x,
+                    qy: playerModel.quaternion.y,
+                    qz: playerModel.quaternion.z,
+                    qw: playerModel.quaternion.w,
                     timestamp: Date.now()
                 }, { merge: true });
             }
@@ -650,15 +675,15 @@
                 player.mesh.position.lerp(player.targetPosition, interpolationFactor);
                 player.mesh.quaternion.slerp(player.targetQuaternion, interpolationFactor);
                 player.minimapIndicator.position.copy(player.mesh.position);
-                player.minimapIndicator.position.y = player.mesh.position.y + 1.5;
+                player.minimapIndicator.position.y = 200; // Keep remote indicators high as well
             }
         }
 
         function updateMinimap() {
             if (!isGameStarted) return;
-            minimapCamera.position.set(camera.position.x, 150, camera.position.z);
-            playerIndicator.position.copy(camera.position);
-            playerIndicator.position.y = 1;
+            minimapCamera.position.set(playerModel.position.x, 150, playerModel.position.z);
+            playerIndicator.position.copy(playerModel.position);
+            playerIndicator.position.y = 200; // Move indicator very high up
             minimapRenderer.render(scene, minimapCamera);
         }
 
@@ -677,7 +702,8 @@
                     lastUpdateTime = time;
                 }
             }
-
+            
+            updateCamera();
             updateRemotePlayers(deltaTime);
             updateMinimap();
 
