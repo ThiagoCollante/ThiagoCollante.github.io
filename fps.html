@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Multiplayer Futsal Game</title>
+    <title>3D Futsal Game</title>
     <style>
         body {
             margin: 0;
@@ -99,22 +99,6 @@
         .crosshair {
             display: none; 
         }
-        #minimapContainer {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            width: 200px;
-            height: 200px;
-            border: 2px solid white;
-            border-radius: 50%;
-            overflow: hidden;
-            z-index: 101;
-            background: rgba(0, 0, 0, 0.3);
-        }
-        #minimapRenderer {
-            width: 100%;
-            height: 100%;
-        }
     </style>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -123,12 +107,12 @@
 <body>
     <div id="blocker">
         <div id="lobby-ui">
-            <h1 class="text-2xl font-bold mb-4">Join a Futsal Match</h1>
-            <button id="create-lobby-btn" class="lobby-button" disabled>Create New Match</button>
+            <h1 class="text-2xl font-bold mb-4">Join a Game</h1>
+            <button id="create-lobby-btn" class="lobby-button" disabled>Create New Game</button>
             <div id="lobby-id-display"></div>
             <hr class="my-4" style="margin: 20px 0; border-color: #444;">
-            <input type="text" id="join-lobby-input" class="lobby-input" placeholder="Enter Match ID" disabled>
-            <button id="join-lobby-btn" class="lobby-button" disabled>Join Match</button>
+            <input type="text" id="join-lobby-input" class="lobby-input" placeholder="Enter Game ID" disabled>
+            <button id="join-lobby-btn" class="lobby-button" disabled>Join Game</button>
             <p id="error-message">Connecting to server...</p>
         </div>
         <div id="pause-menu" style="display: none;">
@@ -139,13 +123,10 @@
 
     <div id="info-container">
         Your User ID: <span id="userId">Loading...</span><br>
-        Match ID: <span id="lobbyId">N/A</span>
+        Game ID: <span id="lobbyId">N/A</span>
     </div>
     
-    <div id="version-info">Version 4.1-futsal</div>
-    <div id="minimapContainer">
-        <div id="minimapRenderer"></div>
-    </div>
+    <div id="version-info">Version 4.5-futsal-colliderFix</div>
     <div class="crosshair"></div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -158,47 +139,35 @@
         import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- GLOBAL VARIABLES ---
-        let scene, camera, renderer, minimapRenderer, minimapCamera;
+        let scene, camera, renderer, world;
         let db, auth;
         let userId, currentLobbyId, appId, isHost = false;
-        let playerRef, playerModel, playerBody, playerIndicator;
-        let ballRef, ballMesh, ballBody;
+        
+        let playerRef, playerModel, playerBody;
+        let ballMesh, ballBody, ballRef;
+        const playerMeshes = {};
         let wallMeshes = [];
         let raycaster = new THREE.Raycaster();
-        
-        // Physics
-        let world;
-        const timeStep = 1 / 60;
 
-        const playerMeshes = {};
+        // Physics materials
+        let groundMaterial, playerMaterial;
 
-        const moveState = { forward: false, backward: false, left: false, right: false, run: false };
-        const walkSpeed = 8.0;
-        const runSpeed = 14.0;
+        const moveState = { forward: false, backward: false, left: false, right: false, run: false, jump: false };
+        const walkSpeed = 10.0;
+        const runSpeed = 16.0;
         let lastTime = performance.now();
         let isGameStarted = false;
-
+        
+        // Physics variables
+        const jumpForce = 15.0;
+        let canJump = false;
+        
         // Camera control
         let cameraYaw = 0;
         let cameraPitch = 0.4;
-        const cameraDistance = 12;
+        const cameraDistance = 15;
         const cameraTarget = new THREE.Vector3();
 
-        // Futsal court dimensions (in tiles)
-        const courtWidth = 10;
-        const courtDepth = 15;
-        const mapGrid = Array(courtDepth).fill(0).map(() => Array(courtWidth).fill(0));
-        // Create walls
-        for(let i=0; i<courtDepth; i++) {
-            mapGrid[i][0] = 2;
-            mapGrid[i][courtWidth-1] = 2;
-        }
-         for(let i=0; i<courtWidth; i++) {
-            mapGrid[0][i] = 2;
-            mapGrid[courtDepth-1][i] = 2;
-        }
-
-        const tileSize = 10;
         const updateInterval = 50;
         let lastUpdateTime = 0;
 
@@ -232,23 +201,6 @@
             });
             try { await signInAnonymously(auth); } catch (error) { console.error(error); }
         }
-        
-        function initPhysics() {
-            world = new CANNON.World();
-            world.gravity.set(0, -20, 0);
-            world.broadphase = new CANNON.NaiveBroadphase();
-            world.solver.iterations = 10;
-
-            const groundMaterial = new CANNON.Material("groundMaterial");
-            const wallMaterial = new CANNON.Material("wallMaterial");
-            const playerMaterial = new CANNON.Material("playerMaterial");
-            const ballMaterial = new CANNON.Material("ballMaterial");
-
-            world.addContactMaterial(new CANNON.ContactMaterial(groundMaterial, ballMaterial, { friction: 0.4, restitution: 0.7 }));
-            world.addContactMaterial(new CANNON.ContactMaterial(playerMaterial, ballMaterial, { friction: 0.1, restitution: 0.8 }));
-            world.addContactMaterial(new CANNON.ContactMaterial(wallMaterial, ballMaterial, { friction: 0.5, restitution: 0.8 }));
-            world.addContactMaterial(new CANNON.ContactMaterial(playerMaterial, playerMaterial, { friction: 0.1, restitution: 0.4 }));
-        }
 
         function initLobbyUI() {
             document.getElementById('create-lobby-btn').addEventListener('click', createLobby);
@@ -256,6 +208,28 @@
             document.getElementById('resume-btn').addEventListener('click', () => {
                 document.body.requestPointerLock();
             });
+        }
+        
+        function initCannon() {
+            world = new CANNON.World();
+            world.gravity.set(0, -30, 0);
+            world.broadphase = new CANNON.NaiveBroadphase();
+            world.solver.iterations = 10;
+
+            // Define physics materials
+            groundMaterial = new CANNON.Material("ground");
+            playerMaterial = new CANNON.Material("player");
+
+            // Define contact material between player and ground/walls
+            const playerGroundContactMaterial = new CANNON.ContactMaterial(
+                groundMaterial,
+                playerMaterial,
+                {
+                    friction: 0.0,
+                    restitution: 0.0 // Set restitution to zero (no bounce)
+                }
+            );
+            world.addContactMaterial(playerGroundContactMaterial);
         }
 
         async function startGame(lobbyId, amHost) {
@@ -265,133 +239,115 @@
             document.getElementById('lobbyId').textContent = lobbyId;
             
             initThree();
-            document.getElementById('lobby-ui').style.display = 'none';
-            document.body.requestPointerLock();
-            
-            playerBody = new CANNON.Body({ mass: 70, shape: new CANNON.Sphere(0.8), material: world.materials.find(m=>m.name==="playerMaterial")});
-            playerBody.position.set(0, 5, courtDepth * tileSize / 2 - 10);
+            initCannon();
+            generateFutsalCourt();
+
+            // Create Player
+            const startPos = new CANNON.Vec3(0, 5, -20);
+            playerModel = createPlayerModel(0x00ff00);
+            scene.add(playerModel);
+            const playerShape = new CANNON.Box(new CANNON.Vec3(0.8, 0.2, 0.8)); // Use a box for stability
+            playerBody = new CANNON.Body({ mass: 80, shape: playerShape, position: startPos });
+            playerBody.material = playerMaterial; // Assign material to player
+            playerBody.angularDamping = 1.0; 
+            playerBody.fixedRotation = true; 
+            playerBody.updateMassProperties();
             world.addBody(playerBody);
 
+            // Create Ball
+            ballMesh = new THREE.Mesh(new THREE.SphereGeometry(0.5, 32, 32), new THREE.MeshStandardMaterial({ color: 0xffffff }));
+            ballMesh.castShadow = true;
+            scene.add(ballMesh);
+             
             const playersCollectionPath = `/artifacts/${appId}/public/data/lobbies/${currentLobbyId}/players`;
             playerRef = doc(db, playersCollectionPath, userId);
-            await setDoc(playerRef, { x: playerBody.position.x, y: playerBody.position.y, z: playerBody.position.z, timestamp: Date.now() });
+            await setDoc(playerRef, { x: startPos.x, y: startPos.y, z: startPos.z, timestamp: Date.now() });
 
             ballRef = doc(db, `/artifacts/${appId}/public/data/lobbies/${currentLobbyId}/ball/state`);
             if (isHost) {
-                 await setDoc(ballRef, { x: 0, y: 5, z: 0, vx: 0, vy: 0, vz: 0 });
+                 const ballShape = new CANNON.Sphere(0.5);
+                 ballBody = new CANNON.Body({ mass: 1, shape: ballShape, position: new CANNON.Vec3(0, 5, 0) });
+                 world.addBody(ballBody);
+                 await setDoc(ballRef, { x: 0, y: 5, z: 0 });
             }
 
             listenForPlayers(playersCollectionPath);
-            listenForBallState();
+            listenForBall();
 
+            document.getElementById('lobby-ui').style.display = 'none';
+            document.body.requestPointerLock();
             isGameStarted = true;
             animate();
         }
         
-        function createRoombaModel(color) {
-            const group = new THREE.Group();
-            const bodyMat = new THREE.MeshStandardMaterial({ color: color, metalness: 0.3, roughness: 0.5 });
-            const bodyGeo = new THREE.CylinderGeometry(0.8, 0.7, 0.4, 24);
-            const body = new THREE.Mesh(bodyGeo, bodyMat);
-            body.castShadow = true;
-            group.add(body);
-            const topMat = new THREE.MeshStandardMaterial({ color: 0xeeeeee, metalness: 0.1, roughness: 0.6 });
-            const topGeo = new THREE.CylinderGeometry(0.6, 0.6, 0.1, 24);
-            const top = new THREE.Mesh(topGeo, topMat);
-            top.position.y = 0.25;
-            group.add(top);
-            const directionIndicatorMat = new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.8 });
-            const directionIndicatorGeo = new THREE.BoxGeometry(0.1, 0.1, 0.5);
-            const directionIndicator = new THREE.Mesh(directionIndicatorGeo, directionIndicatorMat);
-            directionIndicator.position.set(0, 0.25, -0.4);
-            group.add(directionIndicator);
-            return group;
+        function createPlayerModel(color) {
+            const playerGeo = new THREE.CylinderGeometry(0.8, 0.8, 0.4, 24);
+            const playerMat = new THREE.MeshStandardMaterial({ color: color, metalness: 0.3, roughness: 0.5 });
+            const model = new THREE.Mesh(playerGeo, playerMat);
+            model.castShadow = true;
+            return model;
         }
 
         function initThree() {
-            initPhysics();
             scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x225588);
+            scene.background = new THREE.Color(0x111111);
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
             
-            playerModel = createRoombaModel(0xffffff);
-            scene.add(playerModel);
-            
-            ballMesh = new THREE.Mesh(new THREE.SphereGeometry(0.5, 32, 32), new THREE.MeshStandardMaterial({color: 0xffdf00}));
-            ballMesh.castShadow = true;
-            scene.add(ballMesh);
-            ballBody = new CANNON.Body({ mass: 1, shape: new CANNON.Sphere(0.5), material: world.materials.find(m=>m.name==="ballMaterial")});
-            world.addBody(ballBody);
-
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.shadowMap.enabled = true;
             document.body.insertBefore(renderer.domElement, document.getElementById('info-container'));
             
-            scene.add(new THREE.AmbientLight(0x606060, 1.2));
-            const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
-            directionalLight.position.set(20, 50, 20);
-            directionalLight.castShadow = true;
-            directionalLight.shadow.mapSize.width = 2048;
-            directionalLight.shadow.mapSize.height = 2048;
-            scene.add(directionalLight);
-
-            generateWorldFromGrid();
-            initMinimap();
+            scene.add(new THREE.AmbientLight(0x606060, 1.5));
+            const light = new THREE.SpotLight(0xffffff, 1.5, 0, Math.PI / 4, 1);
+            light.position.set(0, 50, 0);
+            light.castShadow = true;
+            light.shadow.mapSize.width = 2048;
+            light.shadow.mapSize.height = 2048;
+            scene.add(light);
         }
+        
+        function generateFutsalCourt() {
+            const courtWidth = 40;
+            const courtLength = 60;
+            const wallHeight = 10;
 
-        function generateWorldFromGrid() {
-            const wallHeight = 15;
-            const gridWidth = mapGrid[0].length * tileSize;
-            const gridDepth = mapGrid.length * tileSize;
-
-            const groundGeo = new THREE.PlaneGeometry(gridWidth, gridDepth);
-            const groundMat = new THREE.MeshLambertMaterial({ color: 0x228B22 });
+            // Ground
+            const groundGeo = new THREE.PlaneGeometry(courtWidth, courtLength);
+            const groundMat = new THREE.MeshStandardMaterial({ color: 0x336633, metalness: 0.1, roughness: 0.8 });
             const groundMesh = new THREE.Mesh(groundGeo, groundMat);
             groundMesh.rotation.x = -Math.PI / 2;
             groundMesh.receiveShadow = true;
             scene.add(groundMesh);
-            const groundBody = new CANNON.Body({ mass: 0, shape: new CANNON.Plane(), material: world.materials.find(m=>m.name==="groundMaterial") });
-            groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1,0,0), -Math.PI/2);
+            const groundBody = new CANNON.Body({ mass: 0, shape: new CANNON.Plane() });
+            groundBody.material = groundMaterial; // Assign material to ground
+            groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
             world.addBody(groundBody);
 
-            mapGrid.forEach((row, z) => {
-                row.forEach((tileType, x) => {
-                    if (tileType === 2) {
-                        const wallGeo = new THREE.BoxGeometry(tileSize, wallHeight, tileSize);
-                        const wallMat = new THREE.MeshLambertMaterial({ color: 0xcccccc });
-                        const wallMesh = new THREE.Mesh(wallGeo, wallMat);
-                        wallMesh.position.set((x - gridWidth/tileSize/2 + 0.5) * tileSize, wallHeight/2, (z - gridDepth/tileSize/2 + 0.5) * tileSize);
-                        wallMesh.castShadow = true;
-                        wallMesh.receiveShadow = true;
-                        scene.add(wallMesh);
-                        wallMeshes.push(wallMesh); // For camera collision
-                        const wallBody = new CANNON.Body({ mass: 0, shape: new CANNON.Box(new CANNON.Vec3(tileSize/2, wallHeight/2, tileSize/2)), material: world.materials.find(m=>m.name==="wallMaterial") });
-                        wallBody.position.copy(wallMesh.position);
-                        world.addBody(wallBody);
-                    }
-                });
+            // Walls
+            const wallMat = new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.9 });
+            const wallPositions = [
+                { pos: [0, wallHeight / 2, -courtLength / 2], size: [courtWidth, wallHeight, 1] },
+                { pos: [0, wallHeight / 2, courtLength / 2], size: [courtWidth, wallHeight, 1] },
+                { pos: [-courtWidth / 2, wallHeight / 2, 0], size: [1, wallHeight, courtLength] },
+                { pos: [courtWidth / 2, wallHeight / 2, 0], size: [1, wallHeight, courtLength] },
+            ];
+            
+            wallPositions.forEach(data => {
+                const wallGeo = new THREE.BoxGeometry(data.size[0], data.size[1], data.size[2]);
+                const wallMesh = new THREE.Mesh(wallGeo, wallMat);
+                wallMesh.position.set(...data.pos);
+                wallMesh.receiveShadow = true;
+                scene.add(wallMesh);
+                wallMeshes.push(wallMesh); 
+
+                const wallShape = new CANNON.Box(new CANNON.Vec3(data.size[0] / 2, data.size[1] / 2, data.size[2] / 2));
+                const wallBody = new CANNON.Body({ mass: 0, shape: wallShape, position: new CANNON.Vec3(...data.pos) });
+                wallBody.material = groundMaterial; // Assign same material to walls
+                world.addBody(wallBody);
             });
         }
         
-        function initMinimap() {
-            const minimapContainer = document.getElementById('minimapRenderer');
-            minimapRenderer = new THREE.WebGLRenderer({ antialias: true });
-            minimapRenderer.setSize(200, 200);
-            minimapContainer.appendChild(minimapRenderer.domElement);
-
-            const mapSize = Math.max(mapGrid.length, mapGrid[0].length) * tileSize * 0.7;
-            minimapCamera = new THREE.OrthographicCamera(-mapSize, mapSize, mapSize, -mapSize, 1, 1000);
-            minimapCamera.up = new THREE.Vector3(0, 0, -1);
-            minimapCamera.lookAt(new THREE.Vector3(0, -1, 0));
-            scene.add(minimapCamera);
-
-            const playerIndicatorGeo = new THREE.SphereGeometry(2, 16, 16);
-            const playerIndicatorMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-            playerIndicator = new THREE.Mesh(playerIndicatorGeo, playerIndicatorMat);
-            scene.add(playerIndicator);
-        }
-
         function initEventListeners() {
             document.addEventListener('pointerlockchange', () => {
                 const blocker = document.getElementById('blocker');
@@ -407,16 +363,15 @@
             });
             document.addEventListener('mousemove', onMouseMove, false);
             document.addEventListener('keydown', (event) => {
-                if(event.code === 'Escape') {
-                    document.exitPointerLock();
-                }
+                if(event.code === 'Escape') document.exitPointerLock();
                 if (document.pointerLockElement !== document.body) return;
                 switch (event.code) {
                     case 'KeyW': moveState.forward = true; break;
                     case 'KeyA': moveState.left = true; break;
                     case 'KeyS': moveState.backward = true; break;
                     case 'KeyD': moveState.right = true; break;
-                    case 'ShiftLeft': case 'ShiftRight': moveState.run = true; break;
+                    case 'ShiftLeft': moveState.run = true; break;
+                    case 'Space': moveState.jump = true; break;
                 }
             });
             document.addEventListener('keyup', (event) => {
@@ -425,19 +380,18 @@
                     case 'KeyA': moveState.left = false; break;
                     case 'KeyS': moveState.backward = false; break;
                     case 'KeyD': moveState.right = false; break;
-                    case 'ShiftLeft': case 'ShiftRight': moveState.run = false; break;
+                    case 'ShiftLeft': moveState.run = false; break;
+                    case 'Space': moveState.jump = false; break;
                 }
             });
             window.addEventListener('resize', onWindowResize);
             window.addEventListener('beforeunload', () => { if (playerRef) deleteDoc(playerRef); });
         }
 
-
         async function createLobby() {
             const lobbyId = Math.random().toString(36).substring(2, 8).toUpperCase();
-            const lobbyRef = doc(db, `/artifacts/${appId}/public/data/lobbies`, lobbyId);
-            await setDoc(lobbyRef, { createdAt: Date.now(), owner: userId });
-            document.getElementById('lobby-id-display').textContent = `Match ID: ${lobbyId}`;
+            await setDoc(doc(db, `/artifacts/${appId}/public/data/lobbies`, lobbyId), { createdAt: Date.now(), owner: userId });
+            document.getElementById('lobby-id-display').textContent = `Game ID: ${lobbyId}`;
             setTimeout(() => startGame(lobbyId, true), 1000);
         }
 
@@ -446,8 +400,19 @@
             if ((await getDoc(lobbyRef)).exists()) {
                 setTimeout(() => startGame(lobbyId, false), 500);
             } else {
-                document.getElementById('error-message').textContent = 'Match not found.';
+                document.getElementById('error-message').textContent = 'Game not found.';
             }
+        }
+        
+        function listenForBall() {
+            onSnapshot(ballRef, (snapshot) => {
+                if (isHost || !snapshot.exists()) return;
+                const data = snapshot.data();
+                ballMesh.position.set(data.x, data.y, data.z);
+                if (data.qx) {
+                   ballMesh.quaternion.set(data.qx, data.qy, data.qz, data.qw);
+                }
+            });
         }
 
         function listenForPlayers(collectionPath) {
@@ -458,19 +423,18 @@
                     if (docId === userId) return;
 
                     if (change.type === "added") {
-                        const model = createRoombaModel(Math.random() * 0xffffff);
-                        const body = new CANNON.Body({ mass: 70, shape: new CANNON.Sphere(0.8), material: world.materials.find(m=>m.name==="playerMaterial")});
-                        playerMeshes[docId] = { mesh: model, body: body, targetPosition: new THREE.Vector3() };
+                        const model = createPlayerModel(Math.random() * 0xffffff);
+                        playerMeshes[docId] = { mesh: model, targetPosition: new THREE.Vector3(), targetQuaternion: new THREE.Quaternion() };
                         scene.add(model);
-                        world.addBody(body);
                     }
                     if (change.type === "added" || change.type === "modified") {
                         playerMeshes[docId].targetPosition.set(data.x, data.y, data.z);
-                        playerMeshes[docId].mesh.quaternion.slerp(new THREE.Quaternion(data.qx, data.qy, data.qz, data.qw), 0.1);
+                        if(data.qx) {
+                           playerMeshes[docId].targetQuaternion.set(data.qx, data.qy, data.qz, data.qw);
+                        }
                     } else if (change.type === "removed") {
                         if (playerMeshes[docId]) {
                             scene.remove(playerMeshes[docId].mesh);
-                            world.remove(playerMeshes[docId].body);
                             delete playerMeshes[docId];
                         }
                     }
@@ -478,16 +442,6 @@
             });
         }
         
-        function listenForBallState() {
-            onSnapshot(ballRef, (doc) => {
-                if (!isHost && doc.exists()) {
-                    const data = doc.data();
-                    ballBody.position.set(data.x, data.y, data.z);
-                    ballBody.velocity.set(data.vx, data.vy, data.vz);
-                }
-            });
-        }
-
         function onMouseMove(event) {
             if (document.pointerLockElement !== document.body) return;
             cameraYaw -= (event.movementX || 0) * 0.002;
@@ -502,14 +456,16 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         }
 
-
         function updatePlayerState() {
+            const groundContact = world.contacts.some(contact => (contact.bi === playerBody && contact.bj.mass === 0) || (contact.bj === playerBody && contact.bi.mass === 0));
+            canJump = groundContact;
+
             const currentSpeed = moveState.run ? runSpeed : walkSpeed;
             const cameraForward = new THREE.Vector3();
             camera.getWorldDirection(cameraForward);
             cameraForward.y = 0;
             cameraForward.normalize();
-            const cameraRight = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), cameraForward);
+            const cameraRight = new THREE.Vector3().crossVectors(cameraForward, new THREE.Vector3(0, 1, 0));
 
             const moveDirection = new THREE.Vector3();
             if (moveState.forward) moveDirection.add(cameraForward);
@@ -517,69 +473,69 @@
             if (moveState.left) moveDirection.sub(cameraRight);
             if (moveState.right) moveDirection.add(cameraRight);
             
+            const currentVelocityY = playerBody.velocity.y;
+
             if (moveDirection.lengthSq() > 0) {
                  moveDirection.normalize();
                  playerBody.velocity.x = moveDirection.x * currentSpeed;
                  playerBody.velocity.z = moveDirection.z * currentSpeed;
-                 const targetQuaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, -1), moveDirection);
-                 playerModel.quaternion.slerp(targetQuaternion, 0.2);
+            } else {
+                 playerBody.velocity.x *= 0.9;
+                 playerBody.velocity.z *= 0.9;
+            }
+            
+            playerBody.velocity.y = currentVelocityY;
+
+            if (moveState.jump && canJump) {
+                playerBody.velocity.y = jumpForce;
             }
         }
 
         function updateCamera() {
-            const targetPosition = playerModel.position.clone().add(new THREE.Vector3(0, 0.5, 0));
+            const targetPosition = playerModel.position.clone().add(new THREE.Vector3(0, 1.0, 0));
             cameraTarget.lerp(targetPosition, 0.2);
-
+            
             const idealOffset = new THREE.Vector3(0, 0, cameraDistance);
-            const rotation = new THREE.Euler(cameraPitch, cameraYaw, 0, 'YXZ');
-            idealOffset.applyEuler(rotation);
-            
-            const idealCameraPosition = playerModel.position.clone().add(idealOffset);
+            idealOffset.applyEuler(new THREE.Euler(cameraPitch, cameraYaw, 0, 'YXZ'));
+            const idealCameraPosition = targetPosition.clone().add(idealOffset);
 
-            // Camera collision
-            const playerToCamera = new THREE.Vector3().subVectors(idealCameraPosition, playerModel.position);
-            raycaster.set(playerModel.position, playerToCamera.normalize());
-            const intersects = raycaster.intersectObjects(wallMeshes);
+            const cameraDirection = idealCameraPosition.clone().sub(targetPosition).normalize();
+            raycaster.set(targetPosition, cameraDirection);
+            const intersects = raycaster.intersectObjects(wallMeshes, false);
 
-            if(intersects.length > 0 && intersects[0].distance < playerToCamera.length()) {
-                 camera.position.copy(intersects[0].point.addScaledVector(playerToCamera.normalize(), -0.5));
+            let finalCameraPosition;
+            if (intersects.length > 0 && intersects[0].distance < cameraDistance) {
+                finalCameraPosition = targetPosition.clone().add(cameraDirection.multiplyScalar(intersects[0].distance - 0.5));
             } else {
-                 camera.position.copy(idealCameraPosition);
+                finalCameraPosition = idealCameraPosition;
             }
-            
+            finalCameraPosition.y = Math.max(finalCameraPosition.y, 0.5); 
+            camera.position.lerp(finalCameraPosition, 0.2);
             camera.lookAt(cameraTarget);
         }
 
         function sendPlayerStateToServer() {
             if (playerRef) {
                 updateDoc(playerRef, {
-                    x: playerBody.position.x, y: playerBody.position.y, z: playerBody.position.z,
+                    x: playerModel.position.x, y: playerModel.position.y, z: playerModel.position.z,
                     qx: playerModel.quaternion.x, qy: playerModel.quaternion.y, qz: playerModel.quaternion.z, qw: playerModel.quaternion.w
                 });
             }
-            if(isHost && ballRef){
+            if (isHost && ballBody) {
                 updateDoc(ballRef, {
                     x: ballBody.position.x, y: ballBody.position.y, z: ballBody.position.z,
-                    vx: ballBody.velocity.x, vy: ballBody.velocity.y, vz: ballBody.velocity.z
+                    qx: ballBody.quaternion.x, qy: ballBody.quaternion.y, qz: ballBody.quaternion.z, qw: ballBody.quaternion.w
                 });
             }
         }
 
-        function updateRemotePlayers() {
+        function updateRemotePlayers(deltaTime) {
+            const factor = deltaTime * 10;
             for (const id in playerMeshes) {
                 const player = playerMeshes[id];
-                player.body.position.lerp(player.targetPosition, 0.2, player.body.position);
-                player.mesh.position.copy(player.body.position);
-                player.mesh.quaternion.copy(player.body.quaternion);
+                player.mesh.position.lerp(player.targetPosition, factor);
+                player.mesh.quaternion.slerp(player.targetQuaternion, factor);
             }
-        }
-
-        function updateMinimap() {
-            if (!isGameStarted) return;
-            minimapCamera.position.set(playerModel.position.x, 150, playerModel.position.z);
-            playerIndicator.position.copy(playerModel.position);
-            playerIndicator.position.y = 200; 
-            minimapRenderer.render(scene, minimapCamera);
         }
 
         function animate() {
@@ -588,18 +544,22 @@
             const time = performance.now();
             const deltaTime = (time - lastTime) / 1000;
             
-            if(document.pointerLockElement === document.body) {
-                world.step(timeStep, deltaTime);
+            if (document.pointerLockElement === document.body) {
                 updatePlayerState();
             }
 
+            world.step(1/60, deltaTime, 3);
+
             playerModel.position.copy(playerBody.position);
-            ballMesh.position.copy(ballBody.position);
-            ballMesh.quaternion.copy(ballBody.quaternion);
+            playerModel.quaternion.copy(playerBody.quaternion);
+
+            if (isHost && ballBody) {
+                ballMesh.position.copy(ballBody.position);
+                ballMesh.quaternion.copy(ballBody.quaternion);
+            }
             
-            updateRemotePlayers();
+            updateRemotePlayers(deltaTime);
             updateCamera();
-            updateMinimap();
 
             if (time - lastUpdateTime > updateInterval && document.pointerLockElement === document.body) {
                 sendPlayerStateToServer();
