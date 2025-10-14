@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Multiplayer Environment with Lobbies</title>
+    <title>3D Multiplayer Futsal Game</title>
     <style>
         body {
             margin: 0;
@@ -45,7 +45,7 @@
             justify-content: center;
             align-items: center;
         }
-        #lobby-ui {
+        #lobby-ui, #pause-menu {
             width: 90%;
             max-width: 450px;
             padding: 25px;
@@ -66,7 +66,7 @@
             text-align: center;
             font-size: 1rem;
         }
-        .lobby-button {
+        .lobby-button, .menu-button {
             width: 100%;
             padding: 12px;
             margin-top: 10px;
@@ -78,7 +78,7 @@
             cursor: pointer;
             transition: background-color 0.2s;
         }
-        .lobby-button:hover:not(:disabled) {
+        .lobby-button:hover:not(:disabled), .menu-button:hover {
             background-color: #357abd;
         }
         .lobby-button:disabled {
@@ -97,16 +97,7 @@
             min-height: 20px;
         }
         .crosshair {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            width: 10px;
-            height: 10px;
-            border: 1px solid white;
-            border-radius: 50%;
-            transform: translate(-50%, -50%);
-            mix-blend-mode: difference;
-            display: none; /* Crosshair not needed in 3rd person */
+            display: none; 
         }
         #minimapContainer {
             position: absolute;
@@ -132,79 +123,82 @@
 <body>
     <div id="blocker">
         <div id="lobby-ui">
-            <h1 class="text-2xl font-bold mb-4">Join a Lobby</h1>
-            <button id="create-lobby-btn" class="lobby-button" disabled>Create New Lobby</button>
+            <h1 class="text-2xl font-bold mb-4">Join a Futsal Match</h1>
+            <button id="create-lobby-btn" class="lobby-button" disabled>Create New Match</button>
             <div id="lobby-id-display"></div>
-            <hr class="my-4 border-gray-600" style="margin: 20px 0; border-color: #444;">
-            <input type="text" id="join-lobby-input" class="lobby-input" placeholder="Enter Lobby ID" disabled>
-            <button id="join-lobby-btn" class="lobby-button" disabled>Join Lobby</button>
+            <hr class="my-4" style="margin: 20px 0; border-color: #444;">
+            <input type="text" id="join-lobby-input" class="lobby-input" placeholder="Enter Match ID" disabled>
+            <button id="join-lobby-btn" class="lobby-button" disabled>Join Match</button>
             <p id="error-message">Connecting to server...</p>
+        </div>
+        <div id="pause-menu" style="display: none;">
+            <h1 class="text-2xl font-bold mb-4">Game Paused</h1>
+            <button id="resume-btn" class="menu-button">Resume Game</button>
         </div>
     </div>
 
     <div id="info-container">
         Your User ID: <span id="userId">Loading...</span><br>
-        Lobby ID: <span id="lobbyId">N/A</span>
+        Match ID: <span id="lobbyId">N/A</span>
     </div>
     
-    <div id="version-info">Version 3.5-free-camera</div>
+    <div id="version-info">Version 4.1-futsal</div>
     <div id="minimapContainer">
         <div id="minimapRenderer"></div>
     </div>
     <div class="crosshair"></div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
 
     <script type="module">
         // Firebase Imports
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- GLOBAL VARIABLES ---
         let scene, camera, renderer, minimapRenderer, minimapCamera;
         let db, auth;
-        let userId, currentLobbyId, appId;
-        let playerRef, playerModel, playerShadow, playerIndicator;
-        let collidableObjects = [];
+        let userId, currentLobbyId, appId, isHost = false;
+        let playerRef, playerModel, playerBody, playerIndicator;
+        let ballRef, ballMesh, ballBody;
+        let wallMeshes = [];
+        let raycaster = new THREE.Raycaster();
+        
+        // Physics
+        let world;
+        const timeStep = 1 / 60;
 
         const playerMeshes = {};
 
-        const moveState = { forward: false, backward: false, left: false, right: false, jump: false, run: false };
-        const playerVelocity = new THREE.Vector3();
-        const walkSpeed = 5.0;
-        const runSpeed = 8.0;
-        const gravity = -30.0;
-        const jumpForce = 10.0;
-        let canJump = false;
+        const moveState = { forward: false, backward: false, left: false, right: false, run: false };
+        const walkSpeed = 8.0;
+        const runSpeed = 14.0;
         let lastTime = performance.now();
         let isGameStarted = false;
 
         // Camera control
         let cameraYaw = 0;
-        let cameraPitch = 0.3; // Start slightly looking down
-        const cameraDistance = 10;
+        let cameraPitch = 0.4;
+        const cameraDistance = 12;
         const cameraTarget = new THREE.Vector3();
 
-        const mapGrid = [
-            [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
-            [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2],
-            [2, 0, 1, 0, 2, 2, 2, 0, 2, 2, 2, 2, 0, 0, 2],
-            [2, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 2, 0, 0, 2],
-            [2, 0, 0, 0, 0, 0, 2, 0, 0, 1, 0, 2, 0, 0, 2],
-            [2, 2, 2, 2, 2, 0, 2, 2, 2, 2, 0, 2, 2, 2, 2],
-            [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
-            [2, 0, 2, 2, 2, 2, 0, 1, 0, 2, 2, 2, 2, 0, 2],
-            [2, 0, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 0, 2],
-            [2, 2, 2, 2, 0, 2, 2, 2, 2, 2, 0, 2, 2, 0, 2],
-            [2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
-            [2, 0, 0, 2, 2, 2, 2, 0, 2, 0, 2, 2, 2, 0, 2],
-            [2, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 1, 0, 2],
-            [2, 0, 1, 0, 0, 0, 1, 0, 2, 0, 0, 0, 0, 0, 2],
-            [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
-        ];
-        const tileSize = 10;
+        // Futsal court dimensions (in tiles)
+        const courtWidth = 10;
+        const courtDepth = 15;
+        const mapGrid = Array(courtDepth).fill(0).map(() => Array(courtWidth).fill(0));
+        // Create walls
+        for(let i=0; i<courtDepth; i++) {
+            mapGrid[i][0] = 2;
+            mapGrid[i][courtWidth-1] = 2;
+        }
+         for(let i=0; i<courtWidth; i++) {
+            mapGrid[0][i] = 2;
+            mapGrid[courtDepth-1][i] = 2;
+        }
 
+        const tileSize = 10;
         const updateInterval = 50;
         let lastUpdateTime = 0;
 
@@ -223,175 +217,163 @@
                 messagingSenderId: "427246041879",
                 appId: "1:427246041879:web:b455c681ee7b952edc9552"
             };
-            
             appId = firebaseConfig.projectId;
-
             const app = initializeApp(firebaseConfig);
             db = getFirestore(app);
             auth = getAuth(app);
 
-            onAuthStateChanged(auth, (user) => {
-                const errorMessage = document.getElementById('error-message');
+            onAuthStateChanged(auth, user => {
                 if (user) {
                     userId = user.uid;
-                    document.getElementById('userId').textContent = userId;
-                    document.getElementById('create-lobby-btn').disabled = false;
-                    document.getElementById('join-lobby-btn').disabled = false;
-                    document.getElementById('join-lobby-input').disabled = false;
-                    errorMessage.textContent = '';
-                } else {
-                    errorMessage.textContent = "Authentication failed. You are not signed in.";
+                    document.getElementById('userId').textContent = userId.substring(0, 8);
+                    ['create-lobby-btn', 'join-lobby-btn', 'join-lobby-input'].forEach(id => document.getElementById(id).disabled = false);
+                    document.getElementById('error-message').textContent = '';
                 }
             });
+            try { await signInAnonymously(auth); } catch (error) { console.error(error); }
+        }
+        
+        function initPhysics() {
+            world = new CANNON.World();
+            world.gravity.set(0, -20, 0);
+            world.broadphase = new CANNON.NaiveBroadphase();
+            world.solver.iterations = 10;
 
-            try {
-                await signInAnonymously(auth);
-            } catch (error) {
-                console.error("Firebase authentication failed:", error);
-                document.getElementById('error-message').textContent = "Authentication failed. Please refresh.";
-            }
+            const groundMaterial = new CANNON.Material("groundMaterial");
+            const wallMaterial = new CANNON.Material("wallMaterial");
+            const playerMaterial = new CANNON.Material("playerMaterial");
+            const ballMaterial = new CANNON.Material("ballMaterial");
+
+            world.addContactMaterial(new CANNON.ContactMaterial(groundMaterial, ballMaterial, { friction: 0.4, restitution: 0.7 }));
+            world.addContactMaterial(new CANNON.ContactMaterial(playerMaterial, ballMaterial, { friction: 0.1, restitution: 0.8 }));
+            world.addContactMaterial(new CANNON.ContactMaterial(wallMaterial, ballMaterial, { friction: 0.5, restitution: 0.8 }));
+            world.addContactMaterial(new CANNON.ContactMaterial(playerMaterial, playerMaterial, { friction: 0.1, restitution: 0.4 }));
         }
 
         function initLobbyUI() {
-            const createBtn = document.getElementById('create-lobby-btn');
-            const joinBtn = document.getElementById('join-lobby-btn');
-            const lobbyInput = document.getElementById('join-lobby-input');
-            
-            createBtn.addEventListener('click', createLobby);
-            joinBtn.addEventListener('click', () => joinLobby(lobbyInput.value.toUpperCase()));
+            document.getElementById('create-lobby-btn').addEventListener('click', createLobby);
+            document.getElementById('join-lobby-btn').addEventListener('click', () => joinLobby(document.getElementById('join-lobby-input').value.toUpperCase()));
+            document.getElementById('resume-btn').addEventListener('click', () => {
+                document.body.requestPointerLock();
+            });
         }
 
-        async function startGame(lobbyId) {
+        async function startGame(lobbyId, amHost) {
             if (isGameStarted) return;
-            
+            isHost = amHost;
             currentLobbyId = lobbyId;
             document.getElementById('lobbyId').textContent = lobbyId;
             
-            document.getElementById('blocker').style.display = 'none';
-
             initThree();
+            document.getElementById('lobby-ui').style.display = 'none';
             document.body.requestPointerLock();
             
-            const startPos = getStartPosition();
-            playerModel.position.set(startPos.x, 1, startPos.z);
-            
+            playerBody = new CANNON.Body({ mass: 70, shape: new CANNON.Sphere(0.8), material: world.materials.find(m=>m.name==="playerMaterial")});
+            playerBody.position.set(0, 5, courtDepth * tileSize / 2 - 10);
+            world.addBody(playerBody);
+
             const playersCollectionPath = `/artifacts/${appId}/public/data/lobbies/${currentLobbyId}/players`;
             playerRef = doc(db, playersCollectionPath, userId);
-            
-            await setDoc(playerRef, {
-                x: playerModel.position.x, y: playerModel.position.y, z: playerModel.position.z,
-                qx: playerModel.quaternion.x, qy: playerModel.quaternion.y, qz: playerModel.quaternion.z, qw: playerModel.quaternion.w,
-                timestamp: Date.now()
-            });
+            await setDoc(playerRef, { x: playerBody.position.x, y: playerBody.position.y, z: playerBody.position.z, timestamp: Date.now() });
+
+            ballRef = doc(db, `/artifacts/${appId}/public/data/lobbies/${currentLobbyId}/ball/state`);
+            if (isHost) {
+                 await setDoc(ballRef, { x: 0, y: 5, z: 0, vx: 0, vy: 0, vz: 0 });
+            }
 
             listenForPlayers(playersCollectionPath);
+            listenForBallState();
 
             isGameStarted = true;
             animate();
         }
-
-        function createPlayerModel(color) {
-            const geometry = new THREE.CylinderGeometry(0.5, 0.5, 2, 16);
-            const material = new THREE.MeshStandardMaterial({ color: color });
-            const mesh = new THREE.Mesh(geometry, material);
-            mesh.castShadow = true;
-            return mesh;
+        
+        function createRoombaModel(color) {
+            const group = new THREE.Group();
+            const bodyMat = new THREE.MeshStandardMaterial({ color: color, metalness: 0.3, roughness: 0.5 });
+            const bodyGeo = new THREE.CylinderGeometry(0.8, 0.7, 0.4, 24);
+            const body = new THREE.Mesh(bodyGeo, bodyMat);
+            body.castShadow = true;
+            group.add(body);
+            const topMat = new THREE.MeshStandardMaterial({ color: 0xeeeeee, metalness: 0.1, roughness: 0.6 });
+            const topGeo = new THREE.CylinderGeometry(0.6, 0.6, 0.1, 24);
+            const top = new THREE.Mesh(topGeo, topMat);
+            top.position.y = 0.25;
+            group.add(top);
+            const directionIndicatorMat = new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.8 });
+            const directionIndicatorGeo = new THREE.BoxGeometry(0.1, 0.1, 0.5);
+            const directionIndicator = new THREE.Mesh(directionIndicatorGeo, directionIndicatorMat);
+            directionIndicator.position.set(0, 0.25, -0.4);
+            group.add(directionIndicator);
+            return group;
         }
 
         function initThree() {
+            initPhysics();
             scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x87CEEB);
-            scene.fog = new THREE.Fog(0x87CEEB, 1, 250);
-
+            scene.background = new THREE.Color(0x225588);
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
             
-            playerModel = createPlayerModel(0xffffff); // Player is white
+            playerModel = createRoombaModel(0xffffff);
             scene.add(playerModel);
             
+            ballMesh = new THREE.Mesh(new THREE.SphereGeometry(0.5, 32, 32), new THREE.MeshStandardMaterial({color: 0xffdf00}));
+            ballMesh.castShadow = true;
+            scene.add(ballMesh);
+            ballBody = new CANNON.Body({ mass: 1, shape: new CANNON.Sphere(0.5), material: world.materials.find(m=>m.name==="ballMaterial")});
+            world.addBody(ballBody);
+
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.shadowMap.enabled = true;
             document.body.insertBefore(renderer.domElement, document.getElementById('info-container'));
             
-            const ambientLight = new THREE.AmbientLight(0x606060, 1.2);
-            scene.add(ambientLight);
-            
+            scene.add(new THREE.AmbientLight(0x606060, 1.2));
             const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
-            directionalLight.position.set(50, 100, 50);
+            directionalLight.position.set(20, 50, 20);
             directionalLight.castShadow = true;
             directionalLight.shadow.mapSize.width = 2048;
             directionalLight.shadow.mapSize.height = 2048;
             scene.add(directionalLight);
 
             generateWorldFromGrid();
-            createPlayerShadow();
             initMinimap();
         }
 
         function generateWorldFromGrid() {
-            const wallHeight = 10;
+            const wallHeight = 15;
             const gridWidth = mapGrid[0].length * tileSize;
             const gridDepth = mapGrid.length * tileSize;
-            const offsetX = -gridWidth / 2;
-            const offsetZ = -gridDepth / 2;
 
-            const groundGeometry = new THREE.PlaneGeometry(gridWidth, gridDepth);
-            const groundMaterial = new THREE.MeshLambertMaterial({ color: 0x66aa66 });
-            const ground = new THREE.Mesh(groundGeometry, groundMaterial);
-            ground.rotation.x = -Math.PI / 2;
-            ground.receiveShadow = true;
-            scene.add(ground);
+            const groundGeo = new THREE.PlaneGeometry(gridWidth, gridDepth);
+            const groundMat = new THREE.MeshLambertMaterial({ color: 0x228B22 });
+            const groundMesh = new THREE.Mesh(groundGeo, groundMat);
+            groundMesh.rotation.x = -Math.PI / 2;
+            groundMesh.receiveShadow = true;
+            scene.add(groundMesh);
+            const groundBody = new CANNON.Body({ mass: 0, shape: new CANNON.Plane(), material: world.materials.find(m=>m.name==="groundMaterial") });
+            groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1,0,0), -Math.PI/2);
+            world.addBody(groundBody);
 
             mapGrid.forEach((row, z) => {
                 row.forEach((tileType, x) => {
-                    const worldX = offsetX + x * tileSize + tileSize / 2;
-                    const worldZ = offsetZ + z * tileSize + tileSize / 2;
-
-                    switch (tileType) {
-                        case 1: createTree(worldX, worldZ); break;
-                        case 2:
-                            const wallGeometry = new THREE.BoxGeometry(tileSize, wallHeight, tileSize);
-                            const wallMaterial = new THREE.MeshLambertMaterial({ color: new THREE.Color(0.5, 0.5, 0.5) });
-                            const wall = new THREE.Mesh(wallGeometry, wallMaterial);
-                            wall.position.set(worldX, wallHeight / 2, worldZ);
-                            wall.castShadow = true;
-                            wall.receiveShadow = true;
-                            scene.add(wall);
-                            collidableObjects.push({ mesh: wall, type: 'box', bounds: new THREE.Box3().setFromObject(wall) });
-                            break;
+                    if (tileType === 2) {
+                        const wallGeo = new THREE.BoxGeometry(tileSize, wallHeight, tileSize);
+                        const wallMat = new THREE.MeshLambertMaterial({ color: 0xcccccc });
+                        const wallMesh = new THREE.Mesh(wallGeo, wallMat);
+                        wallMesh.position.set((x - gridWidth/tileSize/2 + 0.5) * tileSize, wallHeight/2, (z - gridDepth/tileSize/2 + 0.5) * tileSize);
+                        wallMesh.castShadow = true;
+                        wallMesh.receiveShadow = true;
+                        scene.add(wallMesh);
+                        wallMeshes.push(wallMesh); // For camera collision
+                        const wallBody = new CANNON.Body({ mass: 0, shape: new CANNON.Box(new CANNON.Vec3(tileSize/2, wallHeight/2, tileSize/2)), material: world.materials.find(m=>m.name==="wallMaterial") });
+                        wallBody.position.copy(wallMesh.position);
+                        world.addBody(wallBody);
                     }
                 });
             });
         }
-
-        function createTree(x, z) {
-            const trunkHeight = 8;
-            const trunkGeo = new THREE.CylinderGeometry(0.5, 0.8, trunkHeight);
-            const trunkMat = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
-            const trunk = new THREE.Mesh(trunkGeo, trunkMat);
-            trunk.position.set(x, trunkHeight / 2, z);
-            trunk.castShadow = true;
-            scene.add(trunk);
-            
-            const leavesGeo = new THREE.SphereGeometry(4, 8, 8);
-            const leavesMat = new THREE.MeshLambertMaterial({ color: 0x228B22 });
-            const leaves = new THREE.Mesh(leavesGeo, leavesMat);
-            leaves.position.set(x, trunkHeight + 2, z);
-            leaves.castShadow = true;
-            scene.add(leaves);
-            
-            collidableObjects.push({ mesh: trunk, type: 'sphere', bounds: new THREE.Sphere(trunk.position, 1.5) });
-        }
-
-        function createPlayerShadow() {
-            const shadowGeo = new THREE.CircleGeometry(0.5, 16);
-            const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.3 });
-            playerShadow = new THREE.Mesh(shadowGeo, shadowMat);
-            playerShadow.rotation.x = -Math.PI / 2;
-            playerShadow.position.y = 0.01;
-            scene.add(playerShadow);
-        }
-
+        
         function initMinimap() {
             const minimapContainer = document.getElementById('minimapRenderer');
             minimapRenderer = new THREE.WebGLRenderer({ antialias: true });
@@ -410,33 +392,24 @@
             scene.add(playerIndicator);
         }
 
-        function getStartPosition() {
-            const gridWidth = mapGrid[0].length * tileSize;
-            const gridDepth = mapGrid.length * tileSize;
-            const offsetX = -gridWidth / 2;
-            const offsetZ = -gridDepth / 2;
-            for (let z = 0; z < mapGrid.length; z++) {
-                for (let x = 0; x < mapGrid[z].length; x++) {
-                    if (mapGrid[z][x] === 0) {
-                        return {
-                            x: offsetX + x * tileSize + tileSize / 2,
-                            z: offsetZ + z * tileSize + tileSize / 2
-                        };
-                    }
-                }
-            }
-            return { x: 0, z: 0 };
-        }
-
         function initEventListeners() {
             document.addEventListener('pointerlockchange', () => {
-                if (document.pointerLockElement !== document.body) {
-                    Object.keys(moveState).forEach(key => moveState[key] = false);
+                const blocker = document.getElementById('blocker');
+                const pauseMenu = document.getElementById('pause-menu');
+                if(document.pointerLockElement === document.body) {
+                    blocker.style.display = 'none';
+                    pauseMenu.style.display = 'none';
+                } else {
+                    blocker.style.display = 'flex';
+                    pauseMenu.style.display = 'block';
+                    document.getElementById('lobby-ui').style.display = 'none';
                 }
             });
-             document.addEventListener('mousemove', onMouseMove, false);
-
+            document.addEventListener('mousemove', onMouseMove, false);
             document.addEventListener('keydown', (event) => {
+                if(event.code === 'Escape') {
+                    document.exitPointerLock();
+                }
                 if (document.pointerLockElement !== document.body) return;
                 switch (event.code) {
                     case 'KeyW': moveState.forward = true; break;
@@ -444,10 +417,8 @@
                     case 'KeyS': moveState.backward = true; break;
                     case 'KeyD': moveState.right = true; break;
                     case 'ShiftLeft': case 'ShiftRight': moveState.run = true; break;
-                    case 'Space': if (canJump) moveState.jump = true; break;
                 }
             });
-
             document.addEventListener('keyup', (event) => {
                 switch (event.code) {
                     case 'KeyW': moveState.forward = false; break;
@@ -457,85 +428,63 @@
                     case 'ShiftLeft': case 'ShiftRight': moveState.run = false; break;
                 }
             });
-
             window.addEventListener('resize', onWindowResize);
-            window.addEventListener('beforeunload', () => {
-                if (playerRef) deleteDoc(playerRef);
-            });
+            window.addEventListener('beforeunload', () => { if (playerRef) deleteDoc(playerRef); });
         }
 
+
         async function createLobby() {
-            if (!userId) {
-                document.getElementById('error-message').textContent = 'Not authenticated. Cannot create lobby.';
-                return;
-            }
             const lobbyId = Math.random().toString(36).substring(2, 8).toUpperCase();
             const lobbyRef = doc(db, `/artifacts/${appId}/public/data/lobbies`, lobbyId);
-            
             await setDoc(lobbyRef, { createdAt: Date.now(), owner: userId });
-            
-            document.getElementById('lobby-id-display').textContent = `Lobby ID: ${lobbyId}`;
-            document.getElementById('error-message').textContent = 'Lobby created! Starting game...';
-            
-            setTimeout(() => startGame(lobbyId), 1500);
+            document.getElementById('lobby-id-display').textContent = `Match ID: ${lobbyId}`;
+            setTimeout(() => startGame(lobbyId, true), 1000);
         }
 
         async function joinLobby(lobbyId) {
-            if (!userId) {
-                document.getElementById('error-message').textContent = 'Not authenticated. Cannot join lobby.';
-                return;
-            }
-            if (!lobbyId) {
-                document.getElementById('error-message').textContent = 'Please enter a Lobby ID.';
-                return;
-            }
             const lobbyRef = doc(db, `/artifacts/${appId}/public/data/lobbies`, lobbyId);
-            const lobbySnap = await getDoc(lobbyRef);
-
-            if (lobbySnap.exists()) {
-                document.getElementById('error-message').textContent = 'Lobby found! Joining...';
-                setTimeout(() => startGame(lobbyId), 1000);
+            if ((await getDoc(lobbyRef)).exists()) {
+                setTimeout(() => startGame(lobbyId, false), 500);
             } else {
-                document.getElementById('error-message').textContent = 'Lobby not found. Please check the ID.';
+                document.getElementById('error-message').textContent = 'Match not found.';
             }
         }
 
         function listenForPlayers(collectionPath) {
-            const playersCollection = collection(db, collectionPath);
-            onSnapshot(playersCollection, (snapshot) => {
+            onSnapshot(collection(db, collectionPath), (snapshot) => {
                 snapshot.docChanges().forEach((change) => {
                     const docId = change.doc.id;
                     const data = change.doc.data();
-
                     if (docId === userId) return;
 
+                    if (change.type === "added") {
+                        const model = createRoombaModel(Math.random() * 0xffffff);
+                        const body = new CANNON.Body({ mass: 70, shape: new CANNON.Sphere(0.8), material: world.materials.find(m=>m.name==="playerMaterial")});
+                        playerMeshes[docId] = { mesh: model, body: body, targetPosition: new THREE.Vector3() };
+                        scene.add(model);
+                        world.addBody(body);
+                    }
                     if (change.type === "added" || change.type === "modified") {
-                        if (!playerMeshes[docId]) {
-                            const model = createPlayerModel(Math.random() * 0xffffff);
-                            
-                            const minimapIndicatorGeo = new THREE.SphereGeometry(1, 16, 16);
-                            const minimapIndicatorMat = new THREE.MeshBasicMaterial({ color: 0x0000ff });
-                            const minimapIndicator = new THREE.Mesh(minimapIndicatorGeo, minimapIndicatorMat);
-
-                            playerMeshes[docId] = {
-                                mesh: model,
-                                minimapIndicator: minimapIndicator,
-                                targetPosition: new THREE.Vector3(data.x, data.y, data.z),
-                                targetQuaternion: new THREE.Quaternion(data.qx, data.qy, data.qz, data.qw)
-                            };
-                            scene.add(model);
-                            scene.add(minimapIndicator);
-                        }
                         playerMeshes[docId].targetPosition.set(data.x, data.y, data.z);
-                        playerMeshes[docId].targetQuaternion.set(data.qx, data.qy, data.qz, data.qw);
+                        playerMeshes[docId].mesh.quaternion.slerp(new THREE.Quaternion(data.qx, data.qy, data.qz, data.qw), 0.1);
                     } else if (change.type === "removed") {
                         if (playerMeshes[docId]) {
                             scene.remove(playerMeshes[docId].mesh);
-                            scene.remove(playerMeshes[docId].minimapIndicator);
+                            world.remove(playerMeshes[docId].body);
                             delete playerMeshes[docId];
                         }
                     }
                 });
+            });
+        }
+        
+        function listenForBallState() {
+            onSnapshot(ballRef, (doc) => {
+                if (!isHost && doc.exists()) {
+                    const data = doc.data();
+                    ballBody.position.set(data.x, data.y, data.z);
+                    ballBody.velocity.set(data.vx, data.vy, data.vz);
+                }
             });
         }
 
@@ -543,7 +492,7 @@
             if (document.pointerLockElement !== document.body) return;
             cameraYaw -= (event.movementX || 0) * 0.002;
             cameraPitch -= (event.movementY || 0) * 0.002;
-            cameraPitch = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, cameraPitch)); // Clamp pitch
+            cameraPitch = Math.max(-Math.PI / 2 + 0.3, Math.min(Math.PI / 2 - 0.1, cameraPitch));
         }
 
         function onWindowResize() {
@@ -552,17 +501,15 @@
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
         }
-        
-        function updatePlayerState(deltaTime) {
-            const currentSpeed = moveState.run ? runSpeed : walkSpeed;
-            playerVelocity.y += gravity * deltaTime;
 
+
+        function updatePlayerState() {
+            const currentSpeed = moveState.run ? runSpeed : walkSpeed;
             const cameraForward = new THREE.Vector3();
             camera.getWorldDirection(cameraForward);
             cameraForward.y = 0;
             cameraForward.normalize();
-            
-            const cameraRight = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), cameraForward).normalize();
+            const cameraRight = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), cameraForward);
 
             const moveDirection = new THREE.Vector3();
             if (moveState.forward) moveDirection.add(cameraForward);
@@ -572,110 +519,58 @@
             
             if (moveDirection.lengthSq() > 0) {
                  moveDirection.normalize();
-                 playerVelocity.x = moveDirection.x * currentSpeed;
-                 playerVelocity.z = moveDirection.z * currentSpeed;
-
-                 const targetQuaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), moveDirection);
+                 playerBody.velocity.x = moveDirection.x * currentSpeed;
+                 playerBody.velocity.z = moveDirection.z * currentSpeed;
+                 const targetQuaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, -1), moveDirection);
                  playerModel.quaternion.slerp(targetQuaternion, 0.2);
-            } else {
-                playerVelocity.x *= (1 - 10 * deltaTime);
-                playerVelocity.z *= (1 - 10 * deltaTime);
             }
-            
-            if (moveState.jump) {
-                playerVelocity.y = jumpForce;
-                moveState.jump = false;
-                canJump = false;
-            }
-
-            const deltaPosition = playerVelocity.clone().multiplyScalar(deltaTime);
-            handleCollisions(deltaPosition);
-            playerModel.position.add(deltaPosition);
-            
-            if (playerModel.position.y < 1) {
-                playerModel.position.y = 1;
-                playerVelocity.y = 0;
-                canJump = true;
-            }
-            
-            updatePlayerShadow();
         }
 
         function updateCamera() {
-            const targetPosition = playerModel.position.clone().add(new THREE.Vector3(0, 1.0, 0));
+            const targetPosition = playerModel.position.clone().add(new THREE.Vector3(0, 0.5, 0));
             cameraTarget.lerp(targetPosition, 0.2);
 
-            const offset = new THREE.Vector3(0, 0, cameraDistance);
+            const idealOffset = new THREE.Vector3(0, 0, cameraDistance);
             const rotation = new THREE.Euler(cameraPitch, cameraYaw, 0, 'YXZ');
-            offset.applyEuler(rotation);
+            idealOffset.applyEuler(rotation);
             
-            const newCameraPosition = playerModel.position.clone().add(offset);
-            camera.position.lerp(newCameraPosition, 0.1);
+            const idealCameraPosition = playerModel.position.clone().add(idealOffset);
+
+            // Camera collision
+            const playerToCamera = new THREE.Vector3().subVectors(idealCameraPosition, playerModel.position);
+            raycaster.set(playerModel.position, playerToCamera.normalize());
+            const intersects = raycaster.intersectObjects(wallMeshes);
+
+            if(intersects.length > 0 && intersects[0].distance < playerToCamera.length()) {
+                 camera.position.copy(intersects[0].point.addScaledVector(playerToCamera.normalize(), -0.5));
+            } else {
+                 camera.position.copy(idealCameraPosition);
+            }
             
             camera.lookAt(cameraTarget);
         }
 
-        function handleCollisions(deltaPosition) {
-            const playerSphere = new THREE.Sphere(playerModel.position, 0.8);
-            const nextPlayerSphere = new THREE.Sphere(playerSphere.center.clone().add(deltaPosition), playerSphere.radius);
-
-            for (const obj of collidableObjects) {
-                let intersects = false;
-                if (obj.type === 'box') {
-                    intersects = nextPlayerSphere.intersectsBox(obj.bounds);
-                } else if (obj.type === 'sphere') {
-                    intersects = nextPlayerSphere.intersectsSphere(obj.bounds);
-                }
-
-                if (intersects) {
-                    let penetrationVector;
-                    if (obj.type === 'box') {
-                        const closestPoint = new THREE.Vector3().copy(nextPlayerSphere.center).clamp(obj.bounds.min, obj.bounds.max);
-                        penetrationVector = new THREE.Vector3().subVectors(nextPlayerSphere.center, closestPoint).normalize();
-                    } else { // sphere
-                        penetrationVector = new THREE.Vector3().subVectors(nextPlayerSphere.center, obj.bounds.center).normalize();
-                    }
-                    
-                    const dot = deltaPosition.dot(penetrationVector);
-                    if (dot < 0) {
-                        deltaPosition.sub(penetrationVector.multiplyScalar(dot));
-                    }
-                }
-            }
-        }
-
-        function updatePlayerShadow() {
-            playerShadow.position.x = playerModel.position.x;
-            playerShadow.position.z = playerModel.position.z;
-            const heightFactor = Math.max(0, (playerModel.position.y - 1) / 10);
-            playerShadow.material.opacity = Math.max(0.1, 0.4 - heightFactor * 0.3);
-            const scale = 1 + heightFactor * 0.5;
-            playerShadow.scale.set(scale, scale, scale);
-        }
-
         function sendPlayerStateToServer() {
             if (playerRef) {
-                setDoc(playerRef, {
-                    x: playerModel.position.x,
-                    y: playerModel.position.y,
-                    z: playerModel.position.z,
-                    qx: playerModel.quaternion.x,
-                    qy: playerModel.quaternion.y,
-                    qz: playerModel.quaternion.z,
-                    qw: playerModel.quaternion.w,
-                    timestamp: Date.now()
-                }, { merge: true });
+                updateDoc(playerRef, {
+                    x: playerBody.position.x, y: playerBody.position.y, z: playerBody.position.z,
+                    qx: playerModel.quaternion.x, qy: playerModel.quaternion.y, qz: playerModel.quaternion.z, qw: playerModel.quaternion.w
+                });
+            }
+            if(isHost && ballRef){
+                updateDoc(ballRef, {
+                    x: ballBody.position.x, y: ballBody.position.y, z: ballBody.position.z,
+                    vx: ballBody.velocity.x, vy: ballBody.velocity.y, vz: ballBody.velocity.z
+                });
             }
         }
 
-        function updateRemotePlayers(deltaTime) {
-            const interpolationFactor = Math.min(deltaTime * 15, 1.0);
+        function updateRemotePlayers() {
             for (const id in playerMeshes) {
                 const player = playerMeshes[id];
-                player.mesh.position.lerp(player.targetPosition, interpolationFactor);
-                player.mesh.quaternion.slerp(player.targetQuaternion, interpolationFactor);
-                player.minimapIndicator.position.copy(player.mesh.position);
-                player.minimapIndicator.position.y = 200; // Keep remote indicators high as well
+                player.body.position.lerp(player.targetPosition, 0.2, player.body.position);
+                player.mesh.position.copy(player.body.position);
+                player.mesh.quaternion.copy(player.body.quaternion);
             }
         }
 
@@ -683,30 +578,33 @@
             if (!isGameStarted) return;
             minimapCamera.position.set(playerModel.position.x, 150, playerModel.position.z);
             playerIndicator.position.copy(playerModel.position);
-            playerIndicator.position.y = 200; // Move indicator very high up
+            playerIndicator.position.y = 200; 
             minimapRenderer.render(scene, minimapCamera);
         }
 
         function animate() {
             if (!isGameStarted) return;
             requestAnimationFrame(animate);
-            
             const time = performance.now();
             const deltaTime = (time - lastTime) / 1000;
             
-            if (document.pointerLockElement === document.body) {
-                updatePlayerState(deltaTime);
-
-                if (time - lastUpdateTime > updateInterval) {
-                    sendPlayerStateToServer();
-                    lastUpdateTime = time;
-                }
+            if(document.pointerLockElement === document.body) {
+                world.step(timeStep, deltaTime);
+                updatePlayerState();
             }
+
+            playerModel.position.copy(playerBody.position);
+            ballMesh.position.copy(ballBody.position);
+            ballMesh.quaternion.copy(ballBody.quaternion);
             
+            updateRemotePlayers();
             updateCamera();
-            updateRemotePlayers(deltaTime);
             updateMinimap();
 
+            if (time - lastUpdateTime > updateInterval && document.pointerLockElement === document.body) {
+                sendPlayerStateToServer();
+                lastUpdateTime = time;
+            }
             lastTime = time;
             renderer.render(scene, camera);
         }
