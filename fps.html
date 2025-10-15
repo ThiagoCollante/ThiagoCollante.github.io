@@ -126,7 +126,7 @@
         Game ID: <span id="lobbyId">N/A</span>
     </div>
     
-    <div id="version-info">Version 4.6-futsal-clientCollisionFix</div>
+    <div id="version-info">Version 4.7-futsal-clientImpulse</div>
     <div class="crosshair"></div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -136,7 +136,7 @@
         // Firebase Imports
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc, getDoc, updateDoc, addDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- GLOBAL VARIABLES ---
         let scene, camera, renderer, world;
@@ -270,18 +270,39 @@
             world.addBody(ballBody);
 
             if (isHost) {
-                 // The host simulates the ball, so its body is DYNAMIC
                 ballBody.mass = 1;
                 ballBody.type = CANNON.Body.DYNAMIC;
                 ballBody.updateMassProperties();
                 await setDoc(ballRef, { x: 0, y: 5, z: 0 });
             } else {
-                // Clients have a KINEMATIC ball body. It doesn't react to physics on its own,
-                // but other dynamic objects (like the player) can collide with it.
-                // Its position is updated from the server.
                 ballBody.mass = 0;
                 ballBody.type = CANNON.Body.KINEMATIC;
                 ballBody.updateMassProperties();
+            }
+
+            // Add collision listener to send hits to host
+            playerBody.addEventListener("collide", (event) => {
+                if (!isHost && event.body === ballBody) {
+                    sendHitToServer(playerBody.velocity);
+                }
+            });
+
+            // If host, listen for hits from clients
+            if (isHost) {
+                const hitsCollectionRef = collection(db, `/artifacts/${appId}/public/data/lobbies/${currentLobbyId}/hits`);
+                onSnapshot(hitsCollectionRef, (snapshot) => {
+                    snapshot.docChanges().forEach(async (change) => {
+                        if (change.type === "added") {
+                            const hitData = change.doc.data();
+                            const impulse = new CANNON.Vec3(hitData.impulseX, hitData.impulseY, hitData.impulseZ);
+                            
+                            const impulseMagnitude = 0.5; // Tweak this value for desired "kick" strength
+                            ballBody.applyImpulse(impulse.scale(impulseMagnitude), ballBody.position);
+
+                            await deleteDoc(change.doc.ref);
+                        }
+                    });
+                });
             }
 
             listenForPlayers(playersCollectionPath);
@@ -291,6 +312,20 @@
             document.body.requestPointerLock();
             isGameStarted = true;
             animate();
+        }
+
+        async function sendHitToServer(velocity) {
+            const hitsCollectionRef = collection(db, `/artifacts/${appId}/public/data/lobbies/${currentLobbyId}/hits`);
+            try {
+                await addDoc(hitsCollectionRef, {
+                    impulseX: velocity.x,
+                    impulseY: velocity.y,
+                    impulseZ: velocity.z,
+                    timestamp: Date.now()
+                });
+            } catch (error) {
+                console.error("Error sending hit to server:", error);
+            }
         }
         
         function createPlayerModel(color) {
@@ -422,7 +457,6 @@
                 if (isHost || !snapshot.exists() || !ballBody) return;
                 const data = snapshot.data();
                 
-                // Clients update their kinematic ball body's position based on host data
                 ballBody.position.set(data.x, data.y, data.z);
                 if (data.qx) {
                    ballBody.quaternion.set(data.qx, data.qy, data.qz, data.qw);
