@@ -126,7 +126,7 @@
         Game ID: <span id="lobbyId">N/A</span>
     </div>
     
-    <div id="version-info">Version 4.7-futsal-clientImpulse</div>
+    <div id="version-info">Version 4.9-futsal-syncFix</div>
     <div class="crosshair"></div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -148,6 +148,12 @@
         const playerMeshes = {};
         let wallMeshes = [];
         let raycaster = new THREE.Raycaster();
+
+        // Interpolation target for the ball on client side
+        const ballTargetState = {
+            position: new CANNON.Vec3(),
+            quaternion: new CANNON.Quaternion()
+        };
 
         // Physics materials
         let groundMaterial, playerMaterial;
@@ -259,9 +265,16 @@
             ballMesh.castShadow = true;
             scene.add(ballMesh);
              
+            // Set initial player document with full data
             const playersCollectionPath = `/artifacts/${appId}/public/data/lobbies/${currentLobbyId}/players`;
             playerRef = doc(db, playersCollectionPath, userId);
-            await setDoc(playerRef, { x: startPos.x, y: startPos.y, z: startPos.z, timestamp: Date.now() });
+            await setDoc(playerRef, { 
+                x: startPos.x, 
+                y: startPos.y, 
+                z: startPos.z,
+                qx: 0, qy: 0, qz: 0, qw: 1, 
+                timestamp: Date.now() 
+            });
 
             // Create Ball Physics Body
             ballRef = doc(db, `/artifacts/${appId}/public/data/lobbies/${currentLobbyId}/ball/state`);
@@ -273,7 +286,7 @@
                 ballBody.mass = 1;
                 ballBody.type = CANNON.Body.DYNAMIC;
                 ballBody.updateMassProperties();
-                await setDoc(ballRef, { x: 0, y: 5, z: 0 });
+                await setDoc(ballRef, { x: 0, y: 5, z: 0, qx: 0, qy: 0, qz: 0, qw: 1 });
             } else {
                 ballBody.mass = 0;
                 ballBody.type = CANNON.Body.KINEMATIC;
@@ -457,9 +470,10 @@
                 if (isHost || !snapshot.exists() || !ballBody) return;
                 const data = snapshot.data();
                 
-                ballBody.position.set(data.x, data.y, data.z);
+                // Store the target state from the server
+                ballTargetState.position.set(data.x, data.y, data.z);
                 if (data.qx) {
-                   ballBody.quaternion.set(data.qx, data.qy, data.qz, data.qw);
+                   ballTargetState.quaternion.set(data.qx, data.qy, data.qz, data.qw);
                 }
             });
         }
@@ -477,9 +491,11 @@
                         scene.add(model);
                     }
                     if (change.type === "added" || change.type === "modified") {
-                        playerMeshes[docId].targetPosition.set(data.x, data.y, data.z);
-                        if(data.qx) {
-                           playerMeshes[docId].targetQuaternion.set(data.qx, data.qy, data.qz, data.qw);
+                        if (playerMeshes[docId]) {
+                            playerMeshes[docId].targetPosition.set(data.x, data.y, data.z);
+                            if(data.qx) {
+                               playerMeshes[docId].targetQuaternion.set(data.qx, data.qy, data.qz, data.qw);
+                            }
                         }
                     } else if (change.type === "removed") {
                         if (playerMeshes[docId]) {
@@ -587,6 +603,14 @@
             }
         }
 
+        function updateBallInterpolation(deltaTime) {
+            if (!isHost && ballBody) {
+                const factor = Math.min(deltaTime * 20, 1.0);
+                ballBody.position.lerp(ballTargetState.position, factor, ballBody.position);
+                ballBody.quaternion.slerp(ballTargetState.quaternion, factor, ballBody.quaternion);
+            }
+        }
+
         function animate() {
             if (!isGameStarted) return;
             requestAnimationFrame(animate);
@@ -602,12 +626,17 @@
             playerModel.position.copy(playerBody.position);
             playerModel.quaternion.copy(playerBody.quaternion);
 
-            if (ballBody) {
+            if (isHost && ballBody) {
                 ballMesh.position.copy(ballBody.position);
                 ballMesh.quaternion.copy(ballBody.quaternion);
             }
             
             updateRemotePlayers(deltaTime);
+            updateBallInterpolation(deltaTime); 
+            if(ballBody && !isHost) {
+                 ballMesh.position.copy(ballBody.position);
+                 ballMesh.quaternion.copy(ballBody.quaternion);
+            }
             updateCamera();
 
             if (time - lastUpdateTime > updateInterval && document.pointerLockElement === document.body) {
