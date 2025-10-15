@@ -126,7 +126,7 @@
         Game ID: <span id="lobbyId">N/A</span>
     </div>
     
-    <div id="version-info">Version 4.5-futsal-colliderFix</div>
+    <div id="version-info">Version 4.6-futsal-clientCollisionFix</div>
     <div class="crosshair"></div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -254,7 +254,7 @@
             playerBody.updateMassProperties();
             world.addBody(playerBody);
 
-            // Create Ball
+            // Create Ball Mesh
             ballMesh = new THREE.Mesh(new THREE.SphereGeometry(0.5, 32, 32), new THREE.MeshStandardMaterial({ color: 0xffffff }));
             ballMesh.castShadow = true;
             scene.add(ballMesh);
@@ -263,12 +263,25 @@
             playerRef = doc(db, playersCollectionPath, userId);
             await setDoc(playerRef, { x: startPos.x, y: startPos.y, z: startPos.z, timestamp: Date.now() });
 
+            // Create Ball Physics Body
             ballRef = doc(db, `/artifacts/${appId}/public/data/lobbies/${currentLobbyId}/ball/state`);
+            const ballShape = new CANNON.Sphere(0.5);
+            ballBody = new CANNON.Body({ shape: ballShape, position: new CANNON.Vec3(0, 5, 0) });
+            world.addBody(ballBody);
+
             if (isHost) {
-                 const ballShape = new CANNON.Sphere(0.5);
-                 ballBody = new CANNON.Body({ mass: 1, shape: ballShape, position: new CANNON.Vec3(0, 5, 0) });
-                 world.addBody(ballBody);
-                 await setDoc(ballRef, { x: 0, y: 5, z: 0 });
+                 // The host simulates the ball, so its body is DYNAMIC
+                ballBody.mass = 1;
+                ballBody.type = CANNON.Body.DYNAMIC;
+                ballBody.updateMassProperties();
+                await setDoc(ballRef, { x: 0, y: 5, z: 0 });
+            } else {
+                // Clients have a KINEMATIC ball body. It doesn't react to physics on its own,
+                // but other dynamic objects (like the player) can collide with it.
+                // Its position is updated from the server.
+                ballBody.mass = 0;
+                ballBody.type = CANNON.Body.KINEMATIC;
+                ballBody.updateMassProperties();
             }
 
             listenForPlayers(playersCollectionPath);
@@ -406,11 +419,13 @@
         
         function listenForBall() {
             onSnapshot(ballRef, (snapshot) => {
-                if (isHost || !snapshot.exists()) return;
+                if (isHost || !snapshot.exists() || !ballBody) return;
                 const data = snapshot.data();
-                ballMesh.position.set(data.x, data.y, data.z);
+                
+                // Clients update their kinematic ball body's position based on host data
+                ballBody.position.set(data.x, data.y, data.z);
                 if (data.qx) {
-                   ballMesh.quaternion.set(data.qx, data.qy, data.qz, data.qw);
+                   ballBody.quaternion.set(data.qx, data.qy, data.qz, data.qw);
                 }
             });
         }
@@ -553,7 +568,7 @@
             playerModel.position.copy(playerBody.position);
             playerModel.quaternion.copy(playerBody.quaternion);
 
-            if (isHost && ballBody) {
+            if (ballBody) {
                 ballMesh.position.copy(ballBody.position);
                 ballMesh.quaternion.copy(ballBody.quaternion);
             }
