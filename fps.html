@@ -1,646 +1,650 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Multiplayer Game</title>
-    <style>
-        body {
-            margin: 0;
-            overflow: hidden;
-            font-family: 'Inter', sans-serif;
-            color: white;
-            background-color: #111;
-        }
-        canvas {
-            display: block;
-        }
-        #info-container {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            padding: 10px;
-            background-color: rgba(0, 0, 0, 0.5);
-            border-radius: 8px;
-            font-size: 12px;
-            z-index: 10;
-        }
-        #version-info {
-            position: absolute;
-            bottom: 10px;
-            left: 10px;
-            padding: 5px;
-            background-color: rgba(0, 0, 0, 0.5);
-            border-radius: 5px;
-            font-size: 10px;
-            color: white;
-            z-index: 10;
-        }
-        #blocker {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0,0,0,0.7);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-        #lobby-ui, #pause-menu {
-            width: 90%;
-            max-width: 450px;
-            padding: 25px;
-            background-color: #222;
-            border-radius: 12px;
-            text-align: center;
-            border: 1px solid #444;
-        }
-        .lobby-input {
-            width: 100%;
-            box-sizing: border-box;
-            padding: 10px;
-            margin: 10px 0;
-            border-radius: 6px;
-            border: 1px solid #555;
-            background-color: #333;
-            color: white;
-            text-align: center;
-            font-size: 1rem;
-        }
-        .lobby-button, .menu-button {
-            width: 100%;
-            padding: 12px;
-            margin-top: 10px;
-            border-radius: 6px;
-            border: none;
-            background-color: #4a90e2;
-            color: white;
-            font-weight: bold;
-            cursor: pointer;
-            transition: background-color 0.2s;
-        }
-        .lobby-button:hover:not(:disabled), .menu-button:hover {
-            background-color: #357abd;
-        }
-        .lobby-button:disabled {
-            background-color: #555;
-            cursor: not-allowed;
-        }
-        #lobby-id-display {
-            margin-top: 15px;
-            font-size: 1.1rem;
-            font-weight: bold;
-            color: #a5d6a7; /* Light green */
-        }
-        #error-message {
-            color: #ef5350; /* Light red */
-            margin-top: 10px;
-            min-height: 20px;
-        }
-        .crosshair {
-            display: none; 
-        }
-        #minimapContainer {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            width: 200px;
-            height: 200px;
-            border: 2px solid white;
-            border-radius: 50%;
-            overflow: hidden;
-            z-index: 101;
-            background: rgba(0, 0, 0, 0.3);
-        }
-        #minimapRenderer {
-            width: 100%;
-            height: 100%;
-        }
-    </style>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Multiplayer Game</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Inter', sans-serif;
+            color: white;
+            background-color: #111;
+        }
+        canvas {
+            display: block;
+        }
+        #info-container {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            padding: 10px;
+            background-color: rgba(0, 0, 0, 0.5);
+            border-radius: 8px;
+            font-size: 12px;
+            z-index: 10;
+        }
+        #version-info {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            padding: 5px;
+            background-color: rgba(0, 0, 0, 0.5);
+            border-radius: 5px;
+            font-size: 10px;
+            color: white;
+            z-index: 10;
+        }
+        #blocker {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        #lobby-ui, #pause-menu {
+            width: 90%;
+            max-width: 450px;
+            padding: 25px;
+            background-color: #222;
+            border-radius: 12px;
+            text-align: center;
+            border: 1px solid #444;
+        }
+        .lobby-input {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 6px;
+            border: 1px solid #555;
+            background-color: #333;
+            color: white;
+            text-align: center;
+            font-size: 1rem;
+        }
+        .lobby-button, .menu-button {
+            width: 100%;
+            padding: 12px;
+            margin-top: 10px;
+            border-radius: 6px;
+            border: none;
+            background-color: #4a90e2;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .lobby-button:hover:not(:disabled), .menu-button:hover {
+            background-color: #357abd;
+        }
+        .lobby-button:disabled {
+            background-color: #555;
+            cursor: not-allowed;
+        }
+        #lobby-id-display {
+            margin-top: 15px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            color: #a5d6a7; /* Light green */
+        }
+        #error-message {
+            color: #ef5350; /* Light red */
+            margin-top: 10px;
+            min-height: 20px;
+        }
+        .crosshair {
+            display: none; 
+        }
+        #minimapContainer {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 200px;
+            height: 200px;
+            border: 2px solid white;
+            border-radius: 50%;
+            overflow: hidden;
+            z-index: 101;
+            background: rgba(0, 0, 0, 0.3);
+        }
+        #minimapRenderer {
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div id="blocker">
-        <div id="lobby-ui">
-            <h1 class="text-2xl font-bold mb-4">Join a Game</h1>
-            <button id="create-lobby-btn" class="lobby-button" disabled>Create New Game</button>
-            <div id="lobby-id-display"></div>
-            <hr class="my-4" style="margin: 20px 0; border-color: #444;">
-            <input type="text" id="join-lobby-input" class="lobby-input" placeholder="Enter Game ID" disabled>
-            <button id="join-lobby-btn" class="lobby-button" disabled>Join Game</button>
-            <p id="error-message">Connecting to server...</p>
-        </div>
-        <div id="pause-menu" style="display: none;">
-            <h1 class="text-2xl font-bold mb-4">Game Paused</h1>
-            <button id="resume-btn" class="menu-button">Resume Game</button>
-        </div>
-    </div>
+    <div id="blocker">
+        <div id="lobby-ui">
+            <h1 class="text-2xl font-bold mb-4">Join a Game</h1>
+            <button id="create-lobby-btn" class="lobby-button" disabled>Create New Game</button>
+            <div id="lobby-id-display"></div>
+            <hr class="my-4" style="margin: 20px 0; border-color: #444;">
+            <input type="text" id="join-lobby-input" class="lobby-input" placeholder="Enter Game ID" disabled>
+            <button id="join-lobby-btn" class="lobby-button" disabled>Join Game</button>
+            <p id="error-message">Connecting to server...</p>
+        </div>
+        <div id="pause-menu" style="display: none;">
+            <h1 class="text-2xl font-bold mb-4">Game Paused</h1>
+            <button id="resume-btn" class="menu-button">Resume Game</button>
+        </div>
+    </div>
 
-    <div id="info-container">
-        Your User ID: <span id="userId">Loading...</span><br>
-        Game ID: <span id="lobbyId">N/A</span>
-    </div>
-    
-    <div id="version-info">Version 3.5-fixes</div>
-    <div id="minimapContainer">
-        <div id="minimapRenderer"></div>
-    </div>
-    <div class="crosshair"></div>
+    <div id="info-container">
+        Your User ID: <span id="userId">Loading...</span><br>
+        Game ID: <span id="lobbyId">N/A</span>
+    </div>
+    
+    <div id="version-info">Version 3.5-fixes</div>
+    <div id="minimapContainer">
+        <div id="minimapRenderer"></div>
+    </div>
+    <div class="crosshair"></div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
-    <script type="module">
-        // Firebase Imports
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    <script type="module">
+        // Firebase Imports
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // --- GLOBAL VARIABLES ---
-        let scene, camera, renderer, minimapRenderer, minimapCamera;
-        let db, auth;
-        let userId, currentLobbyId, appId, isHost = false;
-        let playerRef, playerModel, playerIndicator;
-        let wallMeshes = [];
-        let collidableObjects = [];
-        let raycaster = new THREE.Raycaster();
-        
-        const playerMeshes = {};
+        // --- GLOBAL VARIABLES ---
+        let scene, camera, renderer, minimapRenderer, minimapCamera;
+        let db, auth;
+        let userId, currentLobbyId, appId, isHost = false;
+        let playerRef, playerModel, playerIndicator;
+        let wallMeshes = [];
+        let collidableObjects = [];
+        let raycaster = new THREE.Raycaster();
+        
+        const playerMeshes = {};
 
-        const moveState = { forward: false, backward: false, left: false, right: false, run: false, jump: false };
-        const walkSpeed = 8.0;
-        const runSpeed = 14.0;
-        let lastTime = performance.now();
-        let isGameStarted = false;
-        
-        // Physics variables
-        const playerVelocity = new THREE.Vector3();
-        const gravity = -30.0;
-        const jumpForce = 10.0;
-        let canJump = true;
-        const playerGroundLevel = 0.2;
-
-
-        // Camera control
-        let cameraYaw = 0;
-        let cameraPitch = 0.4;
-        const cameraDistance = 12;
-        const cameraTarget = new THREE.Vector3();
-
-        const mapGrid = [
-            [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
-            [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2],
-            [2, 0, 1, 0, 2, 2, 2, 0, 2, 2, 2, 2, 0, 0, 2],
-            [2, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 2, 0, 0, 2],
-            [2, 0, 0, 0, 0, 0, 2, 0, 0, 1, 0, 2, 0, 0, 2],
-            [2, 2, 2, 2, 2, 0, 2, 2, 2, 2, 0, 2, 2, 2, 2],
-            [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
-            [2, 0, 2, 2, 2, 2, 0, 1, 0, 2, 2, 2, 2, 0, 2],
-            [2, 0, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 0, 2],
-            [2, 2, 2, 2, 0, 2, 2, 2, 2, 2, 0, 2, 2, 0, 2],
-            [2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
-            [2, 0, 0, 2, 2, 2, 2, 0, 2, 0, 2, 2, 2, 0, 2],
-            [2, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 1, 0, 2],
-            [2, 0, 1, 0, 0, 0, 1, 0, 2, 0, 0, 0, 0, 0, 2],
-            [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
-        ];
-        const tileSize = 10;
-        const updateInterval = 50;
-        let lastUpdateTime = 0;
-
-        async function init() {
-            initLobbyUI();
-            initEventListeners();
-            await initFirebase();
-        }
-
-        async function initFirebase() {
-             const firebaseConfig = {
-                apiKey: "AIzaSyBX7Qk3hB7vNykKt9WyiDNWrqq0eXxpGMA",
-                authDomain: "lanhtml-d905d.firebaseapp.com",
-                projectId: "lanhtml-d905d",
-                storageBucket: "lanhtml-d905d.appspot.com",
-                messagingSenderId: "427246041879",
-                appId: "1:427246041879:web:b455c681ee7b952edc9552"
-            };
-            appId = firebaseConfig.projectId;
-            const app = initializeApp(firebaseConfig);
-            db = getFirestore(app);
-            auth = getAuth(app);
-
-            onAuthStateChanged(auth, user => {
-                if (user) {
-                    userId = user.uid;
-                    document.getElementById('userId').textContent = userId.substring(0, 8);
-                    ['create-lobby-btn', 'join-lobby-btn', 'join-lobby-input'].forEach(id => document.getElementById(id).disabled = false);
-                    document.getElementById('error-message').textContent = '';
-                }
-            });
-            try { await signInAnonymously(auth); } catch (error) { console.error(error); }
-        }
-
-        function initLobbyUI() {
-            document.getElementById('create-lobby-btn').addEventListener('click', createLobby);
-            document.getElementById('join-lobby-btn').addEventListener('click', () => joinLobby(document.getElementById('join-lobby-input').value.toUpperCase()));
-            document.getElementById('resume-btn').addEventListener('click', () => {
-                document.body.requestPointerLock();
-            });
-        }
-
-        async function startGame(lobbyId, amHost) {
-            if (isGameStarted) return;
-            isHost = amHost;
-            currentLobbyId = lobbyId;
-            document.getElementById('lobbyId').textContent = lobbyId;
-            
-            initThree();
-            document.getElementById('lobby-ui').style.display = 'none';
-            document.body.requestPointerLock();
-            
-            const startPos = getStartPosition();
-            playerModel.position.set(startPos.x, playerGroundLevel, startPos.z);
-
-            const playersCollectionPath = `/artifacts/${appId}/public/data/lobbies/${currentLobbyId}/players`;
-            playerRef = doc(db, playersCollectionPath, userId);
-            await setDoc(playerRef, { x: playerModel.position.x, y: playerModel.position.y, z: playerModel.position.z, timestamp: Date.now() });
-
-            listenForPlayers(playersCollectionPath);
-
-            isGameStarted = true;
-            animate();
-        }
-        
-        function createPlayerModel(color) {
-            const playerGeo = new THREE.CylinderGeometry(0.8, 0.8, 0.4, 24);
-            const playerMat = new THREE.MeshStandardMaterial({ color: color, metalness: 0.3, roughness: 0.5 });
-            const model = new THREE.Mesh(playerGeo, playerMat);
-            model.castShadow = true;
-            return model;
-        }
-
-        function initThree() {
-            scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x87CEEB);
-            scene.fog = new THREE.Fog(0x87CEEB, 1, 250);
-            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            
-            playerModel = createPlayerModel(0x00ff00); // Local player is green
-            scene.add(playerModel);
-            
-            renderer = new THREE.WebGLRenderer({ antialias: true });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.shadowMap.enabled = true;
-            document.body.insertBefore(renderer.domElement, document.getElementById('info-container'));
-            
-            scene.add(new THREE.AmbientLight(0x606060, 1.2));
-            const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
-            directionalLight.position.set(50, 100, 50);
-            directionalLight.castShadow = true;
-            directionalLight.shadow.mapSize.width = 2048;
-            directionalLight.shadow.mapSize.height = 2048;
-            scene.add(directionalLight);
-
-            generateWorldFromGrid();
-            initMinimap();
-        }
-        
-        function getStartPosition() {
-            const gridWidth = mapGrid[0].length * tileSize;
-            const gridDepth = mapGrid.length * tileSize;
-            const offsetX = -gridWidth / 2;
-            const offsetZ = -gridDepth / 2;
-            for (let z = 0; z < mapGrid.length; z++) {
-                for (let x = 0; x < mapGrid[z].length; x++) {
-                    if (mapGrid[z][x] === 0) {
-                        return {
-                            x: offsetX + x * tileSize + tileSize / 2,
-                            z: offsetZ + z * tileSize + tileSize / 2
-                        };
-                    }
-                }
-            }
-            return { x: 0, z: 0 };
-        }
-
-        function generateWorldFromGrid() {
-            const wallHeight = 10;
-            const gridWidth = mapGrid[0].length * tileSize;
-            const gridDepth = mapGrid.length * tileSize;
-            const offsetX = -gridWidth / 2;
-            const offsetZ = -gridDepth / 2;
-
-            const groundGeometry = new THREE.PlaneGeometry(gridWidth, gridDepth);
-            const groundMaterial = new THREE.MeshLambertMaterial({ color: 0x66aa66 });
-            const ground = new THREE.Mesh(groundGeometry, groundMaterial);
-            ground.rotation.x = -Math.PI / 2;
-            ground.receiveShadow = true;
-            scene.add(ground);
-
-            mapGrid.forEach((row, z) => {
-                row.forEach((tileType, x) => {
-                    const worldX = offsetX + x * tileSize + tileSize / 2;
-                    const worldZ = offsetZ + z * tileSize + tileSize / 2;
-
-                    switch (tileType) {
-                        case 1: 
-                            const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.8, 8), new THREE.MeshLambertMaterial({ color: 0x8B4513 }));
-                            trunk.position.set(worldX, 4, worldZ);
-                            trunk.castShadow = true;
-                            scene.add(trunk);
-                            const leaves = new THREE.Mesh(new THREE.SphereGeometry(4, 8, 8), new THREE.MeshLambertMaterial({ color: 0x228B22 }));
-                            leaves.position.set(worldX, 8 + 2, worldZ);
-                            leaves.castShadow = true;
-                            scene.add(leaves);
-                            collidableObjects.push({ mesh: trunk, type: 'sphere', bounds: new THREE.Sphere(trunk.position, 1.5) });
-                            break;
-                        case 2:
-                            const wall = new THREE.Mesh(new THREE.BoxGeometry(tileSize, wallHeight, tileSize), new THREE.MeshLambertMaterial({ color: new THREE.Color(0.5, 0.5, 0.5) }));
-                            wall.position.set(worldX, wallHeight / 2, worldZ);
-                            wall.castShadow = true;
-                            wall.receiveShadow = true;
-                            scene.add(wall);
-                            wallMeshes.push(wall);
-                            collidableObjects.push({ mesh: wall, type: 'box', bounds: new THREE.Box3().setFromObject(wall) });
-                            break;
-                    }
-                });
-            });
-        }
-        
-        function initMinimap() {
-            const minimapContainer = document.getElementById('minimapRenderer');
-            minimapRenderer = new THREE.WebGLRenderer({ antialias: true });
-            minimapRenderer.setSize(200, 200);
-            minimapContainer.appendChild(minimapRenderer.domElement);
-
-            const mapSize = Math.max(mapGrid.length, mapGrid[0].length) * tileSize * 0.7;
-            minimapCamera = new THREE.OrthographicCamera(-mapSize, mapSize, mapSize, -mapSize, 1, 1000);
-            minimapCamera.up = new THREE.Vector3(0, 0, -1);
-            minimapCamera.lookAt(new THREE.Vector3(0, -1, 0));
-            scene.add(minimapCamera);
-
-            const playerIndicatorGeo = new THREE.SphereGeometry(2, 16, 16);
-            const playerIndicatorMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-            playerIndicator = new THREE.Mesh(playerIndicatorGeo, playerIndicatorMat);
-            scene.add(playerIndicator);
-        }
-
-        function initEventListeners() {
-            document.addEventListener('pointerlockchange', () => {
-                const blocker = document.getElementById('blocker');
-                const pauseMenu = document.getElementById('pause-menu');
-                if(document.pointerLockElement === document.body) {
-                    blocker.style.display = 'none';
-                    pauseMenu.style.display = 'none';
-                } else {
-                    blocker.style.display = 'flex';
-                    pauseMenu.style.display = 'block';
-                    document.getElementById('lobby-ui').style.display = 'none';
-                }
-            });
-            document.addEventListener('mousemove', onMouseMove, false);
-            document.addEventListener('keydown', (event) => {
-                if(event.code === 'Escape') {
-                    document.exitPointerLock();
-                }
-                if (document.pointerLockElement !== document.body) return;
-                switch (event.code) {
-                    case 'KeyW': moveState.forward = true; break;
-                    case 'KeyA': moveState.left = true; break;
-                    case 'KeyS': moveState.backward = true; break;
-                    case 'KeyD': moveState.right = true; break;
-                    case 'ShiftLeft': case 'ShiftRight': moveState.run = true; break;
-                    case 'Space': moveState.jump = true; break;
-                }
-            });
-            document.addEventListener('keyup', (event) => {
-                switch (event.code) {
-                    case 'KeyW': moveState.forward = false; break;
-                    case 'KeyA': moveState.left = false; break;
-                    case 'KeyS': moveState.backward = false; break;
-                    case 'KeyD': moveState.right = false; break;
-                    case 'ShiftLeft': case 'ShiftRight': moveState.run = false; break;
-                    case 'Space': moveState.jump = false; break;
-                }
-            });
-            window.addEventListener('resize', onWindowResize);
-            window.addEventListener('beforeunload', () => { if (playerRef) deleteDoc(playerRef); });
-        }
+        const moveState = { forward: false, backward: false, left: false, right: false, run: false, jump: false };
+        const walkSpeed = 8.0;
+        const runSpeed = 14.0;
+        let lastTime = performance.now();
+        let isGameStarted = false;
+        
+        // Physics variables
+        const playerVelocity = new THREE.Vector3();
+        const gravity = -30.0;
+        const jumpForce = 10.0;
+        let canJump = true;
+        const playerGroundLevel = 0.2;
 
 
-        async function createLobby() {
-            const lobbyId = Math.random().toString(36).substring(2, 8).toUpperCase();
-            const lobbyRef = doc(db, `/artifacts/${appId}/public/data/lobbies`, lobbyId);
-            await setDoc(lobbyRef, { createdAt: Date.now(), owner: userId });
-            document.getElementById('lobby-id-display').textContent = `Game ID: ${lobbyId}`;
-            setTimeout(() => startGame(lobbyId, true), 1000);
-        }
+        // Camera control
+        let cameraYaw = 0;
+        let cameraPitch = 0.4;
+        const cameraDistance = 12;
+        const cameraTarget = new THREE.Vector3();
 
-        async function joinLobby(lobbyId) {
-            const lobbyRef = doc(db, `/artifacts/${appId}/public/data/lobbies`, lobbyId);
-            if ((await getDoc(lobbyRef)).exists()) {
-                setTimeout(() => startGame(lobbyId, false), 500);
-            } else {
-                document.getElementById('error-message').textContent = 'Game not found.';
-            }
-        }
+        const mapGrid = [
+            [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+            [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2],
+            [2, 0, 1, 0, 2, 2, 2, 0, 2, 2, 2, 2, 0, 0, 2],
+            [2, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 2, 0, 0, 2],
+            [2, 0, 0, 0, 0, 0, 2, 0, 0, 1, 0, 2, 0, 0, 2],
+            [2, 2, 2, 2, 2, 0, 2, 2, 2, 2, 0, 2, 2, 2, 2],
+            [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
+            [2, 0, 2, 2, 2, 2, 0, 1, 0, 2, 2, 2, 2, 0, 2],
+            [2, 0, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 0, 2],
+            [2, 2, 2, 2, 0, 2, 2, 2, 2, 2, 0, 2, 2, 0, 2],
+            [2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
+            [2, 0, 0, 2, 2, 2, 2, 0, 2, 0, 2, 2, 2, 0, 2],
+            [2, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 1, 0, 2],
+            [2, 0, 1, 0, 0, 0, 1, 0, 2, 0, 0, 0, 0, 0, 2],
+            [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+        ];
+        const tileSize = 10;
+        const updateInterval = 50;
+        let lastUpdateTime = 0;
 
-        function listenForPlayers(collectionPath) {
-            onSnapshot(collection(db, collectionPath), (snapshot) => {
-                snapshot.docChanges().forEach((change) => {
-                    const docId = change.doc.id;
-                    const data = change.doc.data();
-                    if (docId === userId) return;
+        async function init() {
+            initLobbyUI();
+            initEventListeners();
+            await initFirebase();
+        }
 
-                    if (change.type === "added") {
-                        const model = createPlayerModel(Math.random() * 0xffffff);
-                        playerMeshes[docId] = { mesh: model, targetPosition: new THREE.Vector3(), targetQuaternion: new THREE.Quaternion() };
-                        scene.add(model);
-                    }
-                    if (change.type === "added" || change.type === "modified") {
-                        playerMeshes[docId].targetPosition.set(data.x, data.y, data.z);
-                        playerMeshes[docId].targetQuaternion.set(data.qx, data.qy, data.qz, data.qw);
-                    } else if (change.type === "removed") {
-                        if (playerMeshes[docId]) {
-                            scene.remove(playerMeshes[docId].mesh);
-                            delete playerMeshes[docId];
-                        }
-                    }
-                });
-            });
-        }
-        
-        function onMouseMove(event) {
-            if (document.pointerLockElement !== document.body) return;
-            cameraYaw -= (event.movementX || 0) * 0.002;
-            cameraPitch -= (event.movementY || 0) * 0.002;
-            cameraPitch = Math.max(-Math.PI / 2 + 0.3, Math.min(Math.PI / 2 - 0.1, cameraPitch));
-        }
+        async function initFirebase() {
+             const firebaseConfig = {
+                apiKey: "AIzaSyBX7Qk3hB7vNykKt9WyiDNWrqq0eXxpGMA",
+                authDomain: "lanhtml-d905d.firebaseapp.com",
+                projectId: "lanhtml-d905d",
+                storageBucket: "lanhtml-d905d.appspot.com",
+                messagingSenderId: "427246041879",
+                appId: "1:427246041879:web:b455c681ee7b952edc9552"
+            };
+            appId = firebaseConfig.projectId;
+            const app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app);
 
-        function onWindowResize() {
-            if (!isGameStarted) return;
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        }
+            onAuthStateChanged(auth, user => {
+                if (user) {
+                    userId = user.uid;
+                    document.getElementById('userId').textContent = userId.substring(0, 8);
+                    ['create-lobby-btn', 'join-lobby-btn', 'join-lobby-input'].forEach(id => document.getElementById(id).disabled = false);
+                    document.getElementById('error-message').textContent = '';
+                }
+            });
+            try { await signInAnonymously(auth); } catch (error) { console.error(error); }
+        }
 
-        function handleCollisions(deltaPosition) {
-            const playerSphere = new THREE.Sphere(playerModel.position, 0.8);
-            const nextPlayerSphere = new THREE.Sphere(playerSphere.center.clone().add(deltaPosition), playerSphere.radius);
+        function initLobbyUI() {
+            document.getElementById('create-lobby-btn').addEventListener('click', createLobby);
+            document.getElementById('join-lobby-btn').addEventListener('click', () => joinLobby(document.getElementById('join-lobby-input').value.toUpperCase()));
+            document.getElementById('resume-btn').addEventListener('click', () => {
+                document.body.requestPointerLock();
+            });
+        }
 
-            for (const obj of collidableObjects) {
-                let intersects = false;
-                if (obj.type === 'box') {
-                    intersects = nextPlayerSphere.intersectsBox(obj.bounds);
-                } else if (obj.type === 'sphere') {
-                    intersects = nextPlayerSphere.intersectsSphere(obj.bounds);
-                }
+        async function startGame(lobbyId, amHost) {
+            if (isGameStarted) return;
+            isHost = amHost;
+            currentLobbyId = lobbyId;
+            document.getElementById('lobbyId').textContent = lobbyId;
+            
+            initThree();
+            document.getElementById('lobby-ui').style.display = 'none';
+            document.body.requestPointerLock();
+            
+            const startPos = getStartPosition();
+            playerModel.position.set(startPos.x, playerGroundLevel, startPos.z);
 
-                if (intersects) {
-                    let penetrationVector;
-                    if (obj.type === 'box') {
-                        const closestPoint = new THREE.Vector3().copy(nextPlayerSphere.center).clamp(obj.bounds.min, obj.bounds.max);
-                        penetrationVector = new THREE.Vector3().subVectors(nextPlayerSphere.center, closestPoint).normalize();
-                    } else { // sphere
-                        penetrationVector = new THREE.Vector3().subVectors(nextPlayerSphere.center, obj.bounds.center).normalize();
-                    }
-                    
-                    const dot = deltaPosition.dot(penetrationVector);
-                    if (dot < 0) {
-                        deltaPosition.sub(penetrationVector.multiplyScalar(dot));
-                    }
-                }
-            }
-        }
+            const playersCollectionPath = `/artifacts/${appId}/public/data/lobbies/${currentLobbyId}/players`;
+            playerRef = doc(db, playersCollectionPath, userId);
+            await setDoc(playerRef, { x: playerModel.position.x, y: playerModel.position.y, z: playerModel.position.z, qx: 0, qy: 0, qz: 0, qw: 1, timestamp: Date.now() });
 
-        function updatePlayerState(deltaTime) {
-            // --- Determine horizontal movement direction based on camera and input
-            const currentSpeed = moveState.run ? runSpeed : walkSpeed;
-            const cameraForward = new THREE.Vector3();
-            camera.getWorldDirection(cameraForward);
-            cameraForward.y = 0;
-            cameraForward.normalize();
-            const cameraRight = new THREE.Vector3().crossVectors(cameraForward, new THREE.Vector3(0, 1, 0));
+            listenForPlayers(playersCollectionPath);
 
-            const moveDirection = new THREE.Vector3();
-            if (moveState.forward) moveDirection.add(cameraForward);
-            if (moveState.backward) moveDirection.sub(cameraForward);
-            if (moveState.left) moveDirection.sub(cameraRight);
-            if (moveState.right) moveDirection.add(cameraRight);
-            
-            // --- Calculate and apply horizontal movement with collisions
-            if (moveDirection.lengthSq() > 0) {
-                 moveDirection.normalize();
+            isGameStarted = true;
+            animate();
+        }
+        
+        function createPlayerModel(color) {
+            const playerGeo = new THREE.CylinderGeometry(0.8, 0.8, 0.4, 24);
+            const playerMat = new THREE.MeshStandardMaterial({ color: color, metalness: 0.3, roughness: 0.5 });
+            const model = new THREE.Mesh(playerGeo, playerMat);
+            model.castShadow = true;
+            return model;
+        }
 
-                 const horizontalDelta = moveDirection.clone().multiplyScalar(currentSpeed * deltaTime);
-                 handleCollisions(horizontalDelta); // Handle horizontal collisions
-                 playerModel.position.add(horizontalDelta);
+        function initThree() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87CEEB);
+            scene.fog = new THREE.Fog(0x87CEEB, 1, 250);
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            
+            playerModel = createPlayerModel(0x00ff00); // Local player is green
+            scene.add(playerModel);
+            
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            document.body.insertBefore(renderer.domElement, document.getElementById('info-container'));
+            
+            scene.add(new THREE.AmbientLight(0x606060, 1.2));
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
+            directionalLight.position.set(50, 100, 50);
+            directionalLight.castShadow = true;
+            directionalLight.shadow.mapSize.width = 2048;
+            directionalLight.shadow.mapSize.height = 2048;
+            scene.add(directionalLight);
 
-                 const targetQuaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), moveDirection);
-                 playerModel.quaternion.slerp(targetQuaternion, 0.2);
-            }
+            generateWorldFromGrid();
+            initMinimap();
+        }
+        
+        function getStartPosition() {
+            const gridWidth = mapGrid[0].length * tileSize;
+            const gridDepth = mapGrid.length * tileSize;
+            const offsetX = -gridWidth / 2;
+            const offsetZ = -gridDepth / 2;
+            for (let z = 0; z < mapGrid.length; z++) {
+                for (let x = 0; x < mapGrid[z].length; x++) {
+                    if (mapGrid[z][x] === 0) {
+                        return {
+                            x: offsetX + x * tileSize + tileSize / 2,
+                            z: offsetZ + z * tileSize + tileSize / 2
+                        };
+                    }
+                }
+            }
+            return { x: 0, z: 0 };
+        }
 
-            // --- Calculate and apply vertical movement (gravity and jumping)
-            playerVelocity.y += gravity * deltaTime;
+        function generateWorldFromGrid() {
+            const wallHeight = 10;
+            const gridWidth = mapGrid[0].length * tileSize;
+            const gridDepth = mapGrid.length * tileSize;
+            const offsetX = -gridWidth / 2;
+            const offsetZ = -gridDepth / 2;
 
-            if (moveState.jump && canJump) {
-                playerVelocity.y = jumpForce;
-                canJump = false;
-            }
-            
-            playerModel.position.y += playerVelocity.y * deltaTime;
+            const groundGeometry = new THREE.PlaneGeometry(gridWidth, gridDepth);
+            const groundMaterial = new THREE.MeshLambertMaterial({ color: 0x66aa66 });
+            const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true;
+            scene.add(ground);
 
-            // --- Final ground collision check
-            if (playerModel.position.y < playerGroundLevel) {
-                playerModel.position.y = playerGroundLevel;
-                playerVelocity.y = 0;
-                canJump = true;
-            }
-        }
+            mapGrid.forEach((row, z) => {
+                row.forEach((tileType, x) => {
+                    const worldX = offsetX + x * tileSize + tileSize / 2;
+                    const worldZ = offsetZ + z * tileSize + tileSize / 2;
 
-        function updateCamera() {
-            const targetPosition = playerModel.position.clone().add(new THREE.Vector3(0, 1.0, 0)); // Raise the target point slightly
-            cameraTarget.lerp(targetPosition, 0.2);
+                    switch (tileType) {
+                        case 1: 
+                            const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.8, 8), new THREE.MeshLambertMaterial({ color: 0x8B4513 }));
+                            trunk.position.set(worldX, 4, worldZ);
+                            trunk.castShadow = true;
+                            scene.add(trunk);
+                            const leaves = new THREE.Mesh(new THREE.SphereGeometry(4, 8, 8), new THREE.MeshLambertMaterial({ color: 0x228B22 }));
+                            leaves.position.set(worldX, 8 + 2, worldZ);
+                            leaves.castShadow = true;
+                            scene.add(leaves);
+                            collidableObjects.push({ mesh: trunk, type: 'sphere', bounds: new THREE.Sphere(trunk.position, 1.5) });
+                            break;
+                        case 2:
+                            const wall = new THREE.Mesh(new THREE.BoxGeometry(tileSize, wallHeight, tileSize), new THREE.MeshLambertMaterial({ color: new THREE.Color(0.5, 0.5, 0.5) }));
+                            wall.position.set(worldX, wallHeight / 2, worldZ);
+                            wall.castShadow = true;
+                            wall.receiveShadow = true;
+                            scene.add(wall);
+                            wallMeshes.push(wall);
+                            collidableObjects.push({ mesh: wall, type: 'box', bounds: new THREE.Box3().setFromObject(wall) });
+                            break;
+                    }
+                });
+            });
+        }
+        
+        function initMinimap() {
+            const minimapContainer = document.getElementById('minimapRenderer');
+            minimapRenderer = new THREE.WebGLRenderer({ antialias: true });
+            minimapRenderer.setSize(200, 200);
+            minimapContainer.appendChild(minimapRenderer.domElement);
 
-            // 1. Calculate ideal camera position without collisions
-            const idealOffset = new THREE.Vector3(0, 0, cameraDistance);
-            const rotation = new THREE.Euler(cameraPitch, cameraYaw, 0, 'YXZ');
-            idealOffset.applyEuler(rotation);
-            const idealCameraPosition = targetPosition.clone().add(idealOffset);
+            const mapSize = Math.max(mapGrid.length, mapGrid[0].length) * tileSize * 0.7;
+            minimapCamera = new THREE.OrthographicCamera(-mapSize, mapSize, mapSize, -mapSize, 1, 1000);
+            minimapCamera.up = new THREE.Vector3(0, 0, -1);
+            minimapCamera.lookAt(new THREE.Vector3(0, -1, 0));
+            scene.add(minimapCamera);
 
-            // 2. Raycast from the player towards the ideal camera position
-            const cameraDirection = idealCameraPosition.clone().sub(targetPosition).normalize();
-            raycaster.set(targetPosition, cameraDirection);
-            const intersects = raycaster.intersectObjects(wallMeshes, false);
+            const playerIndicatorGeo = new THREE.SphereGeometry(2, 16, 16);
+            const playerIndicatorMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+            playerIndicator = new THREE.Mesh(playerIndicatorGeo, playerIndicatorMat);
+            scene.add(playerIndicator);
+        }
 
-            let finalCameraPosition;
+        function initEventListeners() {
+            document.addEventListener('pointerlockchange', () => {
+                const blocker = document.getElementById('blocker');
+                const pauseMenu = document.getElementById('pause-menu');
+                if(document.pointerLockElement === document.body) {
+                    blocker.style.display = 'none';
+                    pauseMenu.style.display = 'none';
+                } else {
+                    blocker.style.display = 'flex';
+                    pauseMenu.style.display = 'block';
+                    document.getElementById('lobby-ui').style.display = 'none';
+                }
+            });
+            document.addEventListener('mousemove', onMouseMove, false);
+            document.addEventListener('keydown', (event) => {
+                if(event.code === 'Escape') {
+                    document.exitPointerLock();
+                }
+                if (document.pointerLockElement !== document.body) return;
+                switch (event.code) {
+                    case 'KeyW': moveState.forward = true; break;
+                    case 'KeyA': moveState.left = true; break;
+                    case 'KeyS': moveState.backward = true; break;
+                    case 'KeyD': moveState.right = true; break;
+                    case 'ShiftLeft': case 'ShiftRight': moveState.run = true; break;
+                    case 'Space': moveState.jump = true; break;
+                }
+            });
+            document.addEventListener('keyup', (event) => {
+                switch (event.code) {
+                    case 'KeyW': moveState.forward = false; break;
+                    case 'KeyA': moveState.left = false; break;
+                    case 'KeyS': moveState.backward = false; break;
+                    case 'KeyD': moveState.right = false; break;
+                    case 'ShiftLeft': case 'ShiftRight': moveState.run = false; break;
+                    case 'Space': moveState.jump = false; break;
+                }
+            });
+            window.addEventListener('resize', onWindowResize);
+            window.addEventListener('beforeunload', () => { if (playerRef) deleteDoc(playerRef); });
+        }
 
-            // 3. Adjust camera position based on wall collision
-            if (intersects.length > 0 && intersects[0].distance < cameraDistance) {
-                // If there's a wall, place camera at the collision point (with a small buffer)
-                finalCameraPosition = targetPosition.clone().add(cameraDirection.multiplyScalar(intersects[0].distance - 0.5));
-            } else {
-                // If no wall, move to the ideal position
-                finalCameraPosition = idealCameraPosition;
-            }
-            
-            // 4. NEW: Prevent camera from going through the floor by setting a minimum height
-            finalCameraPosition.y = Math.max(finalCameraPosition.y, 0.5); 
 
-            camera.position.lerp(finalCameraPosition, 0.2); // Smoothly move camera to its final calculated position
-            
-            camera.lookAt(cameraTarget);
-        }
+        async function createLobby() {
+            const lobbyId = Math.random().toString(36).substring(2, 8).toUpperCase();
+            const lobbyRef = doc(db, `/artifacts/${appId}/public/data/lobbies`, lobbyId);
+            await setDoc(lobbyRef, { createdAt: Date.now(), owner: userId });
+            document.getElementById('lobby-id-display').textContent = `Game ID: ${lobbyId}`;
+            setTimeout(() => startGame(lobbyId, true), 1000);
+        }
 
-        function sendPlayerStateToServer() {
-            if (playerRef) {
-                updateDoc(playerRef, {
-                    x: playerModel.position.x, y: playerModel.position.y, z: playerModel.position.z,
-                    qx: playerModel.quaternion.x, qy: playerModel.quaternion.y, qz: playerModel.quaternion.z, qw: playerModel.quaternion.w
-                });
-            }
-        }
+        async function joinLobby(lobbyId) {
+            const lobbyRef = doc(db, `/artifacts/${appId}/public/data/lobbies`, lobbyId);
+            if ((await getDoc(lobbyRef)).exists()) {
+                setTimeout(() => startGame(lobbyId, false), 500);
+            } else {
+                document.getElementById('error-message').textContent = 'Game not found.';
+            }
+        }
 
-        function updateRemotePlayers(deltaTime) {
-            const factor = deltaTime * 10;
-            for (const id in playerMeshes) {
-                const player = playerMeshes[id];
-                player.mesh.position.lerp(player.targetPosition, factor);
-                player.mesh.quaternion.slerp(player.targetQuaternion, factor);
-            }
-        }
+        function listenForPlayers(collectionPath) {
+            onSnapshot(collection(db, collectionPath), (snapshot) => {
+                snapshot.docChanges().forEach((change) => {
+                    const docId = change.doc.id;
+                    const data = change.doc.data();
+                    if (docId === userId) return;
 
-        function updateMinimap() {
-            if (!isGameStarted) return;
-            minimapCamera.position.set(playerModel.position.x, 150, playerModel.position.z);
-            playerIndicator.position.copy(playerModel.position);
-            playerIndicator.position.y = 200; 
-            minimapRenderer.render(scene, minimapCamera);
-        }
+                    let player = playerMeshes[docId];
 
-        function animate() {
-            if (!isGameStarted) return;
-            requestAnimationFrame(animate);
-            const time = performance.now();
-            const deltaTime = (time - lastTime) / 1000;
-            
-            if(document.pointerLockElement === document.body) {
-                updatePlayerState(deltaTime);
-            }
-            
-            updateRemotePlayers(deltaTime);
-            updateCamera();
-            updateMinimap();
+                    if (change.type === "added") {
+                        if (!player) {
+                            const model = createPlayerModel(Math.random() * 0xffffff);
+                            player = { 
+                                mesh: model, 
+                                targetPosition: new THREE.Vector3(), 
+                                targetQuaternion: new THREE.Quaternion() 
+                            };
+                            playerMeshes[docId] = player;
+                            scene.add(model);
+                        }
+                    } else if (change.type === "removed") {
+                        if (player) {
+                            scene.remove(player.mesh);
+                            delete playerMeshes[docId];
+                        }
+                        return;
+                    }
+                    
+                    if (player && data) {
+                        player.targetPosition.set(data.x, data.y, data.z);
+                        if (data.qx !== undefined) {
+                            player.targetQuaternion.set(data.qx, data.qy, data.qz, data.qw);
+                        }
+                    }
+                });
+            });
+        }
+        
+        function onMouseMove(event) {
+            if (document.pointerLockElement !== document.body) return;
+            cameraYaw -= (event.movementX || 0) * 0.002;
+            cameraPitch -= (event.movementY || 0) * 0.002;
+            cameraPitch = Math.max(-Math.PI / 2 + 0.3, Math.min(Math.PI / 2 - 0.1, cameraPitch));
+        }
 
-            if (time - lastUpdateTime > updateInterval && document.pointerLockElement === document.body) {
-                sendPlayerStateToServer();
-                lastUpdateTime = time;
-            }
-            lastTime = time;
-            renderer.render(scene, camera);
-        }
+        function onWindowResize() {
+            if (!isGameStarted) return;
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
 
-        init();
-    </script>
+        function handleCollisions(deltaPosition) {
+            const playerSphere = new THREE.Sphere(playerModel.position, 0.8);
+            const nextPlayerSphere = new THREE.Sphere(playerSphere.center.clone().add(deltaPosition), playerSphere.radius);
+
+            for (const obj of collidableObjects) {
+                let intersects = false;
+                if (obj.type === 'box') {
+                    intersects = nextPlayerSphere.intersectsBox(obj.bounds);
+                } else if (obj.type === 'sphere') {
+                    intersects = nextPlayerSphere.intersectsSphere(obj.bounds);
+                }
+
+                if (intersects) {
+                    let penetrationVector;
+                    if (obj.type === 'box') {
+                        const closestPoint = new THREE.Vector3().copy(nextPlayerSphere.center).clamp(obj.bounds.min, obj.bounds.max);
+                        penetrationVector = new THREE.Vector3().subVectors(nextPlayerSphere.center, closestPoint).normalize();
+                    } else { // sphere
+                        penetrationVector = new THREE.Vector3().subVectors(nextPlayerSphere.center, obj.bounds.center).normalize();
+                    }
+                    
+                    const dot = deltaPosition.dot(penetrationVector);
+                    if (dot < 0) {
+                        deltaPosition.sub(penetrationVector.multiplyScalar(dot));
+                    }
+                }
+            }
+        }
+
+        function updatePlayerState(deltaTime) {
+            const currentSpeed = moveState.run ? runSpeed : walkSpeed;
+            const cameraForward = new THREE.Vector3();
+            camera.getWorldDirection(cameraForward);
+            cameraForward.y = 0;
+            cameraForward.normalize();
+            const cameraRight = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), cameraForward);
+
+            const moveDirection = new THREE.Vector3();
+            if (moveState.forward) moveDirection.add(cameraForward);
+            if (moveState.backward) moveDirection.sub(cameraForward);
+            if (moveState.left) moveDirection.add(cameraRight);
+            if (moveState.right) moveDirection.sub(cameraRight);
+            
+            if (moveDirection.lengthSq() > 0) {
+                 moveDirection.normalize();
+
+                 const horizontalDelta = moveDirection.clone().multiplyScalar(currentSpeed * deltaTime);
+                 handleCollisions(horizontalDelta); 
+                 playerModel.position.add(horizontalDelta);
+
+                 const targetQuaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, -1), moveDirection);
+                 playerModel.quaternion.slerp(targetQuaternion, 0.2);
+            }
+
+            playerVelocity.y += gravity * deltaTime;
+
+            if (moveState.jump && canJump) {
+                playerVelocity.y = jumpForce;
+                canJump = false;
+            }
+            
+            playerModel.position.y += playerVelocity.y * deltaTime;
+
+            if (playerModel.position.y < playerGroundLevel) {
+                playerModel.position.y = playerGroundLevel;
+                playerVelocity.y = 0;
+                canJump = true;
+            }
+        }
+
+        function updateCamera() {
+            const targetPosition = playerModel.position.clone().add(new THREE.Vector3(0, 1.0, 0));
+            cameraTarget.lerp(targetPosition, 0.2);
+
+            const idealOffset = new THREE.Vector3(0, 0, cameraDistance);
+            const rotation = new THREE.Euler(cameraPitch, cameraYaw, 0, 'YXZ');
+            idealOffset.applyEuler(rotation);
+            const idealCameraPosition = targetPosition.clone().add(idealOffset);
+
+            const cameraDirection = idealCameraPosition.clone().sub(targetPosition).normalize();
+            raycaster.set(targetPosition, cameraDirection);
+            const intersects = raycaster.intersectObjects(wallMeshes, false);
+
+            let finalCameraPosition;
+
+            if (intersects.length > 0 && intersects[0].distance < cameraDistance) {
+                finalCameraPosition = targetPosition.clone().add(cameraDirection.multiplyScalar(intersects[0].distance - 0.5));
+            } else {
+                finalCameraPosition = idealCameraPosition;
+            }
+            
+            finalCameraPosition.y = Math.max(finalCameraPosition.y, 0.5); 
+
+            camera.position.lerp(finalCameraPosition, 0.2); 
+            
+            camera.lookAt(cameraTarget);
+        }
+
+        function sendPlayerStateToServer() {
+            if (playerRef) {
+                updateDoc(playerRef, {
+                    x: playerModel.position.x, y: playerModel.position.y, z: playerModel.position.z,
+                    qx: playerModel.quaternion.x, qy: playerModel.quaternion.y, qz: playerModel.quaternion.z, qw: playerModel.quaternion.w
+                });
+            }
+        }
+
+        function updateRemotePlayers(deltaTime) {
+            const factor = deltaTime * 10;
+            for (const id in playerMeshes) {
+                const player = playerMeshes[id];
+                player.mesh.position.lerp(player.targetPosition, factor);
+                player.mesh.quaternion.slerp(player.targetQuaternion, factor);
+            }
+        }
+
+        function updateMinimap() {
+            if (!isGameStarted) return;
+            minimapCamera.position.set(playerModel.position.x, 150, playerModel.position.z);
+            playerIndicator.position.copy(playerModel.position);
+            playerIndicator.position.y = 200; 
+            minimapRenderer.render(scene, minimapCamera);
+        }
+
+        function animate() {
+            if (!isGameStarted) return;
+            requestAnimationFrame(animate);
+            const time = performance.now();
+            const deltaTime = (time - lastTime) / 1000;
+            
+            if(document.pointerLockElement === document.body) {
+                updatePlayerState(deltaTime);
+            }
+            
+            updateRemotePlayers(deltaTime);
+            updateCamera();
+            updateMinimap();
+
+            if (time - lastUpdateTime > updateInterval && document.pointerLockElement === document.body) {
+                sendPlayerStateToServer();
+                lastUpdateTime = time;
+            }
+            lastTime = time;
+            renderer.render(scene, camera);
+        }
+
+        init();
+    </script>
 </body>
 </html>
+
