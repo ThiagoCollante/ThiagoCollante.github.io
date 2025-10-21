@@ -247,7 +247,7 @@
         Game ID: <span id="lobbyId">N/A</span>
     </div>
     
-    <div id="version-info">Version 6.6-cylinder_model</div>
+    <div id="version-info">Version 6.7-full_sync</div>
     <div id="minimapContainer">
         <div id="minimapRenderer"></div>
     </div>
@@ -269,7 +269,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc, getDoc, updateDoc, addDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         class MultiplayerFPSGame {
             constructor() {
@@ -390,10 +390,12 @@
                         x: this.camera.position.x, 
                         y: this.camera.position.y, 
                         z: this.camera.position.z, 
-                        qx: 0, qy: 0, qz: 0, qw: 1,
+                        yaw: this.mouse.x,
+                        pitch: this.mouse.y,
                         health: 100
                     });
                     this.listenForPlayers(playersCollectionPath);
+                    this.listenForGameEvents();
                 }
                 
                 this.requestPointerLock();
@@ -422,17 +424,12 @@
                 this.zoomFov = 20;
                 this.isZoomed = false;
 
-                // Create an invisible player model for multiplayer representation
                 this.playerModel = this.createPlayerModel(0x00ff00, true);
                 this.scene.add(this.playerModel);
             }
             
             initWeapons() {
-                this.weapons = [
-                    this.createPistol(),
-                    this.createShotgun(),
-                    this.createSniper(),
-                ];
+                this.weapons = [ this.createPistol(), this.createShotgun(), this.createSniper() ];
                 this.currentWeaponIndex = 0;
                 this.lastShotTime = 0;
 
@@ -447,27 +444,30 @@
                 const cylinderHeight = 3.5;
                 const cylinderRadius = 0.8;
 
-                // Create the main body (longer cylinder)
                 const bodyGeo = new THREE.CylinderGeometry(cylinderRadius, cylinderRadius, cylinderHeight, 24);
                 const bodyMat = new THREE.MeshStandardMaterial({ color, metalness: 0.3, roughness: 0.5 });
                 const body = new THREE.Mesh(bodyGeo, bodyMat);
                 body.castShadow = true;
-                body.position.y = cylinderHeight / 2; // Position it so the bottom is at y=0
+                body.position.y = cylinderHeight / 2;
                 playerGroup.add(body);
 
-                // Create the gun
                 const gunGeo = new THREE.BoxGeometry(0.3, 0.3, 1.5);
                 const gunMat = new THREE.MeshStandardMaterial({ color: 0x404040, metalness: 0.7, roughness: 0.3 });
                 const gun = new THREE.Mesh(gunGeo, gunMat);
                 gun.castShadow = true;
-                // Position the gun near the top of the cylinder
-                gun.position.set(0, cylinderHeight - 0.5, -0.5); 
+                gun.position.set(0, cylinderHeight - 0.5, -0.5);
                 playerGroup.add(gun);
                 playerGroup.userData.gun = gun;
 
+                const flashMaterial = new THREE.MeshBasicMaterial({ color: 0xfff5a1, transparent: true, opacity: 0 });
+                const flashGeometry = new THREE.PlaneGeometry(0.5, 0.5);
+                const muzzleFlash = new THREE.Mesh(flashGeometry, flashMaterial);
+                muzzleFlash.position.set(0, 0, -0.75);
+                gun.add(muzzleFlash);
+                playerGroup.userData.muzzleFlash = muzzleFlash;
 
                 if (isLocalPlayer) {
-                    playerGroup.visible = false; // The local player doesn't see their own body
+                    playerGroup.visible = false;
                 }
                 return playerGroup;
             }
@@ -759,7 +759,10 @@
                 
                 // Sync the invisible model with the camera for multiplayer
                 this.playerModel.position.copy(this.camera.position);
-                this.playerModel.quaternion.copy(this.camera.quaternion);
+                this.playerModel.position.y -= this.playerHeight; // Adjust for model height
+                this.playerModel.quaternion.setFromEuler(new THREE.Euler(0, this.camera.rotation.y, 0));
+                this.playerModel.userData.gun.rotation.x = this.camera.rotation.x;
+
             }
 
             updateCameraRotation() {
@@ -869,10 +872,12 @@
                 this.createBulletTrail(endPoint);
             }
             
-            createBulletTrail(endPoint) {
-                const weapon = this.weapons[this.currentWeaponIndex];
-                const startPoint = new THREE.Vector3();
-                weapon.muzzlePoint.getWorldPosition(startPoint);
+            createBulletTrail(endPoint, startPoint = null) {
+                if (!startPoint) {
+                    const weapon = this.weapons[this.currentWeaponIndex];
+                    startPoint = new THREE.Vector3();
+                    weapon.muzzlePoint.getWorldPosition(startPoint);
+                }
                 const points = [startPoint, endPoint];
                 const geometry = new THREE.BufferGeometry().setFromPoints(points);
                 const material = new THREE.LineBasicMaterial({ color: 0xffff00, transparent: true, opacity: 1.0 });
@@ -940,8 +945,11 @@
             sendPlayerStateToServer() {
                 if (this.playerRef) {
                     updateDoc(this.playerRef, {
-                        x: this.camera.position.x, y: this.camera.position.y, z: this.camera.position.z,
-                        qx: this.camera.quaternion.x, qy: this.camera.quaternion.y, qz: this.camera.quaternion.z, qw: this.camera.quaternion.w
+                        x: this.camera.position.x, 
+                        y: this.camera.position.y, 
+                        z: this.camera.position.z,
+                        yaw: this.mouse.x,
+                        pitch: this.mouse.y
                     });
                 }
             }
@@ -972,13 +980,13 @@
                             this.playerMeshes[docId] = { 
                                 mesh: model, 
                                 targetPosition: new THREE.Vector3(), 
-                                targetQuaternion: new THREE.Quaternion() 
+                                targetYaw: 0,
+                                targetPitch: 0
                             };
                             this.scene.add(model);
                             this.shootableObjects.push(model); // Make other players shootable
                         } else if (change.type === "removed" && player) {
                             this.scene.remove(player.mesh);
-                            // Remove from shootable objects
                             const index = this.shootableObjects.indexOf(player.mesh);
                             if(index > -1) this.shootableObjects.splice(index, 1);
                             delete this.playerMeshes[docId];
@@ -987,23 +995,52 @@
                         
                         player = this.playerMeshes[docId];
                         if (player && data) {
-                            player.targetPosition.set(data.x, data.y, data.z);
-                            if (data.qx !== undefined) {
-                                player.targetQuaternion.set(data.qx, data.qy, data.qz, data.qw);
-                            }
-                            // Hide player if they are dead
+                            player.targetPosition.set(data.x, data.y - this.playerHeight, data.z);
+                            if(data.yaw !== undefined) player.targetYaw = data.yaw;
+                            if(data.pitch !== undefined) player.targetPitch = data.pitch;
                             player.mesh.visible = data.health > 0;
+                        }
+                    });
+                });
+            }
+            
+            listenForGameEvents() {
+                 const eventsCollectionPath = `/artifacts/${this.appId}/public/data/lobbies/${this.currentLobbyId}/events`;
+                 onSnapshot(collection(this.db, eventsCollectionPath), (snapshot) => {
+                    snapshot.docChanges().forEach((change) => {
+                        if (change.type === "added") {
+                            const event = change.doc.data();
+                            if (event.shooterId !== this.userId && event.type === 'SHOOT') {
+                                const startPoint = new THREE.Vector3(event.startPoint.x, event.startPoint.y, event.startPoint.z);
+                                const endPoint = new THREE.Vector3(event.endPoint.x, event.endPoint.y, event.endPoint.z);
+                                this.createBulletTrail(endPoint, startPoint); 
+                                if (event.hit && event.hitNormal) {
+                                    const hitNormal = new THREE.Vector3(event.hitNormal.x, event.hitNormal.y, event.hitNormal.z);
+                                    this.createBulletDecal(endPoint, hitNormal);
+                                }
+                                 // Muzzle flash for remote players
+                                const shooter = this.playerMeshes[event.shooterId];
+                                if(shooter && shooter.mesh.userData.muzzleFlash){
+                                    shooter.mesh.userData.muzzleFlash.material.opacity = 1;
+                                    setTimeout(() => { shooter.mesh.userData.muzzleFlash.material.opacity = 0; }, 60);
+                                }
+                            }
                         }
                     });
                 });
             }
 
             updateRemotePlayers(delta) {
-                const factor = delta * 10;
+                const factor = delta * 15; // Increased lerp factor for smoother movement
                 for (const id in this.playerMeshes) {
                     const player = this.playerMeshes[id];
                     player.mesh.position.lerp(player.targetPosition, factor);
-                    player.mesh.quaternion.slerp(player.targetQuaternion, factor);
+                    
+                    const targetQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), player.targetYaw);
+                    player.mesh.quaternion.slerp(targetQuat, factor);
+                    
+                    // Lerp pitch for the gun
+                    player.mesh.userData.gun.rotation.x += (player.targetPitch - player.mesh.userData.gun.rotation.x) * factor;
                 }
             }
 
