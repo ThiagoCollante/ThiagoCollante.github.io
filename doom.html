@@ -247,7 +247,7 @@
         Game ID: <span id="lobbyId">N/A</span>
     </div>
     
-    <div id="version-info">Version 6.5-ux_fix</div>
+    <div id="version-info">Version 6.6-cylinder_model</div>
     <div id="minimapContainer">
         <div id="minimapRenderer"></div>
     </div>
@@ -444,19 +444,27 @@
 
             createPlayerModel(color, isLocalPlayer = false) {
                 const playerGroup = new THREE.Group();
-                const bodyGeo = new THREE.CylinderGeometry(0.8, 0.8, 0.4, 24);
+                const cylinderHeight = 3.5;
+                const cylinderRadius = 0.8;
+
+                // Create the main body (longer cylinder)
+                const bodyGeo = new THREE.CylinderGeometry(cylinderRadius, cylinderRadius, cylinderHeight, 24);
                 const bodyMat = new THREE.MeshStandardMaterial({ color, metalness: 0.3, roughness: 0.5 });
                 const body = new THREE.Mesh(bodyGeo, bodyMat);
                 body.castShadow = true;
-                body.position.y = 0.2;
+                body.position.y = cylinderHeight / 2; // Position it so the bottom is at y=0
                 playerGroup.add(body);
+
+                // Create the gun
                 const gunGeo = new THREE.BoxGeometry(0.3, 0.3, 1.5);
                 const gunMat = new THREE.MeshStandardMaterial({ color: 0x404040, metalness: 0.7, roughness: 0.3 });
                 const gun = new THREE.Mesh(gunGeo, gunMat);
                 gun.castShadow = true;
-                gun.position.set(0, 0.55, -0.5);
+                // Position the gun near the top of the cylinder
+                gun.position.set(0, cylinderHeight - 0.5, -0.5); 
                 playerGroup.add(gun);
                 playerGroup.userData.gun = gun;
+
 
                 if (isLocalPlayer) {
                     playerGroup.visible = false; // The local player doesn't see their own body
