@@ -247,7 +247,7 @@
         Game ID: <span id="lobbyId">N/A</span>
     </div>
     
-    <div id="version-info">Version 6.7-full_sync</div>
+    <div id="version-info">Version 6.9-minimap_fix</div>
     <div id="minimapContainer">
         <div id="minimapRenderer"></div>
     </div>
@@ -589,12 +589,12 @@
                 this.velocity = new THREE.Vector3();
                 this.direction = new THREE.Vector3();
                 this.isOnGround = false;
-                this.playerHeight = 10;
+                this.playerHeight = 3.0; // Correct eye-level height
                 this.jumpForce = 0.35;
                 this.gravity = -0.015;
                 this.walkSpeed = 0.3;
                 this.runSpeed = 0.6;
-                this.playerRadius = 1.5;
+                this.playerRadius = 1.0; // Tighter radius for collision
             }
             
             initWorld() {
@@ -807,7 +807,7 @@
             updateMinimap() {
                 this.minimapCamera.position.set(this.camera.position.x, 150, this.camera.position.z);
                 this.playerIndicator.position.copy(this.camera.position);
-                this.playerIndicator.position.y = 1;
+                this.playerIndicator.position.y = 50; // Raised indicator to be clearly visible
                 this.minimapRenderer.render(this.scene, this.minimapCamera);
             }
 
@@ -844,12 +844,17 @@
                 const intersects = this.raycaster.intersectObjects(shootableMeshes, true);
 
                 let endPoint;
+                let hitNormal;
+                let hit = false;
                 if (intersects.length > 0) {
                     const intersection = intersects[0];
                     endPoint = intersection.point;
-                    if (intersection.face) this.createBulletDecal(intersection.point, intersection.face.normal);
+                    hit = true;
+                    if (intersection.face) {
+                         hitNormal = intersection.face.normal;
+                         this.createBulletDecal(endPoint, hitNormal);
+                    }
 
-                    // Check if a player was hit
                     let hitObject = intersection.object;
                     while(hitObject.parent && !hitObject.userData.playerId) {
                         hitObject = hitObject.parent;
@@ -869,7 +874,23 @@
                     endPoint = new THREE.Vector3();
                     this.raycaster.ray.at(1000, endPoint);
                 }
+
                 this.createBulletTrail(endPoint);
+
+                if(!this.isLocalMode) {
+                    const startPoint = new THREE.Vector3();
+                    weapon.muzzlePoint.getWorldPosition(startPoint);
+                    const eventsCollectionPath = `/artifacts/${this.appId}/public/data/lobbies/${this.currentLobbyId}/events`;
+                    await addDoc(collection(this.db, eventsCollectionPath), {
+                        type: 'SHOOT',
+                        shooterId: this.userId,
+                        startPoint: {x: startPoint.x, y: startPoint.y, z: startPoint.z},
+                        endPoint: {x: endPoint.x, y: endPoint.y, z: endPoint.z},
+                        hit: hit,
+                        hitNormal: hitNormal ? {x: hitNormal.x, y: hitNormal.y, z: hitNormal.z} : null,
+                        timestamp: Date.now()
+                    });
+                }
             }
             
             createBulletTrail(endPoint, startPoint = null) {
