@@ -234,7 +234,7 @@
             <hr class="my-4" style="margin: 20px 0; border-color: #444;">
             <input type="text" id="join-lobby-input" class="lobby-input" placeholder="Enter Game ID" disabled>
             <button id="join-lobby-btn" class="lobby-button" disabled>Join Game</button>
-            <p id="error-message">Connecting to server...</p>
+            <p id="error-message">Initializing...</p>
         </div>
         <div id="pause-menu" style="display: none;">
             <h1 class="text-2xl font-bold mb-4">Game Paused</h1>
@@ -247,7 +247,7 @@
         Game ID: <span id="lobbyId">N/A</span>
     </div>
     
-    <div id="version-info">Version 6.4-health</div>
+    <div id="version-info">Version 6.5-ux_fix</div>
     <div id="minimapContainer">
         <div id="minimapRenderer"></div>
     </div>
@@ -318,7 +318,16 @@
                         this.userId = user.uid;
                         document.getElementById('userId').textContent = this.userId.substring(0, 8);
                         ['create-lobby-btn', 'join-lobby-btn', 'join-lobby-input', 'start-local-btn'].forEach(id => document.getElementById(id).disabled = false);
-                        document.getElementById('error-message').textContent = '';
+                        
+                        const errorMessage = document.getElementById('error-message');
+                        errorMessage.textContent = 'Ready!';
+                        errorMessage.style.color = '#a5d6a7'; // Green
+                        
+                        setTimeout(() => {
+                           if(errorMessage.textContent === 'Ready!') {
+                               errorMessage.textContent = '';
+                           }
+                        }, 2000);
                     }
                 });
                 try { await signInAnonymously(this.auth); } catch (error) { console.error("Firebase sign-in error:", error); }
