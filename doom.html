@@ -45,7 +45,7 @@
             justify-content: center;
             align-items: center;
         }
-        #lobby-ui, #pause-menu {
+        #lobby-ui, #pause-menu, #match-lobby-ui, #username-ui {
             width: 90%;
             max-width: 450px;
             padding: 25px;
@@ -85,7 +85,7 @@
             background-color: #555;
             cursor: not-allowed;
         }
-        #lobby-id-display {
+        #lobby-id-display, #match-lobby-title {
             margin-top: 15px;
             font-size: 1.1rem;
             font-weight: bold;
@@ -140,6 +140,7 @@
             overflow: hidden;
             z-index: 101;
             background: rgba(0, 0, 0, 0.3);
+            display: none; /* Hide by default */
         }
         #minimapRenderer {
             width: 100%;
@@ -219,6 +220,15 @@
             font-weight: bold;
             text-shadow: 1px 1px 2px black;
         }
+        .player-status {
+            padding: 15px;
+            margin: 10px 0;
+            background-color: #333;
+            border-radius: 8px;
+            border: 1px solid #444;
+        }
+        .player-status .status-ready { color: #4caf50; }
+        .player-status .status-not-ready { color: #f44336; }
     </style>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -226,7 +236,12 @@
 </head>
 <body>
     <div id="blocker">
-        <div id="lobby-ui">
+        <div id="username-ui">
+            <h1 class="text-2xl font-bold mb-4">Enter Your Name</h1>
+            <input type="text" id="username-input" class="lobby-input" placeholder="Username" maxlength="12">
+            <button id="username-btn" class="lobby-button">Continue</button>
+        </div>
+        <div id="lobby-ui" style="display: none;">
             <h1 class="text-2xl font-bold mb-4">Join a Game</h1>
             <button id="create-lobby-btn" class="lobby-button" disabled>Create New Game</button>
             <button id="start-local-btn" class="lobby-button" disabled>Start Local Test</button>
@@ -236,9 +251,16 @@
             <button id="join-lobby-btn" class="lobby-button" disabled>Join Game</button>
             <p id="error-message">Initializing...</p>
         </div>
+        <div id="match-lobby-ui" style="display: none;">
+            <h1 id="match-lobby-title">Waiting for Players...</h1>
+            <div id="player1-status" class="player-status">Waiting...</div>
+            <div id="player2-status" class="player-status">Waiting...</div>
+            <button id="ready-btn" class="menu-button">Ready Up</button>
+        </div>
         <div id="pause-menu" style="display: none;">
             <h1 class="text-2xl font-bold mb-4">Game Paused</h1>
             <button id="resume-btn" class="menu-button">Resume Game</button>
+            <button id="quit-btn" class="menu-button">Quit Match</button>
         </div>
     </div>
 
@@ -247,7 +269,7 @@
         Game ID: <span id="lobbyId">N/A</span>
     </div>
     
-    <div id="version-info">Version 6.9-minimap_fix</div>
+    <div id="version-info">Version 7.1-spawn_names</div>
     <div id="minimapContainer">
         <div id="minimapRenderer"></div>
     </div>
@@ -269,7 +291,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc, getDoc, updateDoc, addDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc, getDoc, updateDoc, addDoc, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         class MultiplayerFPSGame {
             constructor() {
@@ -278,6 +300,7 @@
                 this.db = null;
                 this.auth = null;
                 this.userId = null;
+                this.username = null;
                 this.appId = null;
                 this.currentLobbyId = null;
                 this.playerRef = null;
@@ -285,6 +308,9 @@
                 this.lastUpdateTime = 0;
                 this.updateInterval = 50;
                 this.health = 100;
+                this.animationFrameId = null;
+                this.playerReady = false;
+                this.playerIndex = 0; // 0 for host, 1 for guest
 
                 this.initLobbyUI();
                 this.initFirebase();
@@ -293,10 +319,25 @@
             // --- LOBBY AND SETUP ---
 
             initLobbyUI() {
+                document.getElementById('username-btn').addEventListener('click', () => this.setUsername());
                 document.getElementById('create-lobby-btn').addEventListener('click', () => this.createLobby());
                 document.getElementById('start-local-btn').addEventListener('click', () => this.startGame(null, true));
                 document.getElementById('join-lobby-btn').addEventListener('click', () => this.joinLobby(document.getElementById('join-lobby-input').value.toUpperCase()));
                 document.getElementById('resume-btn').addEventListener('click', () => this.requestPointerLock());
+                document.getElementById('quit-btn').addEventListener('click', () => this.quitMatch());
+                document.getElementById('ready-btn').addEventListener('click', () => this.toggleReady());
+            }
+
+            setUsername() {
+                const usernameInput = document.getElementById('username-input');
+                const username = usernameInput.value.trim();
+                if (username) {
+                    this.username = username;
+                    document.getElementById('username-ui').style.display = 'none';
+                    document.getElementById('lobby-ui').style.display = 'block';
+                } else {
+                    usernameInput.placeholder = 'Please enter a name!';
+                }
             }
 
             async initFirebase() {
@@ -321,7 +362,7 @@
                         
                         const errorMessage = document.getElementById('error-message');
                         errorMessage.textContent = 'Ready!';
-                        errorMessage.style.color = '#a5d6a7'; // Green
+                        errorMessage.style.color = '#a5d6a7';
                         
                         setTimeout(() => {
                            if(errorMessage.textContent === 'Ready!') {
@@ -336,9 +377,9 @@
             async createLobby() {
                 const lobbyId = Math.random().toString(36).substring(2, 8).toUpperCase();
                 const lobbyRef = doc(this.db, `/artifacts/${this.appId}/public/data/lobbies`, lobbyId);
-                await setDoc(lobbyRef, { createdAt: Date.now(), owner: this.userId });
-                document.getElementById('lobby-id-display').textContent = `Game ID: ${lobbyId}`;
-                this.startGame(lobbyId, false, true);
+                await setDoc(lobbyRef, { createdAt: Date.now(), owner: this.userId, status: 'waiting' });
+                this.playerIndex = 0; // The creator is always player 0
+                this.enterMatchLobby(lobbyId);
             }
 
             async joinLobby(lobbyId) {
@@ -347,16 +388,47 @@
                     return;
                 }
                 const lobbyRef = doc(this.db, `/artifacts/${this.appId}/public/data/lobbies`, lobbyId);
-                if ((await getDoc(lobbyRef)).exists()) {
-                    this.startGame(lobbyId, false, false);
-                } else {
+                const playersCollectionPath = `/artifacts/${this.appId}/public/data/lobbies/${lobbyId}/players`;
+                const playersSnapshot = await getDocs(collection(this.db, playersCollectionPath));
+
+                if (! (await getDoc(lobbyRef)).exists()) {
                     document.getElementById('error-message').textContent = 'Game not found.';
+                } else if (playersSnapshot.size >= 2) {
+                    document.getElementById('error-message').textContent = 'Lobby is full.';
+                } else {
+                    this.playerIndex = playersSnapshot.size; // 0 if empty, 1 if one player exists
+                    this.enterMatchLobby(lobbyId);
                 }
+            }
+            
+            async enterMatchLobby(lobbyId) {
+                this.currentLobbyId = lobbyId;
+                document.getElementById('lobby-ui').style.display = 'none';
+                document.getElementById('match-lobby-ui').style.display = 'block';
+                document.getElementById('match-lobby-title').textContent = `Match Lobby: ${lobbyId}`;
+
+                const playersCollectionPath = `/artifacts/${this.appId}/public/data/lobbies/${this.currentLobbyId}/players`;
+                this.playerRef = doc(this.db, playersCollectionPath, this.userId);
+                await setDoc(this.playerRef, { ready: false, userId: this.userId, username: this.username });
+                
+                this.listenForPlayers(playersCollectionPath, true);
+            }
+
+            async toggleReady() {
+                this.playerReady = !this.playerReady;
+                if (this.playerRef) {
+                    await updateDoc(this.playerRef, { ready: this.playerReady });
+                }
+                document.getElementById('ready-btn').textContent = this.playerReady ? 'Unready' : 'Ready Up';
+            }
+
+            quitMatch() {
+                window.location.reload();
             }
 
             // --- GAME INITIALIZATION ---
 
-            startGame(lobbyId, isLocal, isHost = false) {
+            startGame(lobbyId, isLocal) {
                 if (this.isGameStarted) return;
                 this.isGameStarted = true;
                 this.isLocalMode = isLocal;
@@ -364,10 +436,10 @@
                 this.health = 100;
 
                 document.getElementById('lobby-ui').style.display = 'none';
+                document.getElementById('match-lobby-ui').style.display = 'none';
                 document.getElementById('blocker').style.display = 'none';
                 document.getElementById('lobbyId').textContent = isLocal ? 'Local Test' : lobbyId;
-                document.getElementById('ammoInfo').style.display = 'block';
-                document.getElementById('healthBarContainer').style.display = 'block';
+                ['ammoInfo', 'healthBarContainer', 'minimapContainer'].forEach(id => document.getElementById(id).style.display = 'block');
 
                 this.initScene();
                 this.initWorld(); // Must be before initCamera
@@ -386,15 +458,13 @@
                 if (!isLocal) {
                     const playersCollectionPath = `/artifacts/${this.appId}/public/data/lobbies/${this.currentLobbyId}/players`;
                     this.playerRef = doc(this.db, playersCollectionPath, this.userId);
-                    setDoc(this.playerRef, { 
-                        x: this.camera.position.x, 
-                        y: this.camera.position.y, 
-                        z: this.camera.position.z, 
-                        yaw: this.mouse.x,
-                        pitch: this.mouse.y,
-                        health: 100
+                    const startPos = this.getStartPosition(this.playerIndex);
+                    this.camera.position.set(startPos.x, this.playerHeight, startPos.z);
+                    updateDoc(this.playerRef, { 
+                        x: startPos.x, y: this.playerHeight, z: startPos.z, 
+                        yaw: this.mouse.x, pitch: this.mouse.y, health: 100
                     });
-                    this.listenForPlayers(playersCollectionPath);
+                    this.listenForPlayers(playersCollectionPath, false); // Switch to game listener
                     this.listenForGameEvents();
                 }
                 
@@ -416,7 +486,7 @@
 
             initCamera() {
                 this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-                const startPos = this.getStartPosition();
+                const startPos = this.getStartPosition(this.playerIndex);
                 this.camera.position.set(startPos.x, 10, startPos.z);
                 this.initialRotation = Math.PI;
                 this.scene.add(this.camera);
@@ -685,7 +755,7 @@
             // --- CORE GAME LOOP AND UPDATES ---
             
             animate() {
-                requestAnimationFrame(() => this.animate());
+                this.animationFrameId = requestAnimationFrame(() => this.animate());
                 
                 if (!this.clock) this.clock = new THREE.Clock();
                 const delta = this.clock.getDelta();
@@ -946,7 +1016,7 @@
 
             handleDeath() {
                 console.log("Player died and respawned.");
-                const respawnPosition = this.getStartPosition();
+                const respawnPosition = this.getStartPosition(this.playerIndex);
                 this.camera.position.set(respawnPosition.x, this.playerHeight, respawnPosition.z);
                 this.velocity.set(0, 0, 0);
                 this.health = 100;
@@ -975,53 +1045,80 @@
                 }
             }
 
-            listenForPlayers(collectionPath) {
+            listenForPlayers(collectionPath, isMatchLobby) {
                 onSnapshot(collection(this.db, collectionPath), (snapshot) => {
-                    snapshot.docChanges().forEach((change) => {
-                        const docId = change.doc.id;
-                        const data = change.doc.data();
+                    const players = snapshot.docs.map(doc => doc.data());
+                    
+                    if (isMatchLobby) {
+                        const player1Status = document.getElementById('player1-status');
+                        const player2Status = document.getElementById('player2-status');
 
-                        if (docId === this.userId) {
-                            if (data.health !== undefined && data.health < this.health) {
-                                this.health = data.health;
-                                if (this.health <= 0) {
-                                    this.handleDeath();
-                                } else {
-                                    this.updateHealthUI();
-                                }
-                            }
-                            return;
+                        if (players[0]) {
+                            player1Status.innerHTML = `${players[0].username}: <span class="${players[0].ready ? 'status-ready' : 'status-not-ready'}">${players[0].ready ? 'Ready' : 'Not Ready'}</span>`;
+                        } else {
+                            player1Status.textContent = 'Player 1: Waiting...';
                         }
-
-                        let player = this.playerMeshes[docId];
-
-                        if (change.type === "added" && !player) {
-                            const model = this.createPlayerModel(Math.random() * 0xffffff);
-                            model.userData.playerId = docId;
-                            this.playerMeshes[docId] = { 
-                                mesh: model, 
-                                targetPosition: new THREE.Vector3(), 
-                                targetYaw: 0,
-                                targetPitch: 0
-                            };
-                            this.scene.add(model);
-                            this.shootableObjects.push(model); // Make other players shootable
-                        } else if (change.type === "removed" && player) {
-                            this.scene.remove(player.mesh);
-                            const index = this.shootableObjects.indexOf(player.mesh);
-                            if(index > -1) this.shootableObjects.splice(index, 1);
-                            delete this.playerMeshes[docId];
-                            return;
+                        if (players[1]) {
+                             player2Status.innerHTML = `${players[1].username}: <span class="${players[1].ready ? 'status-ready' : 'status-not-ready'}">${players[1].ready ? 'Ready' : 'Not Ready'}</span>`;
+                        } else {
+                             player2Status.textContent = 'Player 2: Waiting...';
                         }
                         
-                        player = this.playerMeshes[docId];
-                        if (player && data) {
-                            player.targetPosition.set(data.x, data.y - this.playerHeight, data.z);
-                            if(data.yaw !== undefined) player.targetYaw = data.yaw;
-                            if(data.pitch !== undefined) player.targetPitch = data.pitch;
-                            player.mesh.visible = data.health > 0;
+                        if (players.length === 2 && players.every(p => p.ready)) {
+                            this.startGame(this.currentLobbyId, false);
                         }
-                    });
+
+                    } else { // In-game listener
+                        snapshot.docChanges().forEach((change) => {
+                            const docId = change.doc.id;
+                            const data = change.doc.data();
+
+                            if (docId === this.userId) {
+                                if (data.health !== undefined && data.health < this.health) {
+                                    this.health = data.health;
+                                    if (this.health <= 0) {
+                                        this.handleDeath();
+                                    } else {
+                                        this.updateHealthUI();
+                                    }
+                                }
+                                return;
+                            }
+
+                            let player = this.playerMeshes[docId];
+
+                            if (change.type === "added" && !player) {
+                                const model = this.createPlayerModel(Math.random() * 0xffffff);
+                                model.userData.playerId = docId;
+                                const usernameLabel = this.createUsernameLabel(data.username);
+                                model.add(usernameLabel);
+                                
+                                this.playerMeshes[docId] = { 
+                                    mesh: model, 
+                                    usernameLabel: usernameLabel,
+                                    targetPosition: new THREE.Vector3(), 
+                                    targetYaw: 0,
+                                    targetPitch: 0
+                                };
+                                this.scene.add(model);
+                                this.shootableObjects.push(model); // Make other players shootable
+                            } else if (change.type === "removed" && player) {
+                                this.scene.remove(player.mesh);
+                                const index = this.shootableObjects.indexOf(player.mesh);
+                                if(index > -1) this.shootableObjects.splice(index, 1);
+                                delete this.playerMeshes[docId];
+                                return;
+                            }
+                            
+                            player = this.playerMeshes[docId];
+                            if (player && data) {
+                                player.targetPosition.set(data.x, data.y - this.playerHeight, data.z);
+                                if(data.yaw !== undefined) player.targetYaw = data.yaw;
+                                if(data.pitch !== undefined) player.targetPitch = data.pitch;
+                                player.mesh.visible = data.health > 0;
+                            }
+                        });
+                    }
                 });
             }
             
@@ -1039,7 +1136,6 @@
                                     const hitNormal = new THREE.Vector3(event.hitNormal.x, event.hitNormal.y, event.hitNormal.z);
                                     this.createBulletDecal(endPoint, hitNormal);
                                 }
-                                 // Muzzle flash for remote players
                                 const shooter = this.playerMeshes[event.shooterId];
                                 if(shooter && shooter.mesh.userData.muzzleFlash){
                                     shooter.mesh.userData.muzzleFlash.material.opacity = 1;
@@ -1060,8 +1156,12 @@
                     const targetQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), player.targetYaw);
                     player.mesh.quaternion.slerp(targetQuat, factor);
                     
-                    // Lerp pitch for the gun
                     player.mesh.userData.gun.rotation.x += (player.targetPitch - player.mesh.userData.gun.rotation.x) * factor;
+
+                    // Make username always face camera
+                    if (player.usernameLabel) {
+                        player.usernameLabel.quaternion.copy(this.camera.quaternion);
+                    }
                 }
             }
 
@@ -1084,7 +1184,7 @@
                 }
             }
 
-            generateWorldFromGrid() { /* Re-uses logic from previous versions */ 
+            generateWorldFromGrid() {
                 const wallHeight = this.tileSize;
                 const gridWidth = this.mapGrid[0].length * this.tileSize;
                 const gridDepth = this.mapGrid.length * this.tileSize;
@@ -1132,22 +1232,45 @@
                 });
             }
 
-            getStartPosition() {
-                const gridWidth = this.mapGrid[0].length * this.tileSize;
-                const gridDepth = this.mapGrid.length * this.tileSize;
-                const offsetX = -gridWidth / 2;
-                const offsetZ = -gridDepth / 2;
-                for (let z = 0; z < this.mapGrid.length; z++) {
-                    for (let x = 0; x < this.mapGrid[z].length; x++) {
-                        if (this.mapGrid[z][x] === 0) {
-                            return {
-                                x: offsetX + x * this.tileSize + this.tileSize / 2,
-                                z: offsetZ + z * this.tileSize + this.tileSize / 2
-                            };
-                        }
-                    }
-                }
-                return { x: 0, z: 0 };
+            getStartPosition(playerIndex = 0) {
+                const gridWidth = this.mapGrid[0].length;
+                const gridDepth = this.mapGrid.length;
+                const offsetX = -gridWidth * this.tileSize / 2;
+                const offsetZ = -gridDepth * this.tileSize / 2;
+                
+                const spawnPoints = [
+                    { x: 1, z: 1 },         // Top-left corner
+                    { x: gridWidth - 2, z: gridDepth - 2 } // Bottom-right corner
+                ];
+
+                const spawn = spawnPoints[playerIndex] || spawnPoints[0];
+
+                return {
+                    x: offsetX + spawn.x * this.tileSize + this.tileSize / 2,
+                    z: offsetZ + spawn.z * this.tileSize + this.tileSize / 2
+                };
+            }
+
+            createUsernameLabel(text) {
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                context.font = 'Bold 48px Inter';
+                const textWidth = context.measureText(text).width;
+                canvas.width = textWidth;
+                canvas.height = 64; 
+                context.font = 'Bold 48px Inter';
+                context.fillStyle = 'rgba(255, 255, 255, 1.0)';
+                context.textAlign = 'center';
+                context.textBaseline = 'middle';
+                context.fillText(text, canvas.width / 2, canvas.height / 2);
+
+                const texture = new THREE.CanvasTexture(canvas);
+                const spriteMaterial = new THREE.SpriteMaterial({ map: texture, transparent: true });
+                const sprite = new THREE.Sprite(spriteMaterial);
+                
+                sprite.scale.set(canvas.width / 64, canvas.height / 64, 1.0);
+                sprite.position.y = 5; // Position above the player's head
+                return sprite;
             }
 
             updateCrosshair() {
