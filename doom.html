@@ -228,17 +228,17 @@
 <body>
     <div id="blocker">
         <div id="lobby-ui">
-            <h1 class="text-2xl font-bold mb-4">Join a Game</h1>
+            <h1 style="font-size: 1.5rem; font-weight: bold; margin-bottom: 1rem;">Join a Game</h1>
             <button id="create-lobby-btn" class="lobby-button" disabled>Create New Game</button>
             <button id="start-local-btn" class="lobby-button" disabled>Start Local Test</button>
             <div id="lobby-id-display"></div>
-            <hr class="my-4" style="margin: 20px 0; border-color: #444;">
+            <hr style="margin: 20px 0; border-color: #444;">
             <input type="text" id="join-lobby-input" class="lobby-input" placeholder="Enter Game ID" disabled>
             <button id="join-lobby-btn" class="lobby-button" disabled>Join Game</button>
             <p id="error-message">Initializing...</p>
         </div>
         <div id="pause-menu" style="display: none;">
-            <h1 class="text-2xl font-bold mb-4">Game Paused</h1>
+            <h1 style="font-size: 1.5rem; font-weight: bold; margin-bottom: 1rem;">Game Paused</h1>
             <button id="resume-btn" class="menu-button">Resume Game</button>
             <button id="quit-btn" class="menu-button">Quit Match</button>
         </div>
@@ -249,7 +249,7 @@
         Game ID: <span id="lobbyId">N/A</span>
     </div>
     
-    <div id="version-info">Version 6.10-quit_button</div>
+    <div id="version-info">Version 6.11-firebase_auth_fix</div>
     <div id="minimapContainer">
         <div id="minimapRenderer"></div>
     </div>
@@ -270,8 +270,9 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc, getDoc, updateDoc, addDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        // Updated firebase auth imports
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc, getDoc, updateDoc, addDoc, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         class MultiplayerFPSGame {
             constructor() {
@@ -300,44 +301,63 @@
                 document.getElementById('start-local-btn').addEventListener('click', () => this.startGame(null, true));
                 document.getElementById('join-lobby-btn').addEventListener('click', () => this.joinLobby(document.getElementById('join-lobby-input').value.toUpperCase()));
                 document.getElementById('resume-btn').addEventListener('click', () => this.requestPointerLock());
+                // Reloads the window to quit the match
                 document.getElementById('quit-btn').addEventListener('click', () => window.location.reload());
             }
 
             async initFirebase() {
-                const firebaseConfig = {
-                    apiKey: "AIzaSyBX7Qk3hB7vNykKt9WyiDNWrqq0eXxpGMA",
-                    authDomain: "lanhtml-d905d.firebaseapp.com",
-                    projectId: "lanhtml-d905d",
-                    storageBucket: "lanhtml-d905d.appspot.com",
-                    messagingSenderId: "427246041879",
-                    appId: "1:427246041879:web:b455c681ee7b952edc9552"
-                };
-                this.appId = firebaseConfig.projectId;
-                const app = initializeApp(firebaseConfig);
-                this.db = getFirestore(app);
-                this.auth = getAuth(app);
+                // Use environment variables provided by the platform
+                try {
+                    const firebaseConfig = typeof __firebase_config !== 'undefined'
+                        ? JSON.parse(__firebase_config)
+                        : { apiKey: "AIzaSyBX7Qk3hB7vNykKt9WyiDNWrqq0eXxpGMA", authDomain: "lanhtml-d905d.firebaseapp.com", projectId: "lanhtml-d905d", storageBucket: "lanhtml-d905d.appspot.com", messagingSenderId: "427246041879", appId: "1:427246041879:web:b455c681ee7b952edc9552" }; // Fallback for local testing
+                    
+                    this.appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id'; // Use provided app ID or fallback
+                    
+                    const app = initializeApp(firebaseConfig);
+                    this.db = getFirestore(app);
+                    this.auth = getAuth(app);
+                    setLogLevel('Debug'); // Enable Firestore debug logging
 
-                onAuthStateChanged(this.auth, user => {
-                    if (user) {
-                        this.userId = user.uid;
-                        document.getElementById('userId').textContent = this.userId.substring(0, 8);
-                        ['create-lobby-btn', 'join-lobby-btn', 'join-lobby-input', 'start-local-btn'].forEach(id => document.getElementById(id).disabled = false);
-                        
-                        const errorMessage = document.getElementById('error-message');
-                        errorMessage.textContent = 'Ready!';
-                        errorMessage.style.color = '#a5d6a7'; // Green
-                        
-                        setTimeout(() => {
-                           if(errorMessage.textContent === 'Ready!') {
-                               errorMessage.textContent = '';
-                           }
-                        }, 2000);
+                    onAuthStateChanged(this.auth, user => {
+                        if (user) {
+                            this.userId = user.uid;
+                            document.getElementById('userId').textContent = this.userId; // Show full User ID
+                            ['create-lobby-btn', 'join-lobby-btn', 'join-lobby-input', 'start-local-btn'].forEach(id => document.getElementById(id).disabled = false);
+                            
+                            const errorMessage = document.getElementById('error-message');
+                            errorMessage.textContent = 'Ready!';
+                            errorMessage.style.color = '#a5d6a7'; // Green
+                            
+                            setTimeout(() => {
+                                if(errorMessage.textContent === 'Ready!') {
+                                    errorMessage.textContent = '';
+                                }
+                            }, 2000);
+                        } else {
+                            this.userId = null;
+                            document.getElementById('userId').textContent = 'Loading...';
+                             ['create-lobby-btn', 'join-lobby-btn', 'join-lobby-input', 'start-local-btn'].forEach(id => document.getElementById(id).disabled = true);
+                        }
+                    });
+
+                    // Sign in with custom token if available, otherwise sign in anonymously
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        await signInWithCustomToken(this.auth, __initial_auth_token);
+                    } else {
+                        await signInAnonymously(this.auth);
                     }
-                });
-                try { await signInAnonymously(this.auth); } catch (error) { console.error("Firebase sign-in error:", error); }
+                } catch (error) {
+                    console.error("Firebase initialization or auth error:", error);
+                    document.getElementById('error-message').textContent = 'Firebase connection failed.';
+                }
             }
 
             async createLobby() {
+                if (!this.userId || !this.appId) {
+                    document.getElementById('error-message').textContent = 'Not authenticated. Cannot create game.';
+                    return;
+                }
                 const lobbyId = Math.random().toString(36).substring(2, 8).toUpperCase();
                 const lobbyRef = doc(this.db, `/artifacts/${this.appId}/public/data/lobbies`, lobbyId);
                 await setDoc(lobbyRef, { createdAt: Date.now(), owner: this.userId });
@@ -346,15 +366,25 @@
             }
 
             async joinLobby(lobbyId) {
+                if (!this.userId || !this.appId) {
+                    document.getElementById('error-message').textContent = 'Not authenticated. Cannot join game.';
+                    return;
+                }
                 if (!lobbyId) {
                     document.getElementById('error-message').textContent = 'Please enter a Game ID.';
                     return;
                 }
                 const lobbyRef = doc(this.db, `/artifacts/${this.appId}/public/data/lobbies`, lobbyId);
-                if ((await getDoc(lobbyRef)).exists()) {
-                    this.startGame(lobbyId, false, false);
-                } else {
-                    document.getElementById('error-message').textContent = 'Game not found.';
+                try {
+                    const docSnap = await getDoc(lobbyRef);
+                    if (docSnap.exists()) {
+                        this.startGame(lobbyId, false, false);
+                    } else {
+                        document.getElementById('error-message').textContent = 'Game not found.';
+                    }
+                } catch (error) {
+                    console.error("Error joining lobby:", error);
+                    document.getElementById('error-message').textContent = 'Error checking game status.';
                 }
             }
 
@@ -373,6 +403,7 @@
                 document.getElementById('ammoInfo').style.display = 'block';
                 document.getElementById('healthBarContainer').style.display = 'block';
                 document.getElementById('minimapContainer').style.display = 'block';
+                document.getElementById('crosshair').style.display = 'block'; // Show crosshair on start
 
                 this.initScene();
                 this.initWorld(); // Must be before initCamera
@@ -397,10 +428,18 @@
                         z: this.camera.position.z, 
                         yaw: this.mouse.x,
                         pitch: this.mouse.y,
-                        health: 100
+                        health: 100,
+                        timestamp: Date.now() // Add timestamp for connection
                     });
                     this.listenForPlayers(playersCollectionPath);
                     this.listenForGameEvents();
+
+                    // Handle leaving the page
+                    window.addEventListener('beforeunload', () => {
+                        if (this.playerRef) {
+                            deleteDoc(this.playerRef); // Clean up player doc on exit
+                        }
+                    });
                 }
                 
                 this.requestPointerLock();
@@ -422,13 +461,14 @@
             initCamera() {
                 this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
                 const startPos = this.getStartPosition();
-                this.camera.position.set(startPos.x, 10, startPos.z);
+                this.camera.position.set(startPos.x, this.playerHeight || 3.0, startPos.z);
                 this.initialRotation = Math.PI;
                 this.scene.add(this.camera);
                 this.defaultFov = 75;
                 this.zoomFov = 20;
                 this.isZoomed = false;
 
+                // Local player's model (invisible to self, visible to others via network)
                 this.playerModel = this.createPlayerModel(0x00ff00, true);
                 this.scene.add(this.playerModel);
             }
@@ -467,7 +507,7 @@
                 const flashMaterial = new THREE.MeshBasicMaterial({ color: 0xfff5a1, transparent: true, opacity: 0 });
                 const flashGeometry = new THREE.PlaneGeometry(0.5, 0.5);
                 const muzzleFlash = new THREE.Mesh(flashGeometry, flashMaterial);
-                muzzleFlash.position.set(0, 0, -0.75);
+                muzzleFlash.position.set(0, 0, -0.75); // Position at the tip of the gun
                 gun.add(muzzleFlash);
                 playerGroup.userData.muzzleFlash = muzzleFlash;
 
@@ -540,7 +580,7 @@
                 muzzlePoint.add(muzzleFlash);
                 parent.add(muzzlePoint);
                 muzzlePoint.position.copy(position);
-                muzzlePoint.flash = muzzleFlash;
+                muzzlePoint.flash = muzzleFlash; // Store reference for easy access
                 return muzzlePoint;
             }
             
@@ -574,8 +614,10 @@
                 this.minimapCamera.up = new THREE.Vector3(0, 0, -1);
                 this.minimapCamera.lookAt(new THREE.Vector3(0, -1, 0));
                 this.scene.add(this.minimapCamera);
+                
+                // Player indicator for the minimap
                 const playerIndicatorGeometry = new THREE.SphereGeometry(3, 16, 16);
-                const playerIndicatorMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+                const playerIndicatorMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 }); // Red
                 this.playerIndicator = new THREE.Mesh(playerIndicatorGeometry, playerIndicatorMaterial);
                 this.scene.add(this.playerIndicator);
             }
@@ -594,15 +636,16 @@
                 this.velocity = new THREE.Vector3();
                 this.direction = new THREE.Vector3();
                 this.isOnGround = false;
-                this.playerHeight = 3.0; // Correct eye-level height
+                this.playerHeight = 3.0; // Player eye height
                 this.jumpForce = 0.35;
                 this.gravity = -0.015;
                 this.walkSpeed = 0.3;
                 this.runSpeed = 0.6;
-                this.playerRadius = 1.0; // Tighter radius for collision
+                this.playerRadius = 1.0; // Collision radius
             }
             
             initWorld() {
+                // 15x15 map grid
                 this.mapGrid = [
                     [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
                     [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2],
@@ -620,7 +663,7 @@
                     [2, 0, 1, 0, 0, 0, 1, 0, 2, 0, 0, 0, 0, 0, 2],
                     [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
                 ];
-                this.tileSize = 20;
+                this.tileSize = 20; // Size of each grid tile
                 this.generateWorldFromGrid();
             }
 
@@ -639,18 +682,20 @@
                     if (!this.isPointerLocked) {
                         this.requestPointerLock();
                     } else {
-                        if (e.button === 0) this.shoot();
-                        else if (e.button === 2) this.toggleZoom();
+                        if (e.button === 0) this.shoot(); // Left click
+                        else if (e.button === 2) this.toggleZoom(); // Right click
                     }
                 });
 
+                // Prevent context menu on right click
                 this.renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
                 
                 document.addEventListener('pointerlockchange', () => {
                     this.isPointerLocked = document.pointerLockElement === this.renderer.domElement;
                     document.getElementById('pause-menu').style.display = this.isPointerLocked ? 'none' : 'block';
-                    document.getElementById('lobby-ui').style.display = 'none';
+                    document.getElementById('lobby-ui').style.display = 'none'; // Always hide lobby
                     document.getElementById('blocker').style.display = this.isPointerLocked ? 'none' : 'flex';
+                    // Auto-unzoom when paused
                     if (!this.isPointerLocked && this.isZoomed) this.toggleZoom();
                 });
                 
@@ -659,19 +704,22 @@
                         const sensitivity = 0.002;
                         this.mouse.x -= e.movementX * sensitivity;
                         this.mouse.y -= e.movementY * sensitivity; 
-                        this.mouse.y = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.mouse.y));
+                        this.mouse.y = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.mouse.y)); // Clamp vertical rotation
                     }
                 });
 
                 document.addEventListener('wheel', (e) => {
                     if (!this.isPointerLocked) return;
-                    if (this.isZoomed) this.toggleZoom();
+                    if (this.isZoomed) this.toggleZoom(); // Unzoom if switching weapons while zoomed
+                    
                     const currentWeapon = this.weapons[this.currentWeaponIndex];
-                    if (currentWeapon.isReloading) return;
+                    if (currentWeapon.isReloading) return; // Don't switch while reloading
+                    
                     currentWeapon.viewModel.visible = false;
                     const direction = e.deltaY > 0 ? 1 : -1;
                     this.currentWeaponIndex = (this.currentWeaponIndex + direction + this.weapons.length) % this.weapons.length;
                     this.weapons[this.currentWeaponIndex].viewModel.visible = true;
+                    
                     this.updateCrosshair();
                     this.updateAmmoUI();
                 });
@@ -725,8 +773,10 @@
                 if (this.keys['KeyA']) this.direction.x = 1;
                 if (this.keys['KeyD']) this.direction.x = -1;
 
+                // Apply gravity
                 this.velocity.y += this.gravity;
 
+                // Jump
                 if (this.keys['Space'] && this.isOnGround) {
                     this.velocity.y = this.jumpForce;
                     this.isOnGround = false;
@@ -748,14 +798,16 @@
                     this.velocity.x = moveVector.x;
                     this.velocity.z = moveVector.z;
                 } else {
+                    // Apply friction
                     this.velocity.x *= 0.9;
                     this.velocity.z *= 0.9;
                 }
 
-                const deltaPosition = this.velocity.clone().multiplyScalar(delta * 60);
+                const deltaPosition = this.velocity.clone().multiplyScalar(delta * 60); // Scale by frame-independent factor
                 this.handleCollisions(deltaPosition);
                 this.camera.position.add(deltaPosition);
 
+                // Check for ground collision
                 if (this.camera.position.y < this.playerHeight) {
                     this.camera.position.y = this.playerHeight;
                     this.velocity.y = 0;
@@ -779,28 +831,33 @@
             updateViewModel(elapsedTime, delta) {
                 const weapon = this.weapons[this.currentWeaponIndex];
                 const viewModel = weapon.viewModel;
+
+                // Apply recoil
                 viewModel.position.z = viewModel.basePosition.z + weapon.recoilAmount;
-                weapon.recoilAmount *= 0.8;
+                weapon.recoilAmount *= 0.8; // Recoil recovery
                 viewModel.position.y = viewModel.basePosition.y;
 
+                // Apply reload animation
                 if (viewModel.reloadFlipAmount > 0) {
-                    const flipSpeed = (Math.PI * 2) / (weapon.reloadTime / 1000 * 0.5);
+                    const flipSpeed = (Math.PI * 2) / (weapon.reloadTime / 1000 * 0.5); // Half time to flip down, half up
                     const deltaFlip = flipSpeed * delta;
                     viewModel.rotation.x += deltaFlip;
                     viewModel.reloadFlipAmount -= deltaFlip;
                 } else {
-                    viewModel.rotation.x = 0; 
+                    viewModel.rotation.x = 0; // Snap back
                 }
             }
 
             updateEffects() {
                 const now = Date.now();
+                // Update bullet trails
                 this.bulletTrails = this.bulletTrails.filter(trail => {
                     const age = now - trail.createdAt;
                     if (age > 200) { this.scene.remove(trail.line); return false; }
                     trail.line.material.opacity = 1.0 * (1 - age / 200);
                     return true;
                 });
+                // Update bullet decals
                 this.bulletDecals = this.bulletDecals.filter(decal => {
                     const age = now - decal.createdAt;
                     if (age > 5000) { this.scene.remove(decal.mesh); return false; }
@@ -842,6 +899,7 @@
             
             async fireBullet(spread) {
                 const weapon = this.weapons[this.currentWeaponIndex];
+                // Apply spread
                 const spreadDirection = new THREE.Vector2((Math.random() - 0.5) * spread, (Math.random() - 0.5) * spread);
                 this.raycaster.setFromCamera(spreadDirection, this.camera);
                 
@@ -860,6 +918,7 @@
                          this.createBulletDecal(endPoint, hitNormal);
                     }
 
+                    // Check if a player was hit
                     let hitObject = intersection.object;
                     while(hitObject.parent && !hitObject.userData.playerId) {
                         hitObject = hitObject.parent;
@@ -867,34 +926,44 @@
                     if (hitObject.userData.playerId && !this.isLocalMode) {
                         const targetId = hitObject.userData.playerId;
                         const targetRef = doc(this.db, `/artifacts/${this.appId}/public/data/lobbies/${this.currentLobbyId}/players`, targetId);
-                        const targetDoc = await getDoc(targetRef);
-                        if(targetDoc.exists()) {
-                            const targetData = targetDoc.data();
-                            const newHealth = Math.max(0, targetData.health - weapon.damage);
-                            await updateDoc(targetRef, { health: newHealth });
+                        try {
+                            const targetDoc = await getDoc(targetRef);
+                            if(targetDoc.exists()) {
+                                const targetData = targetDoc.data();
+                                const newHealth = Math.max(0, targetData.health - weapon.damage);
+                                await updateDoc(targetRef, { health: newHealth });
+                            }
+                        } catch (error) {
+                            console.error("Error applying damage:", error);
                         }
                     }
 
                 } else {
+                    // No hit, bullet travels max distance
                     endPoint = new THREE.Vector3();
                     this.raycaster.ray.at(1000, endPoint);
                 }
 
                 this.createBulletTrail(endPoint);
 
+                // Send shoot event to other players
                 if(!this.isLocalMode) {
                     const startPoint = new THREE.Vector3();
                     weapon.muzzlePoint.getWorldPosition(startPoint);
                     const eventsCollectionPath = `/artifacts/${this.appId}/public/data/lobbies/${this.currentLobbyId}/events`;
-                    await addDoc(collection(this.db, eventsCollectionPath), {
-                        type: 'SHOOT',
-                        shooterId: this.userId,
-                        startPoint: {x: startPoint.x, y: startPoint.y, z: startPoint.z},
-                        endPoint: {x: endPoint.x, y: endPoint.y, z: endPoint.z},
-                        hit: hit,
-                        hitNormal: hitNormal ? {x: hitNormal.x, y: hitNormal.y, z: hitNormal.z} : null,
-                        timestamp: Date.now()
-                    });
+                    try {
+                        await addDoc(collection(this.db, eventsCollectionPath), {
+                            type: 'SHOOT',
+                            shooterId: this.userId,
+                            startPoint: {x: startPoint.x, y: startPoint.y, z: startPoint.z},
+                            endPoint: {x: endPoint.x, y: endPoint.y, z: endPoint.z},
+                            hit: hit,
+                            hitNormal: hitNormal ? {x: hitNormal.x, y: hitNormal.y, z: hitNormal.z} : null,
+                            timestamp: Date.now()
+                        });
+                    } catch (error) {
+                        console.error("Error sending shoot event:", error);
+                    }
                 }
             }
             
@@ -928,7 +997,7 @@
                 if (weapon.isReloading || weapon.currentAmmo === weapon.maxAmmo) return;
                 if (this.isZoomed) this.toggleZoom();
                 weapon.isReloading = true;
-                weapon.viewModel.reloadFlipAmount = Math.PI * 2;
+                weapon.viewModel.reloadFlipAmount = Math.PI * 2; // Full rotation
                 this.updateAmmoUI();
                 setTimeout(() => {
                     weapon.currentAmmo = weapon.maxAmmo;
@@ -975,7 +1044,10 @@
                         y: this.camera.position.y, 
                         z: this.camera.position.z,
                         yaw: this.mouse.x,
-                        pitch: this.mouse.y
+                        pitch: this.mouse.y,
+                        timestamp: Date.now()
+                    }).catch(error => {
+                        console.error("Error sending player state: ", error);
                     });
                 }
             }
@@ -987,6 +1059,7 @@
                         const data = change.doc.data();
 
                         if (docId === this.userId) {
+                            // Listen for changes to our own health
                             if (data.health !== undefined && data.health < this.health) {
                                 this.health = data.health;
                                 if (this.health <= 0) {
@@ -1021,6 +1094,7 @@
                         
                         player = this.playerMeshes[docId];
                         if (player && data) {
+                            // Set target positions for interpolation
                             player.targetPosition.set(data.x, data.y - this.playerHeight, data.z);
                             if(data.yaw !== undefined) player.targetYaw = data.yaw;
                             if(data.pitch !== undefined) player.targetPitch = data.pitch;
@@ -1033,35 +1107,37 @@
             listenForGameEvents() {
                  const eventsCollectionPath = `/artifacts/${this.appId}/public/data/lobbies/${this.currentLobbyId}/events`;
                  onSnapshot(collection(this.db, eventsCollectionPath), (snapshot) => {
-                    snapshot.docChanges().forEach((change) => {
-                        if (change.type === "added") {
-                            const event = change.doc.data();
-                            if (event.shooterId !== this.userId && event.type === 'SHOOT') {
-                                const startPoint = new THREE.Vector3(event.startPoint.x, event.startPoint.y, event.startPoint.z);
-                                const endPoint = new THREE.Vector3(event.endPoint.x, event.endPoint.y, event.endPoint.z);
-                                this.createBulletTrail(endPoint, startPoint); 
-                                if (event.hit && event.hitNormal) {
-                                    const hitNormal = new THREE.Vector3(event.hitNormal.x, event.hitNormal.y, event.hitNormal.z);
-                                    this.createBulletDecal(endPoint, hitNormal);
-                                }
-                                 // Muzzle flash for remote players
-                                const shooter = this.playerMeshes[event.shooterId];
-                                if(shooter && shooter.mesh.userData.muzzleFlash){
-                                    shooter.mesh.userData.muzzleFlash.material.opacity = 1;
-                                    setTimeout(() => { shooter.mesh.userData.muzzleFlash.material.opacity = 0; }, 60);
-                                }
-                            }
-                        }
-                    });
-                });
+                     snapshot.docChanges().forEach((change) => {
+                         if (change.type === "added") {
+                             const event = change.doc.data();
+                             // Ensure we don't replay our own events
+                             if (event.shooterId !== this.userId && event.type === 'SHOOT') {
+                                 const startPoint = new THREE.Vector3(event.startPoint.x, event.startPoint.y, event.startPoint.z);
+                                 const endPoint = new THREE.Vector3(event.endPoint.x, event.endPoint.y, event.endPoint.z);
+                                 this.createBulletTrail(endPoint, startPoint); 
+                                 if (event.hit && event.hitNormal) {
+                                     const hitNormal = new THREE.Vector3(event.hitNormal.x, event.hitNormal.y, event.hitNormal.z);
+                                     this.createBulletDecal(endPoint, hitNormal);
+                                 }
+                                  // Muzzle flash for remote players
+                                 const shooter = this.playerMeshes[event.shooterId];
+                                 if(shooter && shooter.mesh.userData.muzzleFlash){
+                                     shooter.mesh.userData.muzzleFlash.material.opacity = 1;
+                                     setTimeout(() => { shooter.mesh.userData.muzzleFlash.material.opacity = 0; }, 60);
+                                 }
+                             }
+                         }
+                     });
+                 });
             }
 
             updateRemotePlayers(delta) {
-                const factor = delta * 15; // Increased lerp factor for smoother movement
+                const factor = delta * 15; // Interpolation factor
                 for (const id in this.playerMeshes) {
                     const player = this.playerMeshes[id];
                     player.mesh.position.lerp(player.targetPosition, factor);
                     
+                    // Slerp for smoother rotation
                     const targetQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), player.targetYaw);
                     player.mesh.quaternion.slerp(targetQuat, factor);
                     
@@ -1075,12 +1151,14 @@
             handleCollisions(deltaPosition) {
                 const playerSphere = new THREE.Sphere(this.camera.position, this.playerRadius);
                 for (const obj of this.collidableObjects) {
+                    // Check against the *next* position
                     const nextPlayerSphere = new THREE.Sphere(playerSphere.center.clone().add(deltaPosition), playerSphere.radius);
+                    
                     if (obj.type === 'box' && nextPlayerSphere.intersectsBox(obj.bounds)) {
                         const closestPoint = new THREE.Vector3().copy(nextPlayerSphere.center).clamp(obj.bounds.min, obj.bounds.max);
                         const penetrationVector = new THREE.Vector3().subVectors(nextPlayerSphere.center, closestPoint).normalize();
                         const dot = deltaPosition.dot(penetrationVector);
-                        if (dot < 0) deltaPosition.sub(penetrationVector.multiplyScalar(dot));
+                        if (dot < 0) deltaPosition.sub(penetrationVector.multiplyScalar(dot)); // Slide along the wall
                     } else if (obj.type === 'sphere' && nextPlayerSphere.intersectsSphere(obj.bounds)) {
                         const penetrationVector = new THREE.Vector3().subVectors(nextPlayerSphere.center, obj.bounds.center).normalize();
                         const dot = deltaPosition.dot(penetrationVector);
@@ -1089,7 +1167,7 @@
                 }
             }
 
-            generateWorldFromGrid() { /* Re-uses logic from previous versions */ 
+            generateWorldFromGrid() { 
                 const wallHeight = this.tileSize;
                 const gridWidth = this.mapGrid[0].length * this.tileSize;
                 const gridDepth = this.mapGrid.length * this.tileSize;
@@ -1110,7 +1188,7 @@
                         const worldZ = offsetZ + z * this.tileSize + this.tileSize / 2;
 
                         switch (tileType) {
-                            case 1:
+                            case 1: // Tree
                                 const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.8, 8), new THREE.MeshLambertMaterial({ color: 0x8B4513 }));
                                 trunk.position.set(worldX, 4, worldZ);
                                 trunk.castShadow = true;
@@ -1122,7 +1200,7 @@
                                 this.collidableObjects.push({ mesh: trunk, type: 'sphere', bounds: new THREE.Sphere(trunk.position, 1.5) });
                                 this.shootableObjects.push(trunk, leaves);
                                 break;
-                            case 2:
+                            case 2: // Wall
                                 const wall = new THREE.Mesh(new THREE.BoxGeometry(this.tileSize, wallHeight, this.tileSize), new THREE.MeshLambertMaterial({ color: new THREE.Color(0.5, 0.5, 0.5) }));
                                 wall.position.set(worldX, wallHeight / 2, worldZ);
                                 wall.castShadow = true;
@@ -1142,23 +1220,28 @@
                 const gridDepth = this.mapGrid.length * this.tileSize;
                 const offsetX = -gridWidth / 2;
                 const offsetZ = -gridDepth / 2;
+                let openSpots = [];
                 for (let z = 0; z < this.mapGrid.length; z++) {
                     for (let x = 0; x < this.mapGrid[z].length; x++) {
-                        if (this.mapGrid[z][x] === 0) {
-                            return {
+                        if (this.mapGrid[z][x] === 0) { // 0 is an open spot
+                            openSpots.push({
                                 x: offsetX + x * this.tileSize + this.tileSize / 2,
                                 z: offsetZ + z * this.tileSize + this.tileSize / 2
-                            };
+                            });
                         }
                     }
                 }
-                return { x: 0, z: 0 };
+                // Return a random open spot
+                if (openSpots.length > 0) {
+                    return openSpots[Math.floor(Math.random() * openSpots.length)];
+                }
+                return { x: 0, z: 0 }; // Fallback
             }
 
             updateCrosshair() {
                 const weapon = this.weapons[this.currentWeaponIndex];
                 const crosshair = document.getElementById('crosshair');
-                crosshair.className = '';
+                crosshair.className = ''; // Clear existing classes
                 switch(weapon.name) {
                     case 'Shotgun': crosshair.classList.add('shotgun-crosshair'); break;
                     default: crosshair.classList.add('default-crosshair'); break;
@@ -1196,4 +1279,3 @@
     </script>
 </body>
 </html>
-
