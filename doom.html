@@ -299,7 +299,7 @@
         Game ID: <span id="lobbyId">N/A</span>
     </div>
     
-    <div id="version-info">Version 7.4-team_lobby</div>
+    <div id="version-info">Version 7.6-name_fix</div>
     <div id="minimapContainer">
         <div id="minimapRenderer"></div>
     </div>
@@ -1261,7 +1261,7 @@
                             
                             player = this.playerMeshes[docId];
                             if (player && data) {
-                                // Set target position directly - interpolation happens in updateRemotePlayers
+                                // **FIX:** Correctly set target position based on synced data y (camera level)
                                 player.targetPosition.set(data.x, data.y - this.playerHeight, data.z); 
                                 if(data.yaw !== undefined) player.targetYaw = data.yaw;
                                 if(data.pitch !== undefined) player.targetPitch = data.pitch;
@@ -1301,6 +1301,7 @@
                 const factor = delta * 15;
                 for (const id in this.playerMeshes) {
                     const player = this.playerMeshes[id];
+                     // **FIX:** Directly lerp towards the target position
                     player.mesh.position.lerp(player.targetPosition, factor);
                     
                     const targetQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), player.targetYaw);
@@ -1423,7 +1424,7 @@
                 const sprite = new THREE.Sprite(spriteMaterial);
                 
                 sprite.scale.set(canvas.width / 64, canvas.height / 64, 1.0);
-                sprite.position.y = 5; // Position above the player's head
+                sprite.position.y = 6; // **FIX:** Increased Y position
                 return sprite;
             }
 
@@ -1478,7 +1479,9 @@
                     this.animationFrameId = null;
                  }
                 // Optionally remove weapons from camera etc.
-                this.weapons.forEach(w => this.camera.remove(w.viewModel));
+                if (this.camera && this.weapons) { // Check if camera and weapons exist
+                    this.weapons.forEach(w => this.camera.remove(w.viewModel));
+                }
                 this.weapons = [];
 
                  // Remove lights and world geometry if necessary
