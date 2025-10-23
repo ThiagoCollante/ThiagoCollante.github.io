@@ -221,14 +221,31 @@
             text-shadow: 1px 1px 2px black;
         }
         .player-status {
-            padding: 15px;
-            margin: 10px 0;
+            padding: 10px;
+            margin: 5px 0;
             background-color: #333;
             border-radius: 8px;
             border: 1px solid #444;
+            font-size: 0.9rem;
         }
         .player-status .status-ready { color: #4caf50; }
         .player-status .status-not-ready { color: #f44336; }
+        .team-section {
+            margin-bottom: 15px;
+            border: 1px solid #555;
+            border-radius: 8px;
+            padding: 10px;
+            background-color: #2a2a2a;
+        }
+        .team-title {
+            font-weight: bold;
+            margin-bottom: 5px;
+            font-size: 1rem;
+        }
+        #team-a { color: #64b5f6; } /* Light Blue */
+        #team-b { color: #e57373; } /* Light Red */
+        .game-mode-selection { margin: 15px 0; }
+        .game-mode-selection label { margin: 0 10px; }
     </style>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -243,6 +260,11 @@
         </div>
         <div id="lobby-ui" style="display: none;">
             <h1 class="text-2xl font-bold mb-4">Join a Game</h1>
+            <div class="game-mode-selection">
+                Game Mode:
+                <label><input type="radio" name="gameMode" value="1v1" checked> 1 vs 1</label>
+                <label><input type="radio" name="gameMode" value="2v2"> 2 vs 2</label>
+            </div>
             <button id="create-lobby-btn" class="lobby-button" disabled>Create New Game</button>
             <button id="start-local-btn" class="lobby-button" disabled>Start Local Test</button>
             <div id="lobby-id-display"></div>
@@ -253,8 +275,16 @@
         </div>
         <div id="match-lobby-ui" style="display: none;">
             <h1 id="match-lobby-title">Waiting for Players...</h1>
-            <div id="player1-status" class="player-status">Waiting...</div>
-            <div id="player2-status" class="player-status">Waiting...</div>
+            <div class="team-section">
+                <div id="team-a" class="team-title">Team A</div>
+                <div id="player-slot-0" class="player-status">Slot 1: Waiting...</div>
+                <div id="player-slot-2" class="player-status" style="display: none;">Slot 3: Waiting...</div>
+            </div>
+             <div class="team-section">
+                <div id="team-b" class="team-title">Team B</div>
+                <div id="player-slot-1" class="player-status">Slot 2: Waiting...</div>
+                <div id="player-slot-3" class="player-status" style="display: none;">Slot 4: Waiting...</div>
+            </div>
             <button id="ready-btn" class="menu-button">Ready Up</button>
         </div>
         <div id="pause-menu" style="display: none;">
@@ -269,7 +299,7 @@
         Game ID: <span id="lobbyId">N/A</span>
     </div>
     
-    <div id="version-info">Version 7.1-spawn_names</div>
+    <div id="version-info">Version 7.4-team_lobby</div>
     <div id="minimapContainer">
         <div id="minimapRenderer"></div>
     </div>
@@ -291,7 +321,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc, getDoc, updateDoc, addDoc, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc, getDoc, updateDoc, addDoc, getDocs, query, where, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         class MultiplayerFPSGame {
             constructor() {
@@ -311,6 +341,10 @@
                 this.animationFrameId = null;
                 this.playerReady = false;
                 this.playerIndex = 0; // 0 for host, 1 for guest
+                this.team = 'A'; // Default team
+                this.gameMode = '1v1'; // Default game mode
+                this.maxPlayers = 2;
+                this.playerDataCache = {}; // Cache player data like team
 
                 this.initLobbyUI();
                 this.initFirebase();
@@ -341,6 +375,7 @@
             }
 
             async initFirebase() {
+                 // **FIX:** Uncommented the firebaseConfig object
                 const firebaseConfig = {
                     apiKey: "AIzaSyBX7Qk3hB7vNykKt9WyiDNWrqq0eXxpGMA",
                     authDomain: "lanhtml-d905d.firebaseapp.com",
@@ -350,7 +385,7 @@
                     appId: "1:427246041879:web:b455c681ee7b952edc9552"
                 };
                 this.appId = firebaseConfig.projectId;
-                const app = initializeApp(firebaseConfig);
+                const app = initializeApp(firebaseConfig); // Pass the config object here
                 this.db = getFirestore(app);
                 this.auth = getAuth(app);
 
@@ -377,26 +412,53 @@
             async createLobby() {
                 const lobbyId = Math.random().toString(36).substring(2, 8).toUpperCase();
                 const lobbyRef = doc(this.db, `/artifacts/${this.appId}/public/data/lobbies`, lobbyId);
-                await setDoc(lobbyRef, { createdAt: Date.now(), owner: this.userId, status: 'waiting' });
-                this.playerIndex = 0; // The creator is always player 0
+                const selectedMode = document.querySelector('input[name="gameMode"]:checked').value;
+                this.gameMode = selectedMode;
+                this.maxPlayers = selectedMode === '1v1' ? 2 : 4;
+                
+                await setDoc(lobbyRef, { 
+                    createdAt: Date.now(), 
+                    owner: this.userId, 
+                    status: 'waiting', 
+                    gameMode: this.gameMode, 
+                    maxPlayers: this.maxPlayers 
+                });
+                this.playerIndex = 0; // Host is always index 0
+                this.team = 'A'; // Host starts in Team A
                 this.enterMatchLobby(lobbyId);
             }
 
             async joinLobby(lobbyId) {
                 if (!lobbyId) {
-                    document.getElementById('error-message').textContent = 'Please enter a Game ID.';
+                    this.showError('Please enter a Game ID.');
                     return;
                 }
                 const lobbyRef = doc(this.db, `/artifacts/${this.appId}/public/data/lobbies`, lobbyId);
+                const lobbySnap = await getDoc(lobbyRef);
+
+                if (!lobbySnap.exists()) {
+                    this.showError('Game not found.');
+                    return;
+                }
+
+                const lobbyData = lobbySnap.data();
+                this.gameMode = lobbyData.gameMode || '1v1';
+                this.maxPlayers = lobbyData.maxPlayers || 2;
+
                 const playersCollectionPath = `/artifacts/${this.appId}/public/data/lobbies/${lobbyId}/players`;
                 const playersSnapshot = await getDocs(collection(this.db, playersCollectionPath));
 
-                if (! (await getDoc(lobbyRef)).exists()) {
-                    document.getElementById('error-message').textContent = 'Game not found.';
-                } else if (playersSnapshot.size >= 2) {
-                    document.getElementById('error-message').textContent = 'Lobby is full.';
+                if (playersSnapshot.size >= this.maxPlayers) {
+                    this.showError('Lobby is full.');
                 } else {
-                    this.playerIndex = playersSnapshot.size; // 0 if empty, 1 if one player exists
+                     // Determine player index and team
+                    const players = playersSnapshot.docs.map(d => d.data());
+                    const teamACount = players.filter(p => p.team === 'A').length;
+                    const teamBCount = players.filter(p => p.team === 'B').length;
+                    
+                    this.playerIndex = playersSnapshot.size; 
+                    this.team = teamACount <= teamBCount ? 'A' : 'B';
+
                     this.enterMatchLobby(lobbyId);
                 }
             }
@@ -405,11 +467,21 @@
                 this.currentLobbyId = lobbyId;
                 document.getElementById('lobby-ui').style.display = 'none';
                 document.getElementById('match-lobby-ui').style.display = 'block';
-                document.getElementById('match-lobby-title').textContent = `Match Lobby: ${lobbyId}`;
+                document.getElementById('match-lobby-title').textContent = `Match Lobby: ${lobbyId} (${this.gameMode})`;
+
+                // Show/hide slots based on game mode
+                document.getElementById('player-slot-2').style.display = this.gameMode === '2v2' ? 'block' : 'none';
+                document.getElementById('player-slot-3').style.display = this.gameMode === '2v2' ? 'block' : 'none';
 
                 const playersCollectionPath = `/artifacts/${this.appId}/public/data/lobbies/${this.currentLobbyId}/players`;
                 this.playerRef = doc(this.db, playersCollectionPath, this.userId);
-                await setDoc(this.playerRef, { ready: false, userId: this.userId, username: this.username });
+                await setDoc(this.playerRef, { 
+                    ready: false, 
+                    userId: this.userId, 
+                    username: this.username, 
+                    team: this.team,
+                    playerIndex: this.playerIndex // Store index for spawning
+                });
                 
                 this.listenForPlayers(playersCollectionPath, true);
             }
@@ -422,14 +494,60 @@
                 document.getElementById('ready-btn').textContent = this.playerReady ? 'Unready' : 'Ready Up';
             }
 
-            quitMatch() {
-                window.location.reload();
+             async quitMatch() {
+                if (this.animationFrameId) {
+                    cancelAnimationFrame(this.animationFrameId);
+                    this.animationFrameId = null;
+                }
+                this.isGameStarted = false;
+                document.exitPointerLock(); // Ensure pointer lock is released
+
+                if (this.playerRef) {
+                    await deleteDoc(this.playerRef);
+                    this.playerRef = null;
+                    const playersCollectionPath = `/artifacts/${this.appId}/public/data/lobbies/${this.currentLobbyId}/players`;
+                    const playersSnapshot = await getDocs(collection(this.db, playersCollectionPath));
+                    if (playersSnapshot.empty && !this.isLocalMode) { // Only cleanup if not local and lobby empty
+                        await this.cleanupLobby(this.currentLobbyId);
+                    }
+                }
+                
+                // Reset UI to main lobby state
+                document.getElementById('blocker').style.display = 'flex';
+                document.getElementById('username-ui').style.display = 'none';
+                document.getElementById('lobby-ui').style.display = 'block';
+                document.getElementById('match-lobby-ui').style.display = 'none';
+                document.getElementById('pause-menu').style.display = 'none';
+                ['ammoInfo', 'healthBarContainer', 'minimapContainer'].forEach(id => document.getElementById(id).style.display = 'none');
+                
+                // Clear scene resources if needed (optional for reload)
+                this.clearScene();
+                 window.location.reload(); // Simple way to reset state
+            }
+
+            async cleanupLobby(lobbyId) {
+                if (!lobbyId) return;
+                console.log(`Cleaning up lobby: ${lobbyId}`);
+                try {
+                    // Delete events subcollection first
+                    const eventsCollectionPath = `/artifacts/${this.appId}/public/data/lobbies/${lobbyId}/events`;
+                    const eventsSnapshot = await getDocs(collection(this.db, eventsCollectionPath));
+                    const batch = writeBatch(this.db);
+                    eventsSnapshot.forEach(doc => batch.delete(doc.ref));
+                    await batch.commit();
+                    console.log("Deleted all game events.");
+
+                    // Delete the main lobby document
+                    const lobbyRef = doc(this.db, `/artifacts/${this.appId}/public/data/lobbies`, lobbyId);
+                    await deleteDoc(lobbyRef);
+                    console.log("Deleted lobby document.");
+                } catch (e) { console.error("Error cleaning up lobby:", e); }
             }
 
             // --- GAME INITIALIZATION ---
 
             startGame(lobbyId, isLocal) {
-                if (this.isGameStarted) return;
+                 if (this.isGameStarted) return;
                 this.isGameStarted = true;
                 this.isLocalMode = isLocal;
                 this.currentLobbyId = lobbyId;
@@ -458,14 +576,17 @@
                 if (!isLocal) {
                     const playersCollectionPath = `/artifacts/${this.appId}/public/data/lobbies/${this.currentLobbyId}/players`;
                     this.playerRef = doc(this.db, playersCollectionPath, this.userId);
-                    const startPos = this.getStartPosition(this.playerIndex);
+                    const startPos = this.getStartPosition(this.team); // Use team for spawn
                     this.camera.position.set(startPos.x, this.playerHeight, startPos.z);
                     updateDoc(this.playerRef, { 
-                        x: startPos.x, y: this.playerHeight, z: startPos.z, 
+                        x: startPos.x, y: this.camera.position.y, z: startPos.z, 
                         yaw: this.mouse.x, pitch: this.mouse.y, health: 100
                     });
                     this.listenForPlayers(playersCollectionPath, false); // Switch to game listener
                     this.listenForGameEvents();
+                } else {
+                     const startPos = this.getStartPosition('A'); // Default spawn for local
+                    this.camera.position.set(startPos.x, this.playerHeight, startPos.z);
                 }
                 
                 this.requestPointerLock();
@@ -486,8 +607,8 @@
 
             initCamera() {
                 this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-                const startPos = this.getStartPosition(this.playerIndex);
-                this.camera.position.set(startPos.x, 10, startPos.z);
+                const startPos = this.getStartPosition(this.team); // Use team-based spawn
+                this.camera.position.set(startPos.x, this.playerHeight, startPos.z);
                 this.initialRotation = Math.PI;
                 this.scene.add(this.camera);
                 this.defaultFov = 75;
@@ -509,13 +630,15 @@
                 });
             }
 
-            createPlayerModel(color, isLocalPlayer = false) {
+            createPlayerModel(color, isLocalPlayer = false, team = 'A') {
                 const playerGroup = new THREE.Group();
                 const cylinderHeight = 3.5;
                 const cylinderRadius = 0.8;
+                
+                const teamColor = team === 'A' ? 0x64b5f6 : 0xe57373; // Blue for A, Red for B
 
                 const bodyGeo = new THREE.CylinderGeometry(cylinderRadius, cylinderRadius, cylinderHeight, 24);
-                const bodyMat = new THREE.MeshStandardMaterial({ color, metalness: 0.3, roughness: 0.5 });
+                const bodyMat = new THREE.MeshStandardMaterial({ color: teamColor, metalness: 0.3, roughness: 0.5 });
                 const body = new THREE.Mesh(bodyGeo, bodyMat);
                 body.castShadow = true;
                 body.position.y = cylinderHeight / 2;
@@ -528,6 +651,7 @@
                 gun.position.set(0, cylinderHeight - 0.5, -0.5);
                 playerGroup.add(gun);
                 playerGroup.userData.gun = gun;
+                playerGroup.userData.team = team; // Store team on the model group
 
                 const flashMaterial = new THREE.MeshBasicMaterial({ color: 0xfff5a1, transparent: true, opacity: 0 });
                 const flashGeometry = new THREE.PlaneGeometry(0.5, 0.5);
@@ -697,13 +821,18 @@
                 document.addEventListener('keydown', (e) => { 
                     this.keys[e.code] = true; 
                     if (e.code === 'KeyR') this.reload();
+                    if (e.code === 'Escape') { // Toggle pointer lock on Esc
+                        if (document.pointerLockElement === this.renderer.domElement) {
+                            document.exitPointerLock();
+                        }
+                    }
                 });
                 document.addEventListener('keyup', (e) => { this.keys[e.code] = false; });
                 
                 document.addEventListener('mousedown', (e) => {
-                    if (!this.isPointerLocked) {
+                    if (!this.isPointerLocked && this.isGameStarted) { // Only lock if game has started
                         this.requestPointerLock();
-                    } else {
+                    } else if (this.isPointerLocked) {
                         if (e.button === 0) this.shoot();
                         else if (e.button === 2) this.toggleZoom();
                     }
@@ -713,9 +842,16 @@
                 
                 document.addEventListener('pointerlockchange', () => {
                     this.isPointerLocked = document.pointerLockElement === this.renderer.domElement;
-                    document.getElementById('pause-menu').style.display = this.isPointerLocked ? 'none' : 'block';
-                    document.getElementById('lobby-ui').style.display = 'none';
-                    document.getElementById('blocker').style.display = this.isPointerLocked ? 'none' : 'flex';
+                     if(this.isGameStarted) { // Only show pause menu if game is running
+                        document.getElementById('pause-menu').style.display = this.isPointerLocked ? 'none' : 'block';
+                        document.getElementById('blocker').style.display = this.isPointerLocked ? 'none' : 'flex';
+                     } else { // Keep lobby visible if pointer lock lost before game start
+                         document.getElementById('pause-menu').style.display = 'none';
+                         document.getElementById('blocker').style.display = 'flex';
+                     }
+                    document.getElementById('lobby-ui').style.display = 'none'; // Always hide main lobby
+                    document.getElementById('match-lobby-ui').style.display = 'none'; // Always hide match lobby
+                    
                     if (!this.isPointerLocked && this.isZoomed) this.toggleZoom();
                 });
                 
@@ -877,7 +1013,7 @@
             updateMinimap() {
                 this.minimapCamera.position.set(this.camera.position.x, 150, this.camera.position.z);
                 this.playerIndicator.position.copy(this.camera.position);
-                this.playerIndicator.position.y = 50; // Raised indicator to be clearly visible
+                this.playerIndicator.position.y = 50; // Raised indicator
                 this.minimapRenderer.render(this.scene, this.minimapCamera);
             }
 
@@ -931,12 +1067,16 @@
                     }
                     if (hitObject.userData.playerId && !this.isLocalMode) {
                         const targetId = hitObject.userData.playerId;
-                        const targetRef = doc(this.db, `/artifacts/${this.appId}/public/data/lobbies/${this.currentLobbyId}/players`, targetId);
-                        const targetDoc = await getDoc(targetRef);
-                        if(targetDoc.exists()) {
-                            const targetData = targetDoc.data();
-                            const newHealth = Math.max(0, targetData.health - weapon.damage);
-                            await updateDoc(targetRef, { health: newHealth });
+                        const targetData = this.playerDataCache[targetId]; // Get team from cache
+                        
+                        if(targetData && targetData.team !== this.team) { // Check for friendly fire
+                            const targetRef = doc(this.db, `/artifacts/${this.appId}/public/data/lobbies/${this.currentLobbyId}/players`, targetId);
+                            const targetDoc = await getDoc(targetRef); // Get current health
+                            if(targetDoc.exists()) {
+                                const currentTargetData = targetDoc.data();
+                                const newHealth = Math.max(0, currentTargetData.health - weapon.damage);
+                                await updateDoc(targetRef, { health: newHealth });
+                            }
                         }
                     }
 
@@ -1016,7 +1156,7 @@
 
             handleDeath() {
                 console.log("Player died and respawned.");
-                const respawnPosition = this.getStartPosition(this.playerIndex);
+                const respawnPosition = this.getStartPosition(this.team); // Use team for respawn
                 this.camera.position.set(respawnPosition.x, this.playerHeight, respawnPosition.z);
                 this.velocity.set(0, 0, 0);
                 this.health = 100;
@@ -1025,7 +1165,7 @@
                     updateDoc(this.playerRef, {
                         health: 100,
                         x: respawnPosition.x,
-                        y: this.playerHeight,
+                        y: this.camera.position.y, // Send camera y pos
                         z: respawnPosition.z
                     });
                 }
@@ -1047,25 +1187,34 @@
 
             listenForPlayers(collectionPath, isMatchLobby) {
                 onSnapshot(collection(this.db, collectionPath), (snapshot) => {
-                    const players = snapshot.docs.map(doc => doc.data());
-                    
-                    if (isMatchLobby) {
-                        const player1Status = document.getElementById('player1-status');
-                        const player2Status = document.getElementById('player2-status');
+                    const players = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    this.playerDataCache = {}; // Clear cache
+                    players.forEach(p => this.playerDataCache[p.userId] = { team: p.team }); // Update cache
 
-                        if (players[0]) {
-                            player1Status.innerHTML = `${players[0].username}: <span class="${players[0].ready ? 'status-ready' : 'status-not-ready'}">${players[0].ready ? 'Ready' : 'Not Ready'}</span>`;
-                        } else {
-                            player1Status.textContent = 'Player 1: Waiting...';
-                        }
-                        if (players[1]) {
-                             player2Status.innerHTML = `${players[1].username}: <span class="${players[1].ready ? 'status-ready' : 'status-not-ready'}">${players[1].ready ? 'Ready' : 'Not Ready'}</span>`;
-                        } else {
-                             player2Status.textContent = 'Player 2: Waiting...';
+                    if (isMatchLobby) {
+                        const teamAPlayers = players.filter(p => p.team === 'A').sort((a, b) => (a.userId > b.userId ? 1 : -1));
+                        const teamBPlayers = players.filter(p => p.team === 'B').sort((a, b) => (a.userId > b.userId ? 1 : -1));
+                        
+                        const updateSlot = (slotId, player) => {
+                            const slot = document.getElementById(slotId);
+                            if (player) {
+                                slot.innerHTML = `${player.username}: <span class="${player.ready ? 'status-ready' : 'status-not-ready'}">${player.ready ? 'Ready' : 'Not Ready'}</span>`;
+                            } else {
+                                slot.textContent = `Slot ${parseInt(slotId.split('-')[2]) + 1}: Waiting...`;
+                            }
+                        };
+
+                        updateSlot('player-slot-0', teamAPlayers[0]);
+                        updateSlot('player-slot-1', teamBPlayers[0]);
+                        if (this.gameMode === '2v2') {
+                            updateSlot('player-slot-2', teamAPlayers[1]);
+                            updateSlot('player-slot-3', teamBPlayers[1]);
                         }
                         
-                        if (players.length === 2 && players.every(p => p.ready)) {
-                            this.startGame(this.currentLobbyId, false);
+                        if (players.length === this.maxPlayers && players.every(p => p.ready)) {
+                             this.playerIndex = players.findIndex(p => p.userId === this.userId);
+                             this.team = players.find(p => p.userId === this.userId)?.team || 'A'; // Get assigned team
+                             this.startGame(this.currentLobbyId, false);
                         }
 
                     } else { // In-game listener
@@ -1088,7 +1237,7 @@
                             let player = this.playerMeshes[docId];
 
                             if (change.type === "added" && !player) {
-                                const model = this.createPlayerModel(Math.random() * 0xffffff);
+                                const model = this.createPlayerModel(Math.random() * 0xffffff, false, data.team);
                                 model.userData.playerId = docId;
                                 const usernameLabel = this.createUsernameLabel(data.username);
                                 model.add(usernameLabel);
@@ -1096,12 +1245,12 @@
                                 this.playerMeshes[docId] = { 
                                     mesh: model, 
                                     usernameLabel: usernameLabel,
-                                    targetPosition: new THREE.Vector3(), 
-                                    targetYaw: 0,
-                                    targetPitch: 0
+                                    targetPosition: new THREE.Vector3(data.x, data.y - this.playerHeight, data.z), // Initial position
+                                    targetYaw: data.yaw || 0,
+                                    targetPitch: data.pitch || 0
                                 };
                                 this.scene.add(model);
-                                this.shootableObjects.push(model); // Make other players shootable
+                                this.shootableObjects.push(model); 
                             } else if (change.type === "removed" && player) {
                                 this.scene.remove(player.mesh);
                                 const index = this.shootableObjects.indexOf(player.mesh);
@@ -1112,7 +1261,8 @@
                             
                             player = this.playerMeshes[docId];
                             if (player && data) {
-                                player.targetPosition.set(data.x, data.y - this.playerHeight, data.z);
+                                // Set target position directly - interpolation happens in updateRemotePlayers
+                                player.targetPosition.set(data.x, data.y - this.playerHeight, data.z); 
                                 if(data.yaw !== undefined) player.targetYaw = data.yaw;
                                 if(data.pitch !== undefined) player.targetPitch = data.pitch;
                                 player.mesh.visible = data.health > 0;
@@ -1148,7 +1298,7 @@
             }
 
             updateRemotePlayers(delta) {
-                const factor = delta * 15; // Increased lerp factor for smoother movement
+                const factor = delta * 15;
                 for (const id in this.playerMeshes) {
                     const player = this.playerMeshes[id];
                     player.mesh.position.lerp(player.targetPosition, factor);
@@ -1158,7 +1308,6 @@
                     
                     player.mesh.userData.gun.rotation.x += (player.targetPitch - player.mesh.userData.gun.rotation.x) * factor;
 
-                    // Make username always face camera
                     if (player.usernameLabel) {
                         player.usernameLabel.quaternion.copy(this.camera.quaternion);
                     }
@@ -1232,18 +1381,20 @@
                 });
             }
 
-            getStartPosition(playerIndex = 0) {
+            getStartPosition(team = 'A') {
                 const gridWidth = this.mapGrid[0].length;
                 const gridDepth = this.mapGrid.length;
                 const offsetX = -gridWidth * this.tileSize / 2;
                 const offsetZ = -gridDepth * this.tileSize / 2;
                 
-                const spawnPoints = [
-                    { x: 1, z: 1 },         // Top-left corner
-                    { x: gridWidth - 2, z: gridDepth - 2 } // Bottom-right corner
-                ];
+                // Define spawn zones (areas within the grid)
+                 const spawnZones = {
+                    'A': [{ x: 1, z: 1 }, { x: 2, z: 1 }, { x: 1, z: 2 }], // Top-left area
+                    'B': [{ x: gridWidth - 2, z: gridDepth - 2 }, { x: gridWidth - 3, z: gridDepth - 2 }, { x: gridWidth - 2, z: gridDepth - 3 }] // Bottom-right area
+                };
 
-                const spawn = spawnPoints[playerIndex] || spawnPoints[0];
+                const zone = spawnZones[team] || spawnZones['A'];
+                const spawn = zone[Math.floor(Math.random() * zone.length)]; // Pick random point in zone
 
                 return {
                     x: offsetX + spawn.x * this.tileSize + this.tileSize / 2,
@@ -1255,17 +1406,20 @@
                 const canvas = document.createElement('canvas');
                 const context = canvas.getContext('2d');
                 context.font = 'Bold 48px Inter';
-                const textWidth = context.measureText(text).width;
-                canvas.width = textWidth;
+                const metrics = context.measureText(text);
+                const textWidth = metrics.width;
+                canvas.width = textWidth + 20; // Add some padding
                 canvas.height = 64; 
                 context.font = 'Bold 48px Inter';
+                context.fillStyle = 'rgba(0, 0, 0, 0.5)'; // Semi-transparent black background
+                context.fillRect(0, 0, canvas.width, canvas.height);
                 context.fillStyle = 'rgba(255, 255, 255, 1.0)';
                 context.textAlign = 'center';
                 context.textBaseline = 'middle';
                 context.fillText(text, canvas.width / 2, canvas.height / 2);
 
                 const texture = new THREE.CanvasTexture(canvas);
-                const spriteMaterial = new THREE.SpriteMaterial({ map: texture, transparent: true });
+                const spriteMaterial = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
                 const sprite = new THREE.Sprite(spriteMaterial);
                 
                 sprite.scale.set(canvas.width / 64, canvas.height / 64, 1.0);
@@ -1308,6 +1462,39 @@
                     healthBar.style.backgroundColor = '#f44336'; // Red
                 }
             }
+             
+             clearScene() {
+                 if (!this.scene) return;
+                // Remove dynamic objects like players, bullets, decals
+                Object.values(this.playerMeshes).forEach(p => this.scene.remove(p.mesh));
+                this.playerMeshes = {};
+                this.bulletTrails.forEach(t => this.scene.remove(t.line));
+                this.bulletTrails = [];
+                this.bulletDecals.forEach(d => this.scene.remove(d.mesh));
+                this.bulletDecals = [];
+                 // Stop animation loop
+                 if (this.animationFrameId) {
+                    cancelAnimationFrame(this.animationFrameId);
+                    this.animationFrameId = null;
+                 }
+                // Optionally remove weapons from camera etc.
+                this.weapons.forEach(w => this.camera.remove(w.viewModel));
+                this.weapons = [];
+
+                 // Remove lights and world geometry if necessary
+                // This might be excessive if you plan to reuse the scene structure
+             }
+
+             showError(message) {
+                 const errorElem = document.getElementById('error-message');
+                 errorElem.textContent = message;
+                 errorElem.style.color = '#ef5350'; // Red
+                 setTimeout(() => {
+                     if(errorElem.textContent === message) {
+                         errorElem.textContent = ''; // Clear after a few seconds
+                     }
+                 }, 3000);
+             }
         }
 
         new MultiplayerFPSGame();
