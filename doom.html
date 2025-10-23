@@ -45,7 +45,7 @@
             justify-content: center;
             align-items: center;
         }
-        #lobby-ui, #pause-menu, #match-lobby-ui {
+        #lobby-ui, #pause-menu {
             width: 90%;
             max-width: 450px;
             padding: 25px;
@@ -85,7 +85,7 @@
             background-color: #555;
             cursor: not-allowed;
         }
-        #lobby-id-display, #match-lobby-title {
+        #lobby-id-display {
             margin-top: 15px;
             font-size: 1.1rem;
             font-weight: bold;
@@ -220,15 +220,6 @@
             font-weight: bold;
             text-shadow: 1px 1px 2px black;
         }
-        .player-status {
-            padding: 15px;
-            margin: 10px 0;
-            background-color: #333;
-            border-radius: 8px;
-            border: 1px solid #444;
-        }
-        .player-status .status-ready { color: #4caf50; }
-        .player-status .status-not-ready { color: #f44336; }
     </style>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -246,12 +237,6 @@
             <button id="join-lobby-btn" class="lobby-button" disabled>Join Game</button>
             <p id="error-message">Initializing...</p>
         </div>
-        <div id="match-lobby-ui" style="display: none;">
-            <h1 id="match-lobby-title">Waiting for Players...</h1>
-            <div id="player1-status" class="player-status">Waiting...</div>
-            <div id="player2-status" class="player-status">Waiting...</div>
-            <button id="ready-btn" class="menu-button">Ready Up</button>
-        </div>
         <div id="pause-menu" style="display: none;">
             <h1 class="text-2xl font-bold mb-4">Game Paused</h1>
             <button id="resume-btn" class="menu-button">Resume Game</button>
@@ -264,7 +249,7 @@
         Game ID: <span id="lobbyId">N/A</span>
     </div>
     
-    <div id="version-info">Version 7.0-match_lobby</div>
+    <div id="version-info">Version 6.10-quit_button</div>
     <div id="minimapContainer">
         <div id="minimapRenderer"></div>
     </div>
@@ -286,7 +271,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc, getDoc, updateDoc, addDoc, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc, getDoc, updateDoc, addDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         class MultiplayerFPSGame {
             constructor() {
@@ -303,7 +288,6 @@
                 this.updateInterval = 50;
                 this.health = 100;
                 this.animationFrameId = null;
-                this.playerReady = false;
 
                 this.initLobbyUI();
                 this.initFirebase();
@@ -316,8 +300,7 @@
                 document.getElementById('start-local-btn').addEventListener('click', () => this.startGame(null, true));
                 document.getElementById('join-lobby-btn').addEventListener('click', () => this.joinLobby(document.getElementById('join-lobby-input').value.toUpperCase()));
                 document.getElementById('resume-btn').addEventListener('click', () => this.requestPointerLock());
-                document.getElementById('quit-btn').addEventListener('click', () => this.quitMatch());
-                document.getElementById('ready-btn').addEventListener('click', () => this.toggleReady());
+                document.getElementById('quit-btn').addEventListener('click', () => window.location.reload());
             }
 
             async initFirebase() {
@@ -342,7 +325,7 @@
                         
                         const errorMessage = document.getElementById('error-message');
                         errorMessage.textContent = 'Ready!';
-                        errorMessage.style.color = '#a5d6a7';
+                        errorMessage.style.color = '#a5d6a7'; // Green
                         
                         setTimeout(() => {
                            if(errorMessage.textContent === 'Ready!') {
@@ -357,8 +340,9 @@
             async createLobby() {
                 const lobbyId = Math.random().toString(36).substring(2, 8).toUpperCase();
                 const lobbyRef = doc(this.db, `/artifacts/${this.appId}/public/data/lobbies`, lobbyId);
-                await setDoc(lobbyRef, { createdAt: Date.now(), owner: this.userId, status: 'waiting' });
-                this.enterMatchLobby(lobbyId);
+                await setDoc(lobbyRef, { createdAt: Date.now(), owner: this.userId });
+                document.getElementById('lobby-id-display').textContent = `Game ID: ${lobbyId}`;
+                this.startGame(lobbyId, false, true);
             }
 
             async joinLobby(lobbyId) {
@@ -367,47 +351,16 @@
                     return;
                 }
                 const lobbyRef = doc(this.db, `/artifacts/${this.appId}/public/data/lobbies`, lobbyId);
-                const playersCollectionPath = `/artifacts/${this.appId}/public/data/lobbies/${lobbyId}/players`;
-                const playersSnapshot = await getDocs(collection(this.db, playersCollectionPath));
-
-                if (! (await getDoc(lobbyRef)).exists()) {
-                    document.getElementById('error-message').textContent = 'Game not found.';
-                } else if (playersSnapshot.size >= 2) {
-                    document.getElementById('error-message').textContent = 'Lobby is full.';
+                if ((await getDoc(lobbyRef)).exists()) {
+                    this.startGame(lobbyId, false, false);
                 } else {
-                    this.enterMatchLobby(lobbyId);
+                    document.getElementById('error-message').textContent = 'Game not found.';
                 }
-            }
-            
-            async enterMatchLobby(lobbyId) {
-                this.currentLobbyId = lobbyId;
-                document.getElementById('lobby-ui').style.display = 'none';
-                document.getElementById('match-lobby-ui').style.display = 'block';
-                document.getElementById('match-lobby-title').textContent = `Match Lobby: ${lobbyId}`;
-
-                const playersCollectionPath = `/artifacts/${this.appId}/public/data/lobbies/${this.currentLobbyId}/players`;
-                this.playerRef = doc(this.db, playersCollectionPath, this.userId);
-                await setDoc(this.playerRef, { ready: false, userId: this.userId });
-                
-                this.listenForPlayers(playersCollectionPath, true);
-            }
-
-            async toggleReady() {
-                this.playerReady = !this.playerReady;
-                if (this.playerRef) {
-                    await updateDoc(this.playerRef, { ready: this.playerReady });
-                }
-                document.getElementById('ready-btn').textContent = this.playerReady ? 'Unready' : 'Ready Up';
-            }
-
-            quitMatch() {
-                // This will now reload the page, effectively resetting the state and showing the lobby.
-                window.location.reload();
             }
 
             // --- GAME INITIALIZATION ---
 
-            startGame(lobbyId, isLocal) {
+            startGame(lobbyId, isLocal, isHost = false) {
                 if (this.isGameStarted) return;
                 this.isGameStarted = true;
                 this.isLocalMode = isLocal;
@@ -415,10 +368,11 @@
                 this.health = 100;
 
                 document.getElementById('lobby-ui').style.display = 'none';
-                document.getElementById('match-lobby-ui').style.display = 'none';
                 document.getElementById('blocker').style.display = 'none';
                 document.getElementById('lobbyId').textContent = isLocal ? 'Local Test' : lobbyId;
-                ['ammoInfo', 'healthBarContainer', 'minimapContainer'].forEach(id => document.getElementById(id).style.display = 'block');
+                document.getElementById('ammoInfo').style.display = 'block';
+                document.getElementById('healthBarContainer').style.display = 'block';
+                document.getElementById('minimapContainer').style.display = 'block';
 
                 this.initScene();
                 this.initWorld(); // Must be before initCamera
@@ -437,13 +391,15 @@
                 if (!isLocal) {
                     const playersCollectionPath = `/artifacts/${this.appId}/public/data/lobbies/${this.currentLobbyId}/players`;
                     this.playerRef = doc(this.db, playersCollectionPath, this.userId);
-                    // Reset health and position on game start
-                    const startPos = this.getStartPosition();
-                    updateDoc(this.playerRef, { 
-                        x: startPos.x, y: this.playerHeight, z: startPos.z, 
-                        yaw: this.mouse.x, pitch: this.mouse.y, health: 100
+                    setDoc(this.playerRef, { 
+                        x: this.camera.position.x, 
+                        y: this.camera.position.y, 
+                        z: this.camera.position.z, 
+                        yaw: this.mouse.x,
+                        pitch: this.mouse.y,
+                        health: 100
                     });
-                    this.listenForPlayers(playersCollectionPath, false); // Switch to game listener
+                    this.listenForPlayers(playersCollectionPath);
                     this.listenForGameEvents();
                 }
                 
@@ -1024,76 +980,53 @@
                 }
             }
 
-            listenForPlayers(collectionPath, isMatchLobby) {
+            listenForPlayers(collectionPath) {
                 onSnapshot(collection(this.db, collectionPath), (snapshot) => {
-                    const players = snapshot.docs.map(doc => doc.data());
-                    
-                    if (isMatchLobby) {
-                        const player1Status = document.getElementById('player1-status');
-                        const player2Status = document.getElementById('player2-status');
+                    snapshot.docChanges().forEach((change) => {
+                        const docId = change.doc.id;
+                        const data = change.doc.data();
 
-                        if (players[0]) {
-                            player1Status.innerHTML = `Player 1: <span class="${players[0].ready ? 'status-ready' : 'status-not-ready'}">${players[0].ready ? 'Ready' : 'Not Ready'}</span>`;
-                        } else {
-                            player1Status.textContent = 'Player 1: Waiting...';
+                        if (docId === this.userId) {
+                            if (data.health !== undefined && data.health < this.health) {
+                                this.health = data.health;
+                                if (this.health <= 0) {
+                                    this.handleDeath();
+                                } else {
+                                    this.updateHealthUI();
+                                }
+                            }
+                            return;
                         }
-                        if (players[1]) {
-                             player2Status.innerHTML = `Player 2: <span class="${players[1].ready ? 'status-ready' : 'status-not-ready'}">${players[1].ready ? 'Ready' : 'Not Ready'}</span>`;
-                        } else {
-                             player2Status.textContent = 'Player 2: Waiting...';
+
+                        let player = this.playerMeshes[docId];
+
+                        if (change.type === "added" && !player) {
+                            const model = this.createPlayerModel(Math.random() * 0xffffff);
+                            model.userData.playerId = docId;
+                            this.playerMeshes[docId] = { 
+                                mesh: model, 
+                                targetPosition: new THREE.Vector3(), 
+                                targetYaw: 0,
+                                targetPitch: 0
+                            };
+                            this.scene.add(model);
+                            this.shootableObjects.push(model); // Make other players shootable
+                        } else if (change.type === "removed" && player) {
+                            this.scene.remove(player.mesh);
+                            const index = this.shootableObjects.indexOf(player.mesh);
+                            if(index > -1) this.shootableObjects.splice(index, 1);
+                            delete this.playerMeshes[docId];
+                            return;
                         }
                         
-                        if (players.length === 2 && players.every(p => p.ready)) {
-                            this.startGame(this.currentLobbyId, false);
+                        player = this.playerMeshes[docId];
+                        if (player && data) {
+                            player.targetPosition.set(data.x, data.y - this.playerHeight, data.z);
+                            if(data.yaw !== undefined) player.targetYaw = data.yaw;
+                            if(data.pitch !== undefined) player.targetPitch = data.pitch;
+                            player.mesh.visible = data.health > 0;
                         }
-
-                    } else { // In-game listener
-                        snapshot.docChanges().forEach((change) => {
-                            const docId = change.doc.id;
-                            const data = change.doc.data();
-
-                            if (docId === this.userId) {
-                                if (data.health !== undefined && data.health < this.health) {
-                                    this.health = data.health;
-                                    if (this.health <= 0) {
-                                        this.handleDeath();
-                                    } else {
-                                        this.updateHealthUI();
-                                    }
-                                }
-                                return;
-                            }
-
-                            let player = this.playerMeshes[docId];
-
-                            if (change.type === "added" && !player) {
-                                const model = this.createPlayerModel(Math.random() * 0xffffff);
-                                model.userData.playerId = docId;
-                                this.playerMeshes[docId] = { 
-                                    mesh: model, 
-                                    targetPosition: new THREE.Vector3(), 
-                                    targetYaw: 0,
-                                    targetPitch: 0
-                                };
-                                this.scene.add(model);
-                                this.shootableObjects.push(model); // Make other players shootable
-                            } else if (change.type === "removed" && player) {
-                                this.scene.remove(player.mesh);
-                                const index = this.shootableObjects.indexOf(player.mesh);
-                                if(index > -1) this.shootableObjects.splice(index, 1);
-                                delete this.playerMeshes[docId];
-                                return;
-                            }
-                            
-                            player = this.playerMeshes[docId];
-                            if (player && data) {
-                                player.targetPosition.set(data.x, data.y - this.playerHeight, data.z);
-                                if(data.yaw !== undefined) player.targetYaw = data.yaw;
-                                if(data.pitch !== undefined) player.targetPitch = data.pitch;
-                                player.mesh.visible = data.health > 0;
-                            }
-                        });
-                    }
+                    });
                 });
             }
             
@@ -1111,6 +1044,7 @@
                                     const hitNormal = new THREE.Vector3(event.hitNormal.x, event.hitNormal.y, event.hitNormal.z);
                                     this.createBulletDecal(endPoint, hitNormal);
                                 }
+                                 // Muzzle flash for remote players
                                 const shooter = this.playerMeshes[event.shooterId];
                                 if(shooter && shooter.mesh.userData.muzzleFlash){
                                     shooter.mesh.userData.muzzleFlash.material.opacity = 1;
@@ -1131,6 +1065,7 @@
                     const targetQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), player.targetYaw);
                     player.mesh.quaternion.slerp(targetQuat, factor);
                     
+                    // Lerp pitch for the gun
                     player.mesh.userData.gun.rotation.x += (player.targetPitch - player.mesh.userData.gun.rotation.x) * factor;
                 }
             }
@@ -1154,7 +1089,7 @@
                 }
             }
 
-            generateWorldFromGrid() {
+            generateWorldFromGrid() { /* Re-uses logic from previous versions */ 
                 const wallHeight = this.tileSize;
                 const gridWidth = this.mapGrid[0].length * this.tileSize;
                 const gridDepth = this.mapGrid.length * this.tileSize;
