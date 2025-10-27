@@ -44,6 +44,7 @@
             display: flex;
             justify-content: center;
             align-items: center;
+            z-index: 200; /* Ensure blocker is on top */
         }
         #lobby-ui, #pause-menu {
             width: 90%;
@@ -220,6 +221,118 @@
             font-weight: bold;
             text-shadow: 1px 1px 2px black;
         }
+        /* New Score Info Box */
+        #scoreInfo {
+            position: absolute;
+            bottom: 60px; /* Above health bar */
+            left: 20px;
+            color: white;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px 20px;
+            border-radius: 10px;
+            font-size: 20px;
+            font-weight: bold;
+            z-index: 100;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            display: none; /* Hide by default */
+        }
+        /* New Scoreboard */
+        #scoreboard {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 90%;
+            max-width: 400px;
+            background-color: rgba(0, 0, 0, 0.85);
+            border-radius: 10px;
+            padding: 20px;
+            z-index: 105; /* Below pause menu, above game */
+            display: none; /* Hidden by default */
+            color: white;
+            border: 1px solid #555;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+        #scoreboard h2 {
+            margin-top: 0;
+            text-align: center;
+            border-bottom: 1px solid #555;
+            padding-bottom: 10px;
+        }
+        #scoreList {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            text-align: left;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        #scoreList li {
+            padding: 8px 5px;
+            border-bottom: 1px solid #444;
+            display: flex;
+            justify-content: space-between;
+            font-size: 1.1rem;
+        }
+        #scoreList li:last-child {
+            border-bottom: none;
+        }
+        #scoreList li span:first-child {
+            font-weight: bold;
+        }
+        #scoreList li span:last-child {
+            font-weight: bold;
+            color: #a5d6a7; /* Green for score */
+        }
+
+        /* Map Editor UI */
+        #mapEditorUI {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 8px;
+            z-index: 201;
+            display: none; /* Hidden by default */
+            flex-direction: column;
+            gap: 10px;
+        }
+        #mapEditorUI button {
+            background-color: #4a90e2;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        #mapEditorUI button:hover {
+            background-color: #357abd;
+        }
+        #mapEditorUI button.active {
+            background-color: #286090;
+            border: 1px solid #99d9ea;
+        }
+        #mapEditorUI label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 0.9rem;
+        }
+        #mapEditorUI input[type="number"] {
+            width: 60px;
+            padding: 5px;
+            background-color: #333;
+            border: 1px solid #555;
+            border-radius: 4px;
+            color: white;
+            margin-right: 5px;
+        }
+        #editorStatus {
+            color: #a5d6a7;
+            font-weight: bold;
+            text-align: center;
+        }
     </style>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -249,7 +362,7 @@
         Game ID: <span id="lobbyId">N/A</span>
     </div>
     
-    <div id="version-info">Version 6.11-firebase_auth_fix</div>
+    <div id="version-info">Version 6.18-plain_textures</div>
     <div id="minimapContainer">
         <div id="minimapRenderer"></div>
     </div>
@@ -265,14 +378,36 @@
         <div id="healthBar"></div>
         <span id="healthText">100 / 100</span>
     </div>
+    <div id="scoreInfo">Kills: 0</div>
+    <div id="scoreboard">
+        <h2>Scoreboard</h2>
+        <ul id="scoreList">
+            <!-- Scores will be populated by JS --></ul>
+    </div>
+
+    <!-- Map Editor UI --><div id="mapEditorUI">
+        <div id="editorStatus">Map Editor (M)</div>
+        <label>Place:</label>
+        <div>
+            <button id="placeWallBtn" class="active">Wall</button>
+            <button id="placeTreeBtn">Tree</button>
+        </div>
+        <label>Grid Size:</label>
+        <div>
+            <input type="number" id="gridWidthInput" value="15" min="5" max="30"> x 
+            <input type="number" id="gridHeightInput" value="15" min="5" max="30">
+            <button id="resizeGridBtn">Resize</button>
+        </div>
+    </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        // Updated firebase auth imports
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc, getDoc, updateDoc, addDoc, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const LOCAL_STORAGE_MAP_KEY = 'fpsGameMapGrid';
 
         class MultiplayerFPSGame {
             constructor() {
@@ -289,6 +424,12 @@
                 this.updateInterval = 50;
                 this.health = 100;
                 this.animationFrameId = null;
+                
+                this.kills = 0; // Local player's kills
+                this.scores = {}; // All player scores { userId: kills }
+
+                this.isMapEditorActive = false;
+                this.editorMode = 'wall'; // 'wall' or 'tree'
 
                 this.initLobbyUI();
                 this.initFirebase();
@@ -301,33 +442,36 @@
                 document.getElementById('start-local-btn').addEventListener('click', () => this.startGame(null, true));
                 document.getElementById('join-lobby-btn').addEventListener('click', () => this.joinLobby(document.getElementById('join-lobby-input').value.toUpperCase()));
                 document.getElementById('resume-btn').addEventListener('click', () => this.requestPointerLock());
-                // Reloads the window to quit the match
                 document.getElementById('quit-btn').addEventListener('click', () => window.location.reload());
+
+                // Map Editor UI buttons
+                document.getElementById('placeWallBtn').addEventListener('click', () => this.setEditorMode('wall'));
+                document.getElementById('placeTreeBtn').addEventListener('click', () => this.setEditorMode('tree'));
+                document.getElementById('resizeGridBtn').addEventListener('click', () => this.resizeGrid());
             }
 
             async initFirebase() {
-                // Use environment variables provided by the platform
                 try {
                     const firebaseConfig = typeof __firebase_config !== 'undefined'
                         ? JSON.parse(__firebase_config)
-                        : { apiKey: "AIzaSyBX7Qk3hB7vNykKt9WyiDNWrqq0eXxpGMA", authDomain: "lanhtml-d905d.firebaseapp.com", projectId: "lanhtml-d905d", storageBucket: "lanhtml-d905d.appspot.com", messagingSenderId: "427246041879", appId: "1:427246041879:web:b455c681ee7b952edc9552" }; // Fallback for local testing
+                        : { apiKey: "AIzaSyBX7Qk3hB7vNykKt9WyiDNWrqq0eXxpGMA", authDomain: "lanhtml-d905d.firebaseapp.com", projectId: "lanhtml-d905d", storageBucket: "lanhtml-d905d.appspot.com", messagingSenderId: "427246041879", appId: "1:427246041879:web:b455c681ee7b952edc9552" };
                     
-                    this.appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id'; // Use provided app ID or fallback
+                    this.appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id'; 
                     
                     const app = initializeApp(firebaseConfig);
                     this.db = getFirestore(app);
                     this.auth = getAuth(app);
-                    setLogLevel('Debug'); // Enable Firestore debug logging
+                    setLogLevel('Debug'); 
 
                     onAuthStateChanged(this.auth, user => {
                         if (user) {
                             this.userId = user.uid;
-                            document.getElementById('userId').textContent = this.userId; // Show full User ID
+                            document.getElementById('userId').textContent = this.userId; 
                             ['create-lobby-btn', 'join-lobby-btn', 'join-lobby-input', 'start-local-btn'].forEach(id => document.getElementById(id).disabled = false);
                             
                             const errorMessage = document.getElementById('error-message');
                             errorMessage.textContent = 'Ready!';
-                            errorMessage.style.color = '#a5d6a7'; // Green
+                            errorMessage.style.color = '#a5d6a7';
                             
                             setTimeout(() => {
                                 if(errorMessage.textContent === 'Ready!') {
@@ -341,7 +485,6 @@
                         }
                     });
 
-                    // Sign in with custom token if available, otherwise sign in anonymously
                     if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                         await signInWithCustomToken(this.auth, __initial_auth_token);
                     } else {
@@ -396,6 +539,8 @@
                 this.isLocalMode = isLocal;
                 this.currentLobbyId = lobbyId;
                 this.health = 100;
+                this.kills = 0; // Reset kills for new game
+                this.scores = {}; // Reset scores for new game
 
                 document.getElementById('lobby-ui').style.display = 'none';
                 document.getElementById('blocker').style.display = 'none';
@@ -403,10 +548,12 @@
                 document.getElementById('ammoInfo').style.display = 'block';
                 document.getElementById('healthBarContainer').style.display = 'block';
                 document.getElementById('minimapContainer').style.display = 'block';
-                document.getElementById('crosshair').style.display = 'block'; // Show crosshair on start
+                document.getElementById('crosshair').style.display = 'block';
+                document.getElementById('scoreInfo').style.display = 'block'; // Show score counter
 
                 this.initScene();
-                this.initWorld(); // Must be before initCamera
+                this.loadMapFromLocalStorage(); // Load map
+                this.initWorld(); 
                 this.initCamera();
                 this.initWeapons();
                 this.initRenderer();
@@ -418,6 +565,7 @@
                 this.updateCrosshair();
                 this.updateAmmoUI();
                 this.updateHealthUI();
+                this.updateScoreUI(); // Init score UI
 
                 if (!isLocal) {
                     const playersCollectionPath = `/artifacts/${this.appId}/public/data/lobbies/${this.currentLobbyId}/players`;
@@ -429,15 +577,15 @@
                         yaw: this.mouse.x,
                         pitch: this.mouse.y,
                         health: 100,
-                        timestamp: Date.now() // Add timestamp for connection
+                        kills: 0, // Add kills field
+                        timestamp: Date.now() 
                     });
                     this.listenForPlayers(playersCollectionPath);
                     this.listenForGameEvents();
 
-                    // Handle leaving the page
                     window.addEventListener('beforeunload', () => {
                         if (this.playerRef) {
-                            deleteDoc(this.playerRef); // Clean up player doc on exit
+                            deleteDoc(this.playerRef); 
                         }
                     });
                 }
@@ -451,11 +599,18 @@
                 this.scene.background = new THREE.Color(0x87CEEB);
                 this.scene.fog = new THREE.Fog(0x87CEEB, 150, 500);
                 this.raycaster = new THREE.Raycaster();
+                this.textureLoader = new THREE.TextureLoader(); // Initialize texture loader
                 this.bulletDecals = [];
                 this.bulletTrails = [];
                 this.shootableObjects = [];
                 this.collidableObjects = [];
                 this.wallMeshes = [];
+
+                // Editor helper
+                this.editorRaycaster = new THREE.Raycaster();
+                this.editorPlane = new THREE.Mesh(new THREE.PlaneGeometry(1000, 1000), new THREE.MeshBasicMaterial({ visible: false }));
+                this.editorPlane.rotation.x = -Math.PI / 2;
+                this.scene.add(this.editorPlane);
             }
 
             initCamera() {
@@ -468,7 +623,6 @@
                 this.zoomFov = 20;
                 this.isZoomed = false;
 
-                // Local player's model (invisible to self, visible to others via network)
                 this.playerModel = this.createPlayerModel(0x00ff00, true);
                 this.scene.add(this.playerModel);
             }
@@ -507,7 +661,7 @@
                 const flashMaterial = new THREE.MeshBasicMaterial({ color: 0xfff5a1, transparent: true, opacity: 0 });
                 const flashGeometry = new THREE.PlaneGeometry(0.5, 0.5);
                 const muzzleFlash = new THREE.Mesh(flashGeometry, flashMaterial);
-                muzzleFlash.position.set(0, 0, -0.75); // Position at the tip of the gun
+                muzzleFlash.position.set(0, 0, -0.75); 
                 gun.add(muzzleFlash);
                 playerGroup.userData.muzzleFlash = muzzleFlash;
 
@@ -580,7 +734,7 @@
                 muzzlePoint.add(muzzleFlash);
                 parent.add(muzzlePoint);
                 muzzlePoint.position.copy(position);
-                muzzlePoint.flash = muzzleFlash; // Store reference for easy access
+                muzzlePoint.flash = muzzleFlash; 
                 return muzzlePoint;
             }
             
@@ -609,15 +763,15 @@
                 this.minimapRenderer = new THREE.WebGLRenderer({ antialias: true });
                 this.minimapRenderer.setSize(200, 200);
                 minimapContainer.appendChild(this.minimapRenderer.domElement);
+                
                 const mapSize = Math.max(this.mapGrid.length, this.mapGrid[0].length) * this.tileSize * 0.7;
                 this.minimapCamera = new THREE.OrthographicCamera(-mapSize, mapSize, mapSize, -mapSize, 1, 1000);
                 this.minimapCamera.up = new THREE.Vector3(0, 0, -1);
                 this.minimapCamera.lookAt(new THREE.Vector3(0, -1, 0));
                 this.scene.add(this.minimapCamera);
                 
-                // Player indicator for the minimap
                 const playerIndicatorGeometry = new THREE.SphereGeometry(3, 16, 16);
-                const playerIndicatorMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 }); // Red
+                const playerIndicatorMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 }); 
                 this.playerIndicator = new THREE.Mesh(playerIndicatorGeometry, playerIndicatorMaterial);
                 this.scene.add(this.playerIndicator);
             }
@@ -636,34 +790,17 @@
                 this.velocity = new THREE.Vector3();
                 this.direction = new THREE.Vector3();
                 this.isOnGround = false;
-                this.playerHeight = 3.0; // Player eye height
+                this.playerHeight = 3.0; 
                 this.jumpForce = 0.35;
                 this.gravity = -0.015;
                 this.walkSpeed = 0.3;
                 this.runSpeed = 0.6;
-                this.playerRadius = 1.0; // Collision radius
+                this.playerRadius = 1.0; 
             }
             
             initWorld() {
-                // 15x15 map grid
-                this.mapGrid = [
-                    [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
-                    [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2],
-                    [2, 0, 1, 0, 2, 2, 2, 0, 2, 2, 2, 2, 0, 0, 2],
-                    [2, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 2, 0, 0, 2],
-                    [2, 0, 0, 0, 0, 0, 2, 0, 0, 1, 0, 2, 0, 0, 2],
-                    [2, 2, 2, 2, 2, 0, 2, 2, 2, 2, 0, 2, 2, 2, 2],
-                    [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
-                    [2, 0, 2, 2, 2, 2, 0, 1, 0, 2, 2, 2, 2, 0, 2],
-                    [2, 0, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 0, 2],
-                    [2, 2, 2, 2, 0, 2, 2, 2, 2, 2, 0, 2, 2, 0, 2],
-                    [2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
-                    [2, 0, 0, 2, 2, 2, 2, 0, 2, 0, 2, 2, 2, 0, 2],
-                    [2, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 1, 0, 2],
-                    [2, 0, 1, 0, 0, 0, 1, 0, 2, 0, 0, 0, 0, 0, 2],
-                    [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
-                ];
-                this.tileSize = 20; // Size of each grid tile
+                this.tileSize = 20; 
+                this.clearWorld();
                 this.generateWorldFromGrid();
             }
 
@@ -675,45 +812,60 @@
                 document.addEventListener('keydown', (e) => { 
                     this.keys[e.code] = true; 
                     if (e.code === 'KeyR') this.reload();
+                    if (e.code === 'Tab') {
+                        e.preventDefault();
+                        this.toggleScoreboard(true);
+                    }
+                    if (e.code === 'KeyM') {
+                        this.toggleMapEditor();
+                    }
                 });
-                document.addEventListener('keyup', (e) => { this.keys[e.code] = false; });
+                document.addEventListener('keyup', (e) => { 
+                    this.keys[e.code] = false; 
+                    if (e.code === 'Tab') {
+                        e.preventDefault();
+                        this.toggleScoreboard(false);
+                    }
+                });
                 
                 document.addEventListener('mousedown', (e) => {
-                    if (!this.isPointerLocked) {
+                    if (this.isMapEditorActive) {
+                        this.handleEditorClick(e);
+                    } else if (!this.isPointerLocked) {
                         this.requestPointerLock();
                     } else {
-                        if (e.button === 0) this.shoot(); // Left click
-                        else if (e.button === 2) this.toggleZoom(); // Right click
+                        if (e.button === 0) this.shoot(); 
+                        else if (e.button === 2) this.toggleZoom(); 
                     }
                 });
 
-                // Prevent context menu on right click
                 this.renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
                 
                 document.addEventListener('pointerlockchange', () => {
                     this.isPointerLocked = document.pointerLockElement === this.renderer.domElement;
                     document.getElementById('pause-menu').style.display = this.isPointerLocked ? 'none' : 'block';
-                    document.getElementById('lobby-ui').style.display = 'none'; // Always hide lobby
+                    document.getElementById('lobby-ui').style.display = 'none';
                     document.getElementById('blocker').style.display = this.isPointerLocked ? 'none' : 'flex';
-                    // Auto-unzoom when paused
                     if (!this.isPointerLocked && this.isZoomed) this.toggleZoom();
+                    // Hide scoreboard when paused
+                    if (!this.isPointerLocked) this.toggleScoreboard(false);
                 });
                 
                 document.addEventListener('mousemove', (e) => {
-                    if (this.isPointerLocked) {
+                    if (this.isPointerLocked && !this.isMapEditorActive) { // Disable camera rotation in editor mode
                         const sensitivity = 0.002;
                         this.mouse.x -= e.movementX * sensitivity;
                         this.mouse.y -= e.movementY * sensitivity; 
-                        this.mouse.y = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.mouse.y)); // Clamp vertical rotation
+                        this.mouse.y = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.mouse.y));
                     }
                 });
 
                 document.addEventListener('wheel', (e) => {
-                    if (!this.isPointerLocked) return;
-                    if (this.isZoomed) this.toggleZoom(); // Unzoom if switching weapons while zoomed
+                    if (!this.isPointerLocked || this.isMapEditorActive) return;
+                    if (this.isZoomed) this.toggleZoom(); 
                     
                     const currentWeapon = this.weapons[this.currentWeaponIndex];
-                    if (currentWeapon.isReloading) return; // Don't switch while reloading
+                    if (currentWeapon.isReloading) return; 
                     
                     currentWeapon.viewModel.visible = false;
                     const direction = e.deltaY > 0 ? 1 : -1;
@@ -745,7 +897,7 @@
                 const elapsedTime = this.clock.getElapsedTime();
 
                 this.updateCameraRotation();
-                if (this.isPointerLocked) {
+                if (this.isPointerLocked && !this.isMapEditorActive) {
                     this.updatePlayerMovement(delta);
                 }
                 this.updateViewModel(elapsedTime, delta);
@@ -773,10 +925,8 @@
                 if (this.keys['KeyA']) this.direction.x = 1;
                 if (this.keys['KeyD']) this.direction.x = -1;
 
-                // Apply gravity
                 this.velocity.y += this.gravity;
 
-                // Jump
                 if (this.keys['Space'] && this.isOnGround) {
                     this.velocity.y = this.jumpForce;
                     this.isOnGround = false;
@@ -798,28 +948,24 @@
                     this.velocity.x = moveVector.x;
                     this.velocity.z = moveVector.z;
                 } else {
-                    // Apply friction
                     this.velocity.x *= 0.9;
                     this.velocity.z *= 0.9;
                 }
 
-                const deltaPosition = this.velocity.clone().multiplyScalar(delta * 60); // Scale by frame-independent factor
+                const deltaPosition = this.velocity.clone().multiplyScalar(delta * 60); 
                 this.handleCollisions(deltaPosition);
                 this.camera.position.add(deltaPosition);
 
-                // Check for ground collision
                 if (this.camera.position.y < this.playerHeight) {
                     this.camera.position.y = this.playerHeight;
                     this.velocity.y = 0;
                     this.isOnGround = true;
                 }
                 
-                // Sync the invisible model with the camera for multiplayer
                 this.playerModel.position.copy(this.camera.position);
-                this.playerModel.position.y -= this.playerHeight; // Adjust for model height
+                this.playerModel.position.y -= this.playerHeight; 
                 this.playerModel.quaternion.setFromEuler(new THREE.Euler(0, this.camera.rotation.y, 0));
                 this.playerModel.userData.gun.rotation.x = this.camera.rotation.x;
-
             }
 
             updateCameraRotation() {
@@ -832,32 +978,28 @@
                 const weapon = this.weapons[this.currentWeaponIndex];
                 const viewModel = weapon.viewModel;
 
-                // Apply recoil
                 viewModel.position.z = viewModel.basePosition.z + weapon.recoilAmount;
-                weapon.recoilAmount *= 0.8; // Recoil recovery
+                weapon.recoilAmount *= 0.8; 
                 viewModel.position.y = viewModel.basePosition.y;
 
-                // Apply reload animation
                 if (viewModel.reloadFlipAmount > 0) {
-                    const flipSpeed = (Math.PI * 2) / (weapon.reloadTime / 1000 * 0.5); // Half time to flip down, half up
+                    const flipSpeed = (Math.PI * 2) / (weapon.reloadTime / 1000 * 0.5); 
                     const deltaFlip = flipSpeed * delta;
                     viewModel.rotation.x += deltaFlip;
                     viewModel.reloadFlipAmount -= deltaFlip;
                 } else {
-                    viewModel.rotation.x = 0; // Snap back
+                    viewModel.rotation.x = 0; 
                 }
             }
 
             updateEffects() {
                 const now = Date.now();
-                // Update bullet trails
                 this.bulletTrails = this.bulletTrails.filter(trail => {
                     const age = now - trail.createdAt;
                     if (age > 200) { this.scene.remove(trail.line); return false; }
                     trail.line.material.opacity = 1.0 * (1 - age / 200);
                     return true;
                 });
-                // Update bullet decals
                 this.bulletDecals = this.bulletDecals.filter(decal => {
                     const age = now - decal.createdAt;
                     if (age > 5000) { this.scene.remove(decal.mesh); return false; }
@@ -869,7 +1011,7 @@
             updateMinimap() {
                 this.minimapCamera.position.set(this.camera.position.x, 150, this.camera.position.z);
                 this.playerIndicator.position.copy(this.camera.position);
-                this.playerIndicator.position.y = 50; // Raised indicator to be clearly visible
+                this.playerIndicator.position.y = 50; 
                 this.minimapRenderer.render(this.scene, this.minimapCamera);
             }
 
@@ -899,7 +1041,6 @@
             
             async fireBullet(spread) {
                 const weapon = this.weapons[this.currentWeaponIndex];
-                // Apply spread
                 const spreadDirection = new THREE.Vector2((Math.random() - 0.5) * spread, (Math.random() - 0.5) * spread);
                 this.raycaster.setFromCamera(spreadDirection, this.camera);
                 
@@ -918,7 +1059,6 @@
                          this.createBulletDecal(endPoint, hitNormal);
                     }
 
-                    // Check if a player was hit
                     let hitObject = intersection.object;
                     while(hitObject.parent && !hitObject.userData.playerId) {
                         hitObject = hitObject.parent;
@@ -932,6 +1072,16 @@
                                 const targetData = targetDoc.data();
                                 const newHealth = Math.max(0, targetData.health - weapon.damage);
                                 await updateDoc(targetRef, { health: newHealth });
+
+                                // Check for kill
+                                if (newHealth <= 0 && targetData.health > 0) { // Check if this shot was the killing blow
+                                    this.kills++;
+                                    this.updateScoreUI();
+                                    // Update kills in Firestore
+                                    if (this.playerRef) {
+                                        updateDoc(this.playerRef, { kills: this.kills });
+                                    }
+                                }
                             }
                         } catch (error) {
                             console.error("Error applying damage:", error);
@@ -939,14 +1089,12 @@
                     }
 
                 } else {
-                    // No hit, bullet travels max distance
                     endPoint = new THREE.Vector3();
                     this.raycaster.ray.at(1000, endPoint);
                 }
 
                 this.createBulletTrail(endPoint);
 
-                // Send shoot event to other players
                 if(!this.isLocalMode) {
                     const startPoint = new THREE.Vector3();
                     weapon.muzzlePoint.getWorldPosition(startPoint);
@@ -987,7 +1135,7 @@
                 const decal = new THREE.Mesh(decalGeometry, decalMaterial);
                 decal.position.copy(position);
                 decal.lookAt(position.clone().add(normal));
-                decal.position.add(normal.multiplyScalar(0.01)); // Prevent z-fighting
+                decal.position.add(normal.multiplyScalar(0.01)); 
                 this.scene.add(decal);
                 this.bulletDecals.push({ mesh: decal, createdAt: Date.now() });
             }
@@ -997,7 +1145,7 @@
                 if (weapon.isReloading || weapon.currentAmmo === weapon.maxAmmo) return;
                 if (this.isZoomed) this.toggleZoom();
                 weapon.isReloading = true;
-                weapon.viewModel.reloadFlipAmount = Math.PI * 2; // Full rotation
+                weapon.viewModel.reloadFlipAmount = Math.PI * 2; 
                 this.updateAmmoUI();
                 setTimeout(() => {
                     weapon.currentAmmo = weapon.maxAmmo;
@@ -1059,7 +1207,6 @@
                         const data = change.doc.data();
 
                         if (docId === this.userId) {
-                            // Listen for changes to our own health
                             if (data.health !== undefined && data.health < this.health) {
                                 this.health = data.health;
                                 if (this.health <= 0) {
@@ -1067,6 +1214,11 @@
                                 } else {
                                     this.updateHealthUI();
                                 }
+                            }
+                            // Update local kill count from Firestore
+                            if (data.kills !== undefined && data.kills !== this.kills) {
+                                this.kills = data.kills;
+                                this.updateScoreUI();
                             }
                             return;
                         }
@@ -1083,21 +1235,23 @@
                                 targetPitch: 0
                             };
                             this.scene.add(model);
-                            this.shootableObjects.push(model); // Make other players shootable
+                            this.shootableObjects.push(model); 
                         } else if (change.type === "removed" && player) {
                             this.scene.remove(player.mesh);
                             const index = this.shootableObjects.indexOf(player.mesh);
                             if(index > -1) this.shootableObjects.splice(index, 1);
                             delete this.playerMeshes[docId];
+                            delete this.scores[docId]; // Remove from scores
                             return;
                         }
                         
                         player = this.playerMeshes[docId];
                         if (player && data) {
-                            // Set target positions for interpolation
                             player.targetPosition.set(data.x, data.y - this.playerHeight, data.z);
                             if(data.yaw !== undefined) player.targetYaw = data.yaw;
                             if(data.pitch !== undefined) player.targetPitch = data.pitch;
+                            // Update score for scoreboard
+                            this.scores[docId] = data.kills || 0;
                             player.mesh.visible = data.health > 0;
                         }
                     });
@@ -1110,7 +1264,6 @@
                      snapshot.docChanges().forEach((change) => {
                          if (change.type === "added") {
                              const event = change.doc.data();
-                             // Ensure we don't replay our own events
                              if (event.shooterId !== this.userId && event.type === 'SHOOT') {
                                  const startPoint = new THREE.Vector3(event.startPoint.x, event.startPoint.y, event.startPoint.z);
                                  const endPoint = new THREE.Vector3(event.endPoint.x, event.endPoint.y, event.endPoint.z);
@@ -1119,7 +1272,6 @@
                                      const hitNormal = new THREE.Vector3(event.hitNormal.x, event.hitNormal.y, event.hitNormal.z);
                                      this.createBulletDecal(endPoint, hitNormal);
                                  }
-                                  // Muzzle flash for remote players
                                  const shooter = this.playerMeshes[event.shooterId];
                                  if(shooter && shooter.mesh.userData.muzzleFlash){
                                      shooter.mesh.userData.muzzleFlash.material.opacity = 1;
@@ -1132,16 +1284,14 @@
             }
 
             updateRemotePlayers(delta) {
-                const factor = delta * 15; // Interpolation factor
+                const factor = delta * 15; 
                 for (const id in this.playerMeshes) {
                     const player = this.playerMeshes[id];
                     player.mesh.position.lerp(player.targetPosition, factor);
                     
-                    // Slerp for smoother rotation
                     const targetQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), player.targetYaw);
                     player.mesh.quaternion.slerp(targetQuat, factor);
                     
-                    // Lerp pitch for the gun
                     player.mesh.userData.gun.rotation.x += (player.targetPitch - player.mesh.userData.gun.rotation.x) * factor;
                 }
             }
@@ -1151,20 +1301,66 @@
             handleCollisions(deltaPosition) {
                 const playerSphere = new THREE.Sphere(this.camera.position, this.playerRadius);
                 for (const obj of this.collidableObjects) {
-                    // Check against the *next* position
                     const nextPlayerSphere = new THREE.Sphere(playerSphere.center.clone().add(deltaPosition), playerSphere.radius);
                     
                     if (obj.type === 'box' && nextPlayerSphere.intersectsBox(obj.bounds)) {
                         const closestPoint = new THREE.Vector3().copy(nextPlayerSphere.center).clamp(obj.bounds.min, obj.bounds.max);
                         const penetrationVector = new THREE.Vector3().subVectors(nextPlayerSphere.center, closestPoint).normalize();
                         const dot = deltaPosition.dot(penetrationVector);
-                        if (dot < 0) deltaPosition.sub(penetrationVector.multiplyScalar(dot)); // Slide along the wall
+                        if (dot < 0) deltaPosition.sub(penetrationVector.multiplyScalar(dot)); 
                     } else if (obj.type === 'sphere' && nextPlayerSphere.intersectsSphere(obj.bounds)) {
                         const penetrationVector = new THREE.Vector3().subVectors(nextPlayerSphere.center, obj.bounds.center).normalize();
                         const dot = deltaPosition.dot(penetrationVector);
                         if (dot < 0) deltaPosition.sub(penetrationVector.multiplyScalar(dot));
                     }
                 }
+            }
+
+            loadMapFromLocalStorage() {
+                const savedMap = localStorage.getItem(LOCAL_STORAGE_MAP_KEY);
+                if (savedMap) {
+                    this.mapGrid = JSON.parse(savedMap);
+                    // Update grid size inputs
+                    document.getElementById('gridWidthInput').value = this.mapGrid[0].length;
+                    document.getElementById('gridHeightInput').value = this.mapGrid.length;
+                } else {
+                    this.mapGrid = [
+                        [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+                        [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2],
+                        [2, 0, 1, 0, 2, 2, 2, 0, 2, 2, 2, 2, 0, 0, 2],
+                        [2, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 2, 0, 0, 2],
+                        [2, 0, 0, 0, 0, 0, 2, 0, 0, 1, 0, 2, 0, 0, 2],
+                        [2, 2, 2, 2, 2, 0, 2, 2, 2, 2, 0, 2, 2, 2, 2],
+                        [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
+                        [2, 0, 2, 2, 2, 2, 0, 1, 0, 2, 2, 2, 2, 0, 2],
+                        [2, 0, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 0, 2],
+                        [2, 2, 2, 2, 0, 2, 2, 2, 2, 2, 0, 2, 2, 0, 2],
+                        [2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
+                        [2, 0, 0, 2, 2, 2, 2, 0, 2, 0, 2, 2, 2, 0, 2],
+                        [2, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 1, 0, 2],
+                        [2, 0, 1, 0, 0, 0, 1, 0, 2, 0, 0, 0, 0, 0, 2],
+                        [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+                    ];
+                }
+            }
+
+            saveMapToLocalStorage() {
+                localStorage.setItem(LOCAL_STORAGE_MAP_KEY, JSON.stringify(this.mapGrid));
+            }
+
+            clearWorld() {
+                this.collidableObjects.forEach(obj => this.scene.remove(obj.mesh));
+                this.shootableObjects.forEach(obj => {
+                    if (obj.isMesh && obj !== this.groundMesh) { // Don't remove ground yet
+                        this.scene.remove(obj);
+                    }
+                });
+                if (this.groundMesh) {
+                    this.scene.remove(this.groundMesh);
+                }
+                this.collidableObjects = [];
+                this.shootableObjects = [];
+                this.wallMeshes = []; // Clear wall meshes
             }
 
             generateWorldFromGrid() { 
@@ -1174,41 +1370,50 @@
                 const offsetX = -gridWidth / 2;
                 const offsetZ = -gridDepth / 2;
 
-                const groundGeometry = new THREE.PlaneGeometry(gridWidth, gridDepth);
+                // Create Materials (Plain colors)
                 const groundMaterial = new THREE.MeshLambertMaterial({ color: 0x66aa66 });
-                const ground = new THREE.Mesh(groundGeometry, groundMaterial);
-                ground.rotation.x = -Math.PI / 2;
-                ground.receiveShadow = true;
-                this.scene.add(ground);
-                this.shootableObjects.push(ground);
+                const wallMaterial = new THREE.MeshLambertMaterial({ color: new THREE.Color(0.5, 0.5, 0.5) });
+                const trunkMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
+                const leavesMaterial = new THREE.MeshLambertMaterial({ color: 0x228B22 });
+
+                this.groundMesh = new THREE.Mesh(new THREE.PlaneGeometry(gridWidth, gridDepth), groundMaterial);
+                this.groundMesh.rotation.x = -Math.PI / 2;
+                this.groundMesh.receiveShadow = true;
+                this.scene.add(this.groundMesh);
+                this.shootableObjects.push(this.groundMesh);
 
                 this.mapGrid.forEach((row, z) => {
                     row.forEach((tileType, x) => {
                         const worldX = offsetX + x * this.tileSize + this.tileSize / 2;
                         const worldZ = offsetZ + z * this.tileSize + this.tileSize / 2;
 
+                        let mesh;
                         switch (tileType) {
                             case 1: // Tree
-                                const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.8, 8), new THREE.MeshLambertMaterial({ color: 0x8B4513 }));
+                                const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.8, 8), trunkMaterial);
                                 trunk.position.set(worldX, 4, worldZ);
                                 trunk.castShadow = true;
                                 this.scene.add(trunk);
-                                const leaves = new THREE.Mesh(new THREE.SphereGeometry(4, 8, 8), new THREE.MeshLambertMaterial({ color: 0x228B22 }));
+                                const leaves = new THREE.Mesh(new THREE.SphereGeometry(4, 8, 8), leavesMaterial);
                                 leaves.position.set(worldX, 8 + 2, worldZ);
                                 leaves.castShadow = true;
                                 this.scene.add(leaves);
-                                this.collidableObjects.push({ mesh: trunk, type: 'sphere', bounds: new THREE.Sphere(trunk.position, 1.5) });
+                                this.collidableObjects.push({ mesh: trunk, type: 'sphere', bounds: new THREE.Sphere(trunk.position, 1.5), gridX: x, gridZ: z });
                                 this.shootableObjects.push(trunk, leaves);
+                                trunk.userData.isMapObject = true;
+                                leaves.userData.isMapObject = true;
                                 break;
                             case 2: // Wall
-                                const wall = new THREE.Mesh(new THREE.BoxGeometry(this.tileSize, wallHeight, this.tileSize), new THREE.MeshLambertMaterial({ color: new THREE.Color(0.5, 0.5, 0.5) }));
-                                wall.position.set(worldX, wallHeight / 2, worldZ);
-                                wall.castShadow = true;
-                                wall.receiveShadow = true;
-                                this.scene.add(wall);
-                                const box = new THREE.Box3().setFromObject(wall);
-                                this.collidableObjects.push({ mesh: wall, type: 'box', bounds: box });
-                                this.shootableObjects.push(wall);
+                                mesh = new THREE.Mesh(new THREE.BoxGeometry(this.tileSize, wallHeight, this.tileSize), wallMaterial);
+                                mesh.position.set(worldX, wallHeight / 2, worldZ);
+                                mesh.castShadow = true;
+                                mesh.receiveShadow = true;
+                                this.scene.add(mesh);
+                                const box = new THREE.Box3().setFromObject(mesh);
+                                this.collidableObjects.push({ mesh: mesh, type: 'box', bounds: box, gridX: x, gridZ: z });
+                                this.shootableObjects.push(mesh);
+                                this.wallMeshes.push(mesh);
+                                mesh.userData.isMapObject = true;
                                 break;
                         }
                     });
@@ -1223,7 +1428,7 @@
                 let openSpots = [];
                 for (let z = 0; z < this.mapGrid.length; z++) {
                     for (let x = 0; x < this.mapGrid[z].length; x++) {
-                        if (this.mapGrid[z][x] === 0) { // 0 is an open spot
+                        if (this.mapGrid[z][x] === 0) { 
                             openSpots.push({
                                 x: offsetX + x * this.tileSize + this.tileSize / 2,
                                 z: offsetZ + z * this.tileSize + this.tileSize / 2
@@ -1231,24 +1436,37 @@
                         }
                     }
                 }
-                // Return a random open spot
                 if (openSpots.length > 0) {
                     return openSpots[Math.floor(Math.random() * openSpots.length)];
                 }
-                return { x: 0, z: 0 }; // Fallback
+                return { x: 0, z: 0 }; 
             }
 
             updateCrosshair() {
                 const weapon = this.weapons[this.currentWeaponIndex];
                 const crosshair = document.getElementById('crosshair');
-                crosshair.className = ''; // Clear existing classes
-                switch(weapon.name) {
-                    case 'Shotgun': crosshair.classList.add('shotgun-crosshair'); break;
-                    default: crosshair.classList.add('default-crosshair'); break;
+                crosshair.className = ''; 
+                if (this.isMapEditorActive) {
+                    crosshair.style.display = 'block';
+                    crosshair.classList.add('default-crosshair'); // Generic crosshair for editor
+                } else if (this.isZoomed) {
+                    crosshair.style.display = 'none';
+                }
+                else {
+                    crosshair.style.display = 'block';
+                    switch(weapon.name) {
+                        case 'Shotgun': crosshair.classList.add('shotgun-crosshair'); break;
+                        default: crosshair.classList.add('default-crosshair'); break;
+                    }
                 }
             }
 
             updateAmmoUI() {
+                if (this.isMapEditorActive) {
+                    document.getElementById('ammoInfo').style.display = 'none';
+                    return;
+                }
+                document.getElementById('ammoInfo').style.display = 'block';
                 const weapon = this.weapons[this.currentWeaponIndex];
                 const ammoElem = document.getElementById('ammoInfo');
                 if (weapon.isReloading) {
@@ -1259,6 +1477,11 @@
             }
 
             updateHealthUI() {
+                if (this.isMapEditorActive) {
+                    document.getElementById('healthBarContainer').style.display = 'none';
+                    return;
+                }
+                document.getElementById('healthBarContainer').style.display = 'block';
                 const healthBar = document.getElementById('healthBar');
                 const healthText = document.getElementById('healthText');
                 const healthPercentage = (this.health / 100) * 100;
@@ -1266,12 +1489,172 @@
                 healthText.textContent = `${this.health} / 100`;
 
                 if (healthPercentage > 50) {
-                    healthBar.style.backgroundColor = '#4caf50'; // Green
+                    healthBar.style.backgroundColor = '#4caf50'; 
                 } else if (healthPercentage > 25) {
-                    healthBar.style.backgroundColor = '#ffc107'; // Yellow
+                    healthBar.style.backgroundColor = '#ffc107'; 
                 } else {
-                    healthBar.style.backgroundColor = '#f44336'; // Red
+                    healthBar.style.backgroundColor = '#f44336'; 
                 }
+            }
+
+            // --- New Score Methods ---
+            
+            updateScoreUI() {
+                if (this.isMapEditorActive) {
+                    document.getElementById('scoreInfo').style.display = 'none';
+                    return;
+                }
+                document.getElementById('scoreInfo').style.display = 'block';
+                document.getElementById('scoreInfo').textContent = `Kills: ${this.kills}`;
+            }
+
+            toggleScoreboard(show) {
+                // Don't show scoreboard if pause menu or editor is active
+                if (document.getElementById('pause-menu').style.display === 'block' || this.isMapEditorActive) {
+                    document.getElementById('scoreboard').style.display = 'none';
+                    return;
+                }
+                document.getElementById('scoreboard').style.display = show ? 'block' : 'none';
+                if (show) {
+                    this.updateScoreboard();
+                }
+            }
+
+            updateScoreboard() {
+                const scoreList = document.getElementById('scoreList');
+                scoreList.innerHTML = ''; // Clear list
+
+                // Add self to scores map for sorting
+                this.scores[this.userId] = this.kills;
+
+                // Sort by kills (descending)
+                const sortedScores = Object.entries(this.scores).sort(([, a], [, b]) => b - a);
+                
+                for (const [userId, kills] of sortedScores) {
+                    const li = document.createElement('li');
+                    const name = (userId === this.userId ? 'You' : userId.substring(0, 8) + '...');
+                    li.innerHTML = `<span>${name}</span> <span>${kills}</span>`;
+                    scoreList.appendChild(li);
+                }
+            }
+
+            // --- Map Editor Logic ---
+            toggleMapEditor() {
+                this.isMapEditorActive = !this.isMapEditorActive;
+                document.getElementById('mapEditorUI').style.display = this.isMapEditorActive ? 'flex' : 'none';
+
+                if (this.isMapEditorActive) {
+                    document.exitPointerLock(); 
+                    document.getElementById('crosshair').style.display = 'block';
+                    this.weapons.forEach(w => w.viewModel.visible = false);
+                    document.getElementById('ammoInfo').style.display = 'none';
+                    document.getElementById('healthBarContainer').style.display = 'none';
+                    document.getElementById('scoreInfo').style.display = 'none';
+                    document.getElementById('scoreboard').style.display = 'none';
+                    this.updateCrosshair();
+                } else {
+                    this.requestPointerLock();
+                    this.weapons[this.currentWeaponIndex].viewModel.visible = true;
+                    this.updateAmmoUI();
+                    this.updateHealthUI();
+                    this.updateScoreUI();
+                    this.updateCrosshair();
+                }
+            }
+
+            setEditorMode(mode) {
+                this.editorMode = mode;
+                document.getElementById('placeWallBtn').classList.remove('active');
+                document.getElementById('placeTreeBtn').classList.remove('active');
+                document.getElementById(`place${mode.charAt(0).toUpperCase() + mode.slice(1)}Btn`).classList.add('active');
+            }
+
+            resizeGrid() {
+                const newWidth = parseInt(document.getElementById('gridWidthInput').value);
+                const newHeight = parseInt(document.getElementById('gridHeightInput').value);
+
+                if (isNaN(newWidth) || isNaN(newHeight) || newWidth < 5 || newHeight < 5 || newWidth > 30 || newHeight > 30) {
+                    alert("Grid dimensions must be numbers between 5 and 30.");
+                    return;
+                }
+
+                const oldGridWidth = this.mapGrid[0].length;
+                const oldGridHeight = this.mapGrid.length;
+
+                let newGrid = Array(newHeight).fill(null).map(() => Array(newWidth).fill(0));
+
+                for (let z = 0; z < newHeight; z++) {
+                    for (let x = 0; x < newWidth; x++) {
+                        if (z < oldGridHeight && x < oldGridWidth) {
+                            newGrid[z][x] = this.mapGrid[z][x];
+                        } else {
+                            // Pad new areas with walls
+                            if (z === 0 || z === newHeight - 1 || x === 0 || x === newWidth - 1) {
+                                newGrid[z][x] = 2; // Outer border is always wall
+                            } else {
+                                newGrid[z][x] = 0; // Inner new cells are empty
+                            }
+                        }
+                    }
+                }
+                this.mapGrid = newGrid;
+                this.clearWorld();
+                this.generateWorldFromGrid();
+                this.saveMapToLocalStorage();
+                document.getElementById('editorStatus').textContent = 'Map Resized & Saved!';
+                setTimeout(() => document.getElementById('editorStatus').textContent = 'Map Editor (M)', 1500);
+            }
+
+            handleEditorClick(event) {
+                const mouse = new THREE.Vector2();
+                mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+                mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+                this.editorRaycaster.setFromCamera(mouse, this.camera);
+
+                const intersects = this.editorRaycaster.intersectObject(this.editorPlane);
+
+                if (intersects.length > 0) {
+                    const intersectionPoint = intersects[0].point;
+                    const gridWidth = this.mapGrid[0].length * this.tileSize;
+                    const gridDepth = this.mapGrid.length * this.tileSize;
+                    const offsetX = -gridWidth / 2;
+                    const offsetZ = -gridDepth / 2;
+
+                    const gridX = Math.floor((intersectionPoint.x - offsetX) / this.tileSize);
+                    const gridZ = Math.floor((intersectionPoint.z - offsetZ) / this.tileSize);
+
+                    if (gridX >= 0 && gridX < this.mapGrid[0].length && gridZ >= 0 && gridZ < this.mapGrid.length) {
+                        // Prevent editing outer border
+                        if (gridX === 0 || gridX === this.mapGrid[0].length - 1 || gridZ === 0 || gridZ === this.mapGrid.length - 1) {
+                            document.getElementById('editorStatus').textContent = 'Cannot edit border!';
+                            setTimeout(() => document.getElementById('editorStatus').textContent = 'Map Editor (M)', 1500);
+                            return;
+                        }
+
+                        if (event.button === 0) { // Left click (place)
+                            const typeToPlace = this.editorMode === 'wall' ? 2 : 1; // 2 for wall, 1 for tree
+                            if (this.mapGrid[gridZ][gridX] !== typeToPlace) {
+                                this.mapGrid[gridZ][gridX] = typeToPlace;
+                                this.rebuildMap();
+                                this.saveMapToLocalStorage();
+                            }
+                        } else if (event.button === 2) { // Right click (remove)
+                            if (this.mapGrid[gridZ][gridX] !== 0) {
+                                this.mapGrid[gridZ][gridX] = 0; // Empty
+                                this.rebuildMap();
+                                this.saveMapToLocalStorage();
+                            }
+                        }
+                    }
+                }
+            }
+
+            rebuildMap() {
+                this.clearWorld();
+                this.generateWorldFromGrid();
+                document.getElementById('editorStatus').textContent = 'Map Updated & Saved!';
+                setTimeout(() => document.getElementById('editorStatus').textContent = 'Map Editor (M)', 1500);
             }
         }
 
@@ -1279,3 +1662,4 @@
     </script>
 </body>
 </html>
+
