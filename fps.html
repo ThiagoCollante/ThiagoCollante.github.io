@@ -364,7 +364,7 @@
         Game ID: <span id="lobbyId">N/A</span>
     </div>
     
-    <div id="version-info">Version 7.0-ably_refactor</div>
+    <div id="version-info">Version 7.1-guest_fix</div>
     <div id="minimapContainer">
         <div id="minimapRenderer"></div>
     </div>
@@ -583,7 +583,7 @@
             initAblyChannel(lobbyId) {
                 this.channel = this.ably.channels.get(lobbyId);
 
-                // Start listening for player presence (joins/leaves)
+                // Start listening for player presence (joins/leaves/updates)
                 this.listenForPlayers();
                 
                 // Start listening for game events (moves, shots, hits)
@@ -594,6 +594,36 @@
                     kills: 0,
                     health: 100
                 });
+
+                // **FIXED**: Get players already in the channel when we join
+                this.channel.presence.get((err, members) => {
+                    if (err) {
+                        console.error("Error getting presence members:", err);
+                        return;
+                    }
+                    console.log("Existing members:", members);
+                    members.forEach(member => {
+                        if (member.clientId !== this.userId) {
+                            // Add mesh for players already present
+                            this.addPlayerMesh(member.clientId, member.data.kills); 
+                            
+                            // Initialize position slightly differently for existing members
+                            // Attempt to get their last known position (might need a separate message later)
+                            const player = this.playerMeshes[member.clientId];
+                            if (player) {
+                                // Default to spawn, but ideally we'd get last position
+                                // This is a limitation: we don't know their *current* spot
+                                // But this will make them appear. They will snap to their
+                                // correct spot on the next 'player-move' message.
+                                const spawnPos = this.getStartPosition(); 
+                                player.targetPosition.set(spawnPos.x, this.playerHeight, spawnPos.z);
+                                player.mesh.position.set(spawnPos.x, spawnPos.y - this.playerHeight, spawnPos.z);
+                                player.mesh.visible = member.data.health > 0;
+                            }
+                        }
+                    });
+                });
+
 
                 // Clean up when window is closed
                 window.addEventListener('beforeunload', () => {
