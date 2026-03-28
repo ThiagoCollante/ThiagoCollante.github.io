@@ -101,6 +101,11 @@
                     <input type="number" id="gridSizeInput" value="1" min="0.1" step="0.1" class="w-full bg-gray-900 text-gray-200 text-sm p-1.5 rounded border border-gray-600 outline-none focus:border-blue-500">
                 </div>
 
+                <div class="flex flex-col px-1 mt-2">
+                    <label for="rotSnapInput" class="text-[10px] text-gray-400 mb-1">Rotation Snap (°)</label>
+                    <input type="number" id="rotSnapInput" value="45" min="1" step="1" class="w-full bg-gray-900 text-gray-200 text-sm p-1.5 rounded border border-gray-600 outline-none focus:border-blue-500">
+                </div>
+
                 <hr class="border-gray-700 my-1"/>
                 
                 <button class="tool-btn action-btn px-3 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded text-sm border border-gray-600 flex items-center gap-2" data-action="paint">
@@ -170,6 +175,7 @@
         let isDraggingTransform = false;
         let snapEnabled = false;
         let gridSize = 1;
+        let rotSnapValue = 45;
         
         // Track Control key for center scaling
         let isCtrlDown = false;
@@ -559,6 +565,14 @@
                 updateSnapSettings();
             });
 
+            const rotSnapInput = document.getElementById('rotSnapInput');
+            rotSnapInput.addEventListener('change', (e) => {
+                let val = parseFloat(e.target.value);
+                if (isNaN(val) || val <= 0) val = 1;
+                rotSnapValue = val;
+                updateSnapSettings();
+            });
+
             document.getElementById('btn-export').addEventListener('click', exportGLTF);
             document.getElementById('btn-clear').addEventListener('click', () => {
                 if(confirm("Are you sure you want to clear the scene?")) clearScene();
@@ -639,7 +653,7 @@
         function updateSnapSettings() {
             if (snapEnabled) {
                 transformControls.setTranslationSnap(gridSize); // matches the grid cell size
-                transformControls.setRotationSnap(THREE.MathUtils.degToRad(45)); // 45 degrees
+                transformControls.setRotationSnap(THREE.MathUtils.degToRad(rotSnapValue)); // Custom degrees
                 transformControls.setScaleSnap(gridSize * 0.5); // half grid cell size
             } else {
                 transformControls.setTranslationSnap(null);
