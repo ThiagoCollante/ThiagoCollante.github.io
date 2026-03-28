@@ -1,0 +1,1376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Modeler & Painter</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #1a1a20; font-family: sans-serif; }
+        #canvas-container { width: 100vw; height: 100vh; display: block; }
+        
+        /* Custom scrollbar for tools */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        .tool-btn {
+            transition: all 0.2s;
+        }
+        .tool-btn.active {
+            background-color: #3b82f6; /* Blue-500 */
+            color: white;
+            border-color: #60a5fa;
+        }
+    </style>
+    <!-- Import Maps for Three.js -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body>
+
+    <div id="canvas-container"></div>
+
+    <!-- UI Overlay -->
+    <div class="absolute inset-0 pointer-events-none flex flex-col justify-between">
+        
+        <!-- ViewHelper Div (Axis Graph) moved here to top-left -->
+        <div id="viewHelper" class="absolute top-4 left-4 w-[128px] h-[128px] cursor-pointer pointer-events-auto z-50"></div>
+
+        <!-- Top Bar -->
+        <div class="w-full p-4 flex justify-end items-center bg-gradient-to-b from-black/60 to-transparent">
+            <div class="pointer-events-auto flex gap-3">
+                <button id="btn-undo" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-md text-sm font-semibold backdrop-blur transition-colors border border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed" disabled>Undo</button>
+                <button id="btn-redo" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-md text-sm font-semibold backdrop-blur transition-colors border border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed" disabled>Redo</button>
+                <button id="btn-toggle-menus" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-md text-sm font-semibold backdrop-blur transition-colors border border-gray-600">Toggle Tools</button>
+                <button id="btn-preview" class="px-4 py-2 bg-purple-600/80 hover:bg-purple-500 text-white rounded-md text-sm font-semibold backdrop-blur transition-colors shadow-lg shadow-purple-900/50">FPS Preview</button>
+                <button id="btn-import" class="px-4 py-2 bg-blue-600/80 hover:bg-blue-500 text-white rounded-md text-sm font-semibold backdrop-blur transition-colors">Import Model</button>
+                <input type="file" id="file-input" accept=".glb,.gltf" class="hidden">
+                <button id="btn-clear" class="px-4 py-2 bg-red-600/80 hover:bg-red-500 text-white rounded-md text-sm font-semibold backdrop-blur transition-colors">Clear Scene</button>
+                <button id="btn-export" class="px-4 py-2 bg-emerald-600/80 hover:bg-emerald-500 text-white rounded-md text-sm font-semibold backdrop-blur transition-colors shadow-lg shadow-emerald-900/50">Export .GLB</button>
+            </div>
+        </div>
+
+        <div class="flex-1 flex items-center justify-between px-4">
+            
+            <!-- Left Toolbar: Shapes -->
+            <div id="left-toolbar" class="pointer-events-auto flex flex-col gap-2 bg-gray-900/80 p-3 rounded-xl backdrop-blur border border-gray-700 shadow-xl max-h-[80vh] overflow-y-auto no-scrollbar mt-24 transition-opacity">
+                <div class="text-xs text-gray-400 mb-1 text-center font-bold uppercase tracking-wider">Shapes</div>
+                <button class="tool-btn shape-btn px-3 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded text-sm border border-gray-600" data-shape="cube">Cube</button>
+                <button class="tool-btn shape-btn px-3 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded text-sm border border-gray-600" data-shape="sphere">Sphere</button>
+                <button class="tool-btn shape-btn px-3 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded text-sm border border-gray-600" data-shape="cylinder">Cylinder</button>
+                <button class="tool-btn shape-btn px-3 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded text-sm border border-gray-600" data-shape="wedge">Wedge</button>
+                <button class="tool-btn shape-btn px-3 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded text-sm border border-gray-600" data-shape="slope">Curved Slope</button>
+                <button class="tool-btn shape-btn px-3 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded text-sm border border-gray-600" data-shape="ring">Ring</button>
+            </div>
+
+            <!-- Right Toolbar: Tools & Paint -->
+            <div id="right-toolbar" class="pointer-events-auto flex flex-col gap-2 bg-gray-900/80 p-3 rounded-xl backdrop-blur border border-gray-700 shadow-xl transition-opacity">
+                <div class="text-xs text-gray-400 mb-1 text-center font-bold uppercase tracking-wider">Tools</div>
+                
+                <button class="tool-btn action-btn px-3 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded text-sm border border-gray-600 flex items-center gap-2" data-action="select">
+                    <span>Box Select</span>
+                </button>
+
+                <hr class="border-gray-700 my-1"/>
+                
+                <button class="tool-btn action-btn active px-3 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded text-sm border border-gray-600 flex items-center gap-2" data-action="move">
+                    <span>Move</span>
+                </button>
+                <button class="tool-btn action-btn px-3 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded text-sm border border-gray-600 flex items-center gap-2" data-action="rotate">
+                    <span>Rotate</span>
+                </button>
+                <button class="tool-btn action-btn px-3 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded text-sm border border-gray-600 flex items-center gap-2" data-action="scale">
+                    <span>Scale</span>
+                </button>
+                
+                <hr class="border-gray-700 my-1"/>
+
+                <button id="btn-snap" class="tool-btn px-3 py-2 bg-gray-800 hover:bg-gray-700 text-gray-400 rounded text-sm border border-gray-600 flex items-center justify-between transition-colors">
+                    <span>Snap to Grid</span>
+                    <span class="text-xs font-bold bg-gray-700 px-1.5 py-0.5 rounded text-gray-400 indicator">OFF</span>
+                </button>
+                
+                <div class="flex flex-col px-1 mt-1">
+                    <label for="gridSizeInput" class="text-[10px] text-gray-400 mb-1">Cell Size</label>
+                    <input type="number" id="gridSizeInput" value="1" min="0.1" step="0.1" class="w-full bg-gray-900 text-gray-200 text-sm p-1.5 rounded border border-gray-600 outline-none focus:border-blue-500">
+                </div>
+
+                <hr class="border-gray-700 my-1"/>
+                
+                <button class="tool-btn action-btn px-3 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded text-sm border border-gray-600 flex items-center gap-2" data-action="paint">
+                    <span>Paint</span>
+                </button>
+                
+                <div class="flex flex-col items-center mt-1">
+                    <label for="colorPicker" class="text-[10px] text-gray-400 mb-1">Color</label>
+                    <input type="color" id="colorPicker" value="#3b82f6" class="w-10 h-10 p-0 border-0 rounded cursor-pointer bg-transparent"/>
+                </div>
+
+                <div class="flex flex-col items-center mt-2 px-1">
+                    <label for="opacitySlider" class="text-[10px] text-gray-400 mb-1">Opacity</label>
+                    <input type="range" id="opacitySlider" min="0.1" max="1" step="0.05" value="1" class="w-full accent-blue-500 cursor-pointer bg-gray-700 h-1 rounded-lg appearance-none">
+                </div>
+
+                <hr class="border-gray-700 my-1"/>
+
+                <button class="tool-btn action-btn px-3 py-2 bg-gray-800 hover:bg-red-900/80 text-red-300 rounded text-sm border border-gray-600 flex items-center gap-2" data-action="delete">
+                    <span>Delete</span>
+                </button>
+            </div>
+            
+        </div>
+        
+        <!-- Bottom Bar (Instructions) -->
+        <div class="w-full p-4 text-center pointer-events-none">
+            <span id="instruction-text" class="px-4 py-2 bg-black/50 text-gray-300 rounded-full text-sm backdrop-blur inline-block">
+                Select a tool and interact with objects.
+            </span>
+        </div>
+
+        <!-- FPS Preview UI -->
+        <div id="preview-ui" class="absolute inset-0 pointer-events-none hidden flex justify-center items-center z-50">
+            <div class="w-1 h-1 bg-green-400 rounded-full shadow-[0_0_2px_black]"></div>
+            <div class="absolute top-4 left-1/2 -translate-x-1/2 bg-black/70 text-white px-4 py-2 rounded-full font-bold shadow-lg">Press ESC to exit FPS Preview</div>
+            <div class="absolute bottom-4 right-4 bg-black/70 text-white px-4 py-2 rounded-lg font-bold shadow-lg flex flex-col items-end gap-1">
+                <span>WASD to Move</span>
+                <span class="text-gray-300 text-sm">Right Click to ADS</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Application Logic -->
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { TransformControls } from 'three/addons/controls/TransformControls.js';
+        import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
+        import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { ViewHelper } from 'three/addons/helpers/ViewHelper.js';
+        import { SelectionBox } from 'three/addons/interactive/SelectionBox.js';
+
+        // --- Core Variables ---
+        let scene, camera, renderer, orbitControls, transformControls;
+        let objectsGroup; // Contains all unselected geometries
+        let selectionGroup; // Temporarily holds selected objects for multi-transform
+        let selectedObjects = []; // Array keeping track of selected items
+        let selectionHelpers = []; // Array to store BoxHelpers for highlighting
+        let raycaster, mouse, gridHelper;
+        
+        let viewHelper;
+        const clock = new THREE.Clock();
+
+        let currentAction = 'move'; // move, rotate, scale, paint, delete
+        let isDraggingTransform = false;
+        let snapEnabled = false;
+        let gridSize = 1;
+        
+        // Track Control key for center scaling
+        let isCtrlDown = false;
+        let isAltDown = false; // Track Alt key for uniform scaling
+        let dragStartScale = new THREE.Vector3();
+        let dragStartPosition = new THREE.Vector3();
+        let scaleAxis = null;
+
+        // History variables
+        let commandHistory = [];
+        let historyIndex = -1;
+        const MAX_HISTORY = 50;
+        let transformStartStates = [];
+
+        // FPS Preview variables
+        let fpControls;
+        let isPreviewMode = false;
+        let originalTransform = { pos: new THREE.Vector3(), rot: new THREE.Euler(), scale: new THREE.Vector3(), parent: null };
+        let baseGunPos = new THREE.Vector3();
+        let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
+        let fpVelocity = new THREE.Vector3();
+        let fpDirection = new THREE.Vector3();
+        let lastTime = performance.now();
+
+        // ADS variables
+        let isAiming = false;
+        const hipPos = new THREE.Vector3(0.2, -0.05, -0.35);
+        const adsPos = new THREE.Vector3(0, -0.08, -0.25);
+        let currentGunBasePos = new THREE.Vector3();
+        let gunOffset = new THREE.Vector3();
+
+        // Box Selection variables
+        let selectionBox;
+        let isMarqueeSelecting = false;
+        let startClientX = 0, startClientY = 0;
+        const marqueeDiv = document.createElement('div');
+        marqueeDiv.className = 'hidden absolute border border-blue-400 bg-blue-500/20 pointer-events-none z-[100]';
+        document.body.appendChild(marqueeDiv);
+
+        // --- Initialization ---
+        init();
+        animate();
+
+        function init() {
+            const container = document.getElementById('canvas-container');
+
+            // Scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x1a1a20);
+            scene.fog = new THREE.Fog(0x1a1a20, 10, 50);
+
+            // Camera
+            camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
+            camera.position.set(5, 5, 5);
+            camera.lookAt(0, 0, 0);
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            
+            // Required for ViewHelper to render over the main scene safely
+            renderer.autoClear = false;
+            renderer.setClearColor(0x1a1a20);
+            container.appendChild(renderer.domElement);
+
+            // Lights
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+            dirLight.position.set(5, 10, 7);
+            dirLight.castShadow = true;
+            dirLight.shadow.mapSize.width = 2048;
+            dirLight.shadow.mapSize.height = 2048;
+            scene.add(dirLight);
+
+            // Grid Helpers
+            gridHelper = new THREE.GridHelper(40 * gridSize, 40, 0x444444, 0x222222);
+            scene.add(gridHelper);
+
+            // Groupings
+            objectsGroup = new THREE.Group();
+            scene.add(objectsGroup);
+            
+            selectionGroup = new THREE.Group();
+            scene.add(selectionGroup);
+
+            // Controls
+            orbitControls = new OrbitControls(camera, renderer.domElement);
+            orbitControls.enableDamping = true;
+            orbitControls.dampingFactor = 0.05;
+
+            transformControls = new TransformControls(camera, renderer.domElement);
+            transformControls.addEventListener('dragging-changed', function (event) {
+                orbitControls.enabled = !event.value;
+                isDraggingTransform = event.value;
+            });
+            scene.add(transformControls);
+
+            // FPS Controls setup
+            fpControls = new PointerLockControls(camera, renderer.domElement);
+            scene.add(fpControls.getObject());
+
+            fpControls.addEventListener('lock', () => {
+                isPreviewMode = true;
+                document.getElementById('left-toolbar').classList.add('hidden');
+                document.getElementById('right-toolbar').classList.add('hidden');
+                document.getElementById('preview-ui').classList.remove('hidden');
+                document.getElementById('btn-toggle-menus').parentNode.classList.add('hidden');
+            });
+
+            fpControls.addEventListener('unlock', () => {
+                isPreviewMode = false;
+                exitPreview();
+            });
+
+            // ViewHelper (Axis Graph like Blender)
+            const viewHelperDiv = document.getElementById('viewHelper');
+            viewHelper = new ViewHelper(camera, viewHelperDiv);
+            
+            // Override render to draw in custom div location securely
+            const originalVHRender = viewHelper.render.bind(viewHelper);
+            viewHelper.render = function(renderer) {
+                const originalSetViewport = renderer.setViewport.bind(renderer);
+                renderer.setViewport = function(x, y, w, h) {
+                    const rect = viewHelperDiv.getBoundingClientRect();
+                    originalSetViewport(rect.left, window.innerHeight - rect.bottom, rect.width, rect.height);
+                };
+                originalVHRender(renderer);
+                renderer.setViewport = originalSetViewport;
+            };
+            
+            viewHelperDiv.addEventListener('pointerdown', (e) => e.stopPropagation());
+            viewHelperDiv.addEventListener('pointerup', (e) => {
+                e.stopPropagation();
+                viewHelper.handleClick(e);
+            });
+
+            // Raycaster
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2();
+
+            selectionBox = new SelectionBox(camera, scene);
+
+            // Event Listeners
+            window.addEventListener('resize', onWindowResize);
+            renderer.domElement.addEventListener('pointerdown', onPointerDown);
+
+            // Global pointer events for marquee selection
+            window.addEventListener('pointermove', onPointerMove);
+            window.addEventListener('pointerup', onPointerUp);
+
+            // ADS Controls
+            document.addEventListener('mousedown', (e) => {
+                if (isPreviewMode && e.button === 2) isAiming = true;
+            });
+            document.addEventListener('mouseup', (e) => {
+                if (isPreviewMode && e.button === 2) isAiming = false;
+            });
+            // Prevent context menu when right clicking in preview
+            document.addEventListener('contextmenu', (e) => {
+                if (isPreviewMode) e.preventDefault();
+            });
+            
+            window.addEventListener('keydown', (e) => { 
+                if (document.activeElement.tagName === 'INPUT') return;
+
+                if (e.ctrlKey || e.metaKey) {
+                    if (e.key.toLowerCase() === 'z') {
+                        if (e.shiftKey) redo();
+                        else undo();
+                        e.preventDefault();
+                    } else if (e.key.toLowerCase() === 'y') {
+                        redo();
+                        e.preventDefault();
+                    } else if (e.key.toLowerCase() === 'd') {
+                        duplicateSelected();
+                        e.preventDefault();
+                    }
+                }
+
+                if (!isPreviewMode) {
+                    if (e.key === 'Control') isCtrlDown = true; 
+                    if (e.key === 'Alt') { isAltDown = true; e.preventDefault(); }
+                }
+
+                if (isPreviewMode) {
+                    switch(e.code) {
+                        case 'KeyW': moveForward = true; break;
+                        case 'KeyA': moveLeft = true; break;
+                        case 'KeyS': moveBackward = true; break;
+                        case 'KeyD': moveRight = true; break;
+                    }
+                }
+            });
+            
+            window.addEventListener('keyup', (e) => { 
+                if (!isPreviewMode) {
+                    if (e.key === 'Control') isCtrlDown = false; 
+                    if (e.key === 'Alt') { isAltDown = false; e.preventDefault(); }
+                }
+                
+                if (isPreviewMode) {
+                    switch(e.code) {
+                        case 'KeyW': moveForward = false; break;
+                        case 'KeyA': moveLeft = false; break;
+                        case 'KeyS': moveBackward = false; break;
+                        case 'KeyD': moveRight = false; break;
+                    }
+                }
+            });
+
+            setupUI();
+        }
+
+        function setupUI() {
+            document.querySelectorAll('.shape-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => addShape(e.target.dataset.shape));
+            });
+
+            document.querySelectorAll('.action-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    document.querySelectorAll('.action-btn').forEach(b => b.classList.remove('active'));
+                    const targetBtn = e.target.closest('button');
+                    targetBtn.classList.add('active');
+                    
+                    currentAction = targetBtn.dataset.action;
+                    updateInstructionText();
+
+                    if (['move', 'rotate', 'scale'].includes(currentAction)) {
+                        updateTransformControls();
+                    } else {
+                        transformControls.detach();
+                    }
+                });
+            });
+
+            const btnSnap = document.getElementById('btn-snap');
+            const snapIndicator = btnSnap.querySelector('.indicator');
+            btnSnap.addEventListener('click', () => {
+                snapEnabled = !snapEnabled;
+                if (snapEnabled) {
+                    btnSnap.classList.add('text-blue-400', 'border-blue-500/50');
+                    btnSnap.classList.remove('text-gray-400');
+                    snapIndicator.textContent = 'ON';
+                    snapIndicator.classList.add('bg-blue-600', 'text-white');
+                    snapIndicator.classList.remove('bg-gray-700', 'text-gray-400');
+                } else {
+                    btnSnap.classList.remove('text-blue-400', 'border-blue-500/50');
+                    btnSnap.classList.add('text-gray-400');
+                    snapIndicator.textContent = 'OFF';
+                    snapIndicator.classList.remove('bg-blue-600', 'text-white');
+                    snapIndicator.classList.add('bg-gray-700', 'text-gray-400');
+                }
+                updateSnapSettings();
+            });
+
+            // Toggle Tools Menu
+            document.getElementById('btn-toggle-menus').addEventListener('click', () => {
+                document.getElementById('left-toolbar').classList.toggle('hidden');
+                document.getElementById('right-toolbar').classList.toggle('hidden');
+            });
+
+            // Opacity Slider Logic
+            const opacitySlider = document.getElementById('opacitySlider');
+            let initialOpacities = [];
+
+            opacitySlider.addEventListener('mousedown', () => {
+                // Capture initial opacities before sliding for undo history
+                initialOpacities = selectedObjects.map(obj => {
+                    let startOp = 1;
+                    obj.traverse(child => {
+                        if (child.isMesh && child.material && child.material.opacity !== undefined) {
+                            startOp = child.material.opacity;
+                        }
+                    });
+                    return { obj: obj, opacity: startOp };
+                });
+            });
+
+            opacitySlider.addEventListener('input', (e) => {
+                const val = parseFloat(e.target.value);
+                selectedObjects.forEach(obj => setOpacityObject(obj, val));
+            });
+
+            opacitySlider.addEventListener('change', (e) => {
+                const val = parseFloat(e.target.value);
+                const capturedOld = [...initialOpacities];
+                const capturedNew = val;
+                const targetObjs = [...selectedObjects];
+
+                if (targetObjs.length > 0) {
+                    addHistory(
+                        () => {
+                            capturedOld.forEach(data => setOpacityObject(data.obj, data.opacity));
+                            if (selectedObjects.length > 0 && selectedObjects[0] === targetObjs[0]) {
+                                opacitySlider.value = capturedOld[0].opacity;
+                            }
+                        },
+                        () => {
+                            targetObjs.forEach(obj => setOpacityObject(obj, capturedNew));
+                            if (selectedObjects.length > 0 && selectedObjects[0] === targetObjs[0]) {
+                                opacitySlider.value = capturedNew;
+                            }
+                        }
+                    );
+                }
+            });
+
+            // Undo / Redo Logic
+            document.getElementById('btn-undo').addEventListener('click', undo);
+            document.getElementById('btn-redo').addEventListener('click', redo);
+
+            // FPS Preview Logic
+            document.getElementById('btn-preview').addEventListener('click', enterPreview);
+
+            // Import Model Logic
+            document.getElementById('btn-import').addEventListener('click', () => {
+                document.getElementById('file-input').click();
+            });
+
+            document.getElementById('file-input').addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    const contents = event.target.result;
+                    const loader = new GLTFLoader();
+                    loader.parse(contents, '', function(gltf) {
+                        const wrapper = new THREE.Group();
+                        wrapper.add(gltf.scene);
+                        wrapper.userData.isSelectable = true; // Mark as selectable unit
+                        
+                        wrapper.traverse(child => {
+                            if (child.isMesh) {
+                                child.castShadow = true;
+                                child.receiveShadow = true;
+                            }
+                        });
+                        
+                        // Center model and sit on grid
+                        const box = new THREE.Box3().setFromObject(wrapper);
+                        const center = box.getCenter(new THREE.Vector3());
+                        wrapper.position.x = -center.x;
+                        wrapper.position.z = -center.z;
+                        wrapper.position.y = -box.min.y;
+                        
+                        objectsGroup.add(wrapper);
+                        
+                        const addedWrapper = wrapper;
+                        addHistory(
+                            () => { objectsGroup.remove(addedWrapper); clearSelection(); },
+                            () => { objectsGroup.add(addedWrapper); }
+                        );
+                        
+                        if (['move', 'rotate', 'scale'].includes(currentAction)) {
+                            clearSelection();
+                            selectedObjects.push(wrapper);
+                            updateEmissive(wrapper, 0x333333);
+                            updateTransformControls();
+                        }
+                    }, function(error) {
+                        console.error('Error parsing GLTF', error);
+                        alert("Error loading model.");
+                    });
+                };
+                reader.readAsArrayBuffer(file);
+                e.target.value = ''; // reset
+            });
+
+            const gridSizeInput = document.getElementById('gridSizeInput');
+            gridSizeInput.addEventListener('change', (e) => {
+                let val = parseFloat(e.target.value);
+                if (isNaN(val) || val <= 0) val = 1;
+                gridSize = val;
+                
+                // Update grid visual
+                scene.remove(gridHelper);
+                gridHelper = new THREE.GridHelper(40 * gridSize, 40, 0x444444, 0x222222); 
+                scene.add(gridHelper);
+                
+                // Update snapping if active
+                updateSnapSettings();
+            });
+
+            document.getElementById('btn-export').addEventListener('click', exportGLTF);
+            document.getElementById('btn-clear').addEventListener('click', () => {
+                if(confirm("Are you sure you want to clear the scene?")) clearScene();
+            });
+
+            updateInstructionText();
+        }
+
+        function enterPreview() {
+            if (objectsGroup.children.length === 0) return; // Silent abort if scene is empty
+            clearSelection();
+            transformControls.detach();
+
+            // Save current objectsGroup state
+            originalTransform.parent = objectsGroup.parent;
+            originalTransform.pos.copy(objectsGroup.position);
+            originalTransform.rot.copy(objectsGroup.rotation);
+            originalTransform.scale.copy(objectsGroup.scale);
+
+            // Calculate current bounding box dimensions
+            const box = new THREE.Box3().setFromObject(objectsGroup);
+            const center = box.getCenter(new THREE.Vector3());
+            const size = box.getSize(new THREE.Vector3());
+            const maxDim = Math.max(size.x, size.y, size.z);
+            
+            // Scale so the model acts like a hand-held gun (~0.8 units long)
+            const targetScale = 0.8 / maxDim;
+            objectsGroup.scale.setScalar(targetScale);
+
+            // Attach to camera so it moves with the view
+            camera.add(objectsGroup);
+
+            // Target gun placement
+            gunOffset = center.clone().multiplyScalar(targetScale);
+            currentGunBasePos.copy(hipPos);
+
+            // Shift object so its bounding box center matches the target position
+            objectsGroup.position.copy(currentGunBasePos).sub(gunOffset);
+
+            // Reset camera for first-person perspective
+            camera.position.set(0, 1.7, 5); 
+            camera.rotation.set(0, 0, 0);
+            camera.fov = 75; // Expanded FOV for FPS mode
+            camera.updateProjectionMatrix();
+
+            orbitControls.enabled = false;
+            fpControls.lock();
+        }
+
+        function exitPreview() {
+            // Restore objectsGroup state
+            if (originalTransform.parent) {
+                originalTransform.parent.add(objectsGroup);
+            } else {
+                scene.add(objectsGroup);
+            }
+            objectsGroup.position.copy(originalTransform.pos);
+            objectsGroup.rotation.copy(originalTransform.rot);
+            objectsGroup.scale.copy(originalTransform.scale);
+
+            // Re-enable tools and orbit controls
+            orbitControls.enabled = true;
+            document.getElementById('left-toolbar').classList.remove('hidden');
+            document.getElementById('right-toolbar').classList.remove('hidden');
+            document.getElementById('preview-ui').classList.add('hidden');
+            document.getElementById('btn-toggle-menus').parentNode.classList.remove('hidden');
+
+            camera.position.set(5, 5, 5);
+            camera.lookAt(0, 0, 0);
+            camera.fov = 50; // Restore standard editor FOV
+            camera.updateProjectionMatrix();
+            
+            fpVelocity.set(0, 0, 0);
+            moveForward = false; moveBackward = false; moveLeft = false; moveRight = false;
+            isAiming = false;
+        }
+
+        function updateSnapSettings() {
+            if (snapEnabled) {
+                transformControls.setTranslationSnap(gridSize); // matches the grid cell size
+                transformControls.setRotationSnap(THREE.MathUtils.degToRad(45)); // 45 degrees
+                transformControls.setScaleSnap(gridSize * 0.5); // half grid cell size
+            } else {
+                transformControls.setTranslationSnap(null);
+                transformControls.setRotationSnap(null);
+                transformControls.setScaleSnap(null);
+            }
+        }
+
+        function updateInstructionText() {
+            const textEl = document.getElementById('instruction-text');
+            const messages = {
+                'select': 'Box Select Tool: Drag to select an area. (Shift to add)',
+                'move': 'Move Tool: Click to select (Shift+Click for multiple). Drag arrows to move.',
+                'rotate': 'Rotate Tool: Click to select (Shift+Click for multiple). Drag rings to rotate.',
+                'scale': 'Scale Tool: Click to select. Drag blocks to scale. (ALT: uniform)',
+                'paint': 'Paint Tool: Select a color and click object(s) to paint.',
+                'delete': 'Delete Tool: Click object(s) to remove.'
+            };
+            textEl.textContent = messages[currentAction] || 'Select a tool.';
+        }
+
+        function addShape(type) {
+            let geometry;
+            const material = new THREE.MeshStandardMaterial({ 
+                color: 0xcccccc, roughness: 0.4, metalness: 0.1 
+            });
+
+            switch (type) {
+                case 'cube': geometry = new THREE.BoxGeometry(1, 1, 1); break;
+                case 'sphere': geometry = new THREE.SphereGeometry(0.6, 32, 16); break;
+                case 'cylinder': geometry = new THREE.CylinderGeometry(0.5, 0.5, 1, 32); break;
+                case 'ring': 
+                    geometry = new THREE.TorusGeometry(0.5, 0.15, 16, 48);
+                    geometry.rotateX(Math.PI / 2); 
+                    break;
+                case 'wedge':
+                    const wedgeShape = new THREE.Shape();
+                    wedgeShape.moveTo(0, 0); wedgeShape.lineTo(1, 0); wedgeShape.lineTo(0, 1); wedgeShape.lineTo(0, 0);
+                    geometry = new THREE.ExtrudeGeometry(wedgeShape, { depth: 1, bevelEnabled: false });
+                    geometry.center(); break;
+                case 'slope':
+                    const slopeShape = new THREE.Shape();
+                    slopeShape.moveTo(0, 0); slopeShape.lineTo(1, 0); slopeShape.quadraticCurveTo(0, 0, 0, 1); slopeShape.lineTo(0, 0);
+                    geometry = new THREE.ExtrudeGeometry(slopeShape, { depth: 1, bevelEnabled: false });
+                    geometry.center(); break;
+            }
+
+            if (geometry) {
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+                mesh.userData.isSelectable = true;
+                
+                geometry.computeBoundingBox();
+                const height = geometry.boundingBox.max.y - geometry.boundingBox.min.y;
+                mesh.position.y = height / 2;
+                
+                mesh.position.x = (Math.random() - 0.5) * 2;
+                mesh.position.z = (Math.random() - 0.5) * 2;
+
+                objectsGroup.add(mesh);
+
+                const addedMesh = mesh;
+                addHistory(
+                    () => { objectsGroup.remove(addedMesh); clearSelection(); },
+                    () => { objectsGroup.add(addedMesh); }
+                );
+
+                if (['move', 'rotate', 'scale'].includes(currentAction)) {
+                    clearSelection();
+                    selectObject(mesh);
+                    updateTransformControls();
+                }
+            }
+        }
+
+        // --- Selection & Transform Management ---
+        function selectObject(obj) {
+            if (!selectedObjects.includes(obj)) {
+                selectedObjects.push(obj);
+                updateEmissive(obj, 0x333333);
+                addHighlight(obj);
+            }
+        }
+
+        function deselectObject(obj) {
+            selectedObjects = selectedObjects.filter(o => o !== obj);
+            updateEmissive(obj, 0x000000);
+            const idx = selectionHelpers.findIndex(h => h.target === obj);
+            if (idx > -1) {
+                scene.remove(selectionHelpers[idx].helper);
+                selectionHelpers[idx].helper.geometry.dispose();
+                selectionHelpers[idx].helper.material.dispose();
+                selectionHelpers.splice(idx, 1);
+            }
+        }
+
+        function addHighlight(obj) {
+            // Add a bright blue BoxHelper for clear selection
+            const helper = new THREE.BoxHelper(obj, 0x3b82f6); 
+            helper.material.depthTest = false; 
+            helper.material.transparent = true;
+            helper.material.opacity = 0.8;
+            scene.add(helper);
+            selectionHelpers.push({ target: obj, helper: helper });
+        }
+
+        function updateEmissive(obj, hex) {
+            if (obj.isMesh && obj.material && obj.material.emissive) {
+                obj.material.emissive.setHex(hex);
+            }
+            if (obj.children) {
+                obj.children.forEach(child => updateEmissive(child, hex));
+            }
+        }
+
+        function clearSelection() {
+            selectedObjects.forEach(obj => updateEmissive(obj, 0x000000));
+            selectionHelpers.forEach(item => {
+                scene.remove(item.helper);
+                if(item.helper.geometry) item.helper.geometry.dispose();
+                if(item.helper.material) item.helper.material.dispose();
+            });
+            selectionHelpers = [];
+            selectedObjects = [];
+            updateTransformControls();
+        }
+
+        function updateTransformControls() {
+            transformControls.detach();
+            
+            // Move items from temporary Selection Group back to global Objects Group
+            while(selectionGroup.children.length > 0) {
+                objectsGroup.attach(selectionGroup.children[0]);
+            }
+
+            if (selectedObjects.length === 0) return;
+
+            // Sync Opacity Slider UI with the first selected object
+            let firstMesh = null;
+            selectedObjects[0].traverse(child => {
+                if (!firstMesh && child.isMesh) firstMesh = child;
+            });
+            if (firstMesh && firstMesh.material) {
+                document.getElementById('opacitySlider').value = firstMesh.material.opacity !== undefined ? firstMesh.material.opacity : 1;
+            }
+
+            if (['move', 'rotate', 'scale'].includes(currentAction)) {
+                transformControls.setMode(currentAction === 'move' ? 'translate' : currentAction);
+
+                if (selectedObjects.length === 1) {
+                    transformControls.attach(selectedObjects[0]);
+                } else {
+                    // Multi-select grouping logic
+                    const box = new THREE.Box3();
+                    selectedObjects.forEach(obj => box.expandByObject(obj));
+                    const center = new THREE.Vector3();
+                    box.getCenter(center);
+
+                    selectionGroup.position.copy(center);
+                    selectionGroup.rotation.set(0,0,0);
+                    selectionGroup.scale.set(1,1,1);
+
+                    selectedObjects.forEach(obj => selectionGroup.attach(obj));
+                    transformControls.attach(selectionGroup);
+                }
+            }
+        }
+
+        function paintObject(obj, colorHex) {
+            if (obj.isMesh && obj.material) {
+                if (!obj.material.isCustomCloned) {
+                    obj.material = obj.material.clone();
+                    obj.material.isCustomCloned = true;
+                }
+                obj.material.color.set(colorHex);
+            }
+            if (obj.children) {
+                obj.children.forEach(child => paintObject(child, colorHex));
+            }
+        }
+
+        function setOpacityObject(obj, opacity) {
+            if (obj.isMesh && obj.material) {
+                if (!obj.material.isCustomCloned) {
+                    obj.material = obj.material.clone();
+                    obj.material.isCustomCloned = true;
+                }
+                obj.material.opacity = opacity;
+                obj.material.transparent = opacity < 1;
+                obj.material.needsUpdate = true;
+                
+                // If it casts shadows, sometimes highly transparent objects look better without casting solid shadows
+                // obj.castShadow = opacity > 0.5; 
+            }
+            if (obj.children) {
+                obj.children.forEach(child => setOpacityObject(child, opacity));
+            }
+        }
+
+        // --- Undo / Redo Management ---
+        function addHistory(undoFn, redoFn) {
+            if (historyIndex < commandHistory.length - 1) {
+                commandHistory = commandHistory.slice(0, historyIndex + 1);
+            }
+            commandHistory.push({ undo: undoFn, redo: redoFn });
+            if (commandHistory.length > MAX_HISTORY) {
+                commandHistory.shift();
+            } else {
+                historyIndex++;
+            }
+            updateHistoryUI();
+        }
+
+        function undo() {
+            if (historyIndex < 0 || isPreviewMode) return;
+            commandHistory[historyIndex].undo();
+            historyIndex--;
+            updateHistoryUI();
+        }
+
+        function redo() {
+            if (historyIndex >= commandHistory.length - 1 || isPreviewMode) return;
+            historyIndex++;
+            commandHistory[historyIndex].redo();
+            updateHistoryUI();
+        }
+
+        function updateHistoryUI() {
+            const btnUndo = document.getElementById('btn-undo');
+            const btnRedo = document.getElementById('btn-redo');
+            if (btnUndo) btnUndo.disabled = historyIndex < 0;
+            if (btnRedo) btnRedo.disabled = historyIndex >= commandHistory.length - 1;
+        }
+
+        function applyTransforms(states) {
+            const previouslySelected = [...selectedObjects];
+            clearSelection();
+            
+            states.forEach(state => {
+                state.obj.position.copy(state.pos);
+                state.obj.quaternion.copy(state.quat);
+                state.obj.scale.copy(state.scale);
+                state.obj.updateMatrixWorld(true);
+            });
+
+            previouslySelected.forEach(obj => {
+                if (obj.parent) {
+                    selectedObjects.push(obj);
+                    updateEmissive(obj, 0x333333);
+                    addHighlight(obj);
+                }
+            });
+            updateTransformControls();
+        }
+
+        // --- Interaction ---
+        function onPointerDown(event) {
+            if (isPreviewMode) return;
+            if (isDraggingTransform || transformControls.axis !== null) return;
+
+            if (currentAction === 'select') {
+                isMarqueeSelecting = true;
+                startClientX = event.clientX;
+                startClientY = event.clientY;
+                marqueeDiv.style.left = startClientX + 'px';
+                marqueeDiv.style.top = startClientY + 'px';
+                marqueeDiv.style.width = '0px';
+                marqueeDiv.style.height = '0px';
+                marqueeDiv.classList.remove('hidden');
+
+                selectionBox.startPoint.set(
+                    (event.clientX / window.innerWidth) * 2 - 1,
+                    -(event.clientY / window.innerHeight) * 2 + 1,
+                    0.5
+                );
+                
+                orbitControls.enabled = false;
+                return;
+            }
+
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+
+            // Raycast against all objects regardless of which group they are currently parented to
+            const interactables = [...objectsGroup.children, ...selectionGroup.children];
+            const intersects = raycaster.intersectObjects(interactables, true);
+
+            if (intersects.length > 0) {
+                // Find root selectable object (ensures imported models are selected as a whole)
+                let object = intersects[0].object;
+                while (object && !object.userData.isSelectable && object.parent && object !== objectsGroup && object !== selectionGroup) {
+                    object = object.parent;
+                }
+                if (!object || object === objectsGroup || object === selectionGroup) {
+                    object = intersects[0].object; // fallback
+                }
+
+                if (currentAction === 'paint') {
+                    const colorHex = document.getElementById('colorPicker').value;
+                    let targetObjects = selectedObjects.includes(object) ? [...selectedObjects] : [object];
+                    
+                    // Capture old colors for undo
+                    const oldColors = [];
+                    function captureColors(o) {
+                        if (o.isMesh && o.material) {
+                            oldColors.push({ obj: o, color: o.material.color.getHex() });
+                        }
+                        if (o.children) o.children.forEach(captureColors);
+                    }
+                    targetObjects.forEach(captureColors);
+
+                    targetObjects.forEach(obj => paintObject(obj, colorHex));
+
+                    const applyColorCommand = (colorDataArray, newCol) => {
+                        if (newCol !== undefined) {
+                            targetObjects.forEach(obj => paintObject(obj, newCol));
+                        } else {
+                            colorDataArray.forEach(data => paintObject(data.obj, data.color));
+                        }
+                    };
+
+                    addHistory(
+                        () => applyColorCommand(oldColors),
+                        () => applyColorCommand(null, colorHex)
+                    );
+                } 
+                else if (currentAction === 'delete') {
+                    let toDelete = [];
+                    if (selectedObjects.includes(object)) {
+                        toDelete = [...selectedObjects];
+                        clearSelection();
+                    } else {
+                        toDelete = [object];
+                    }
+
+                    const deleteData = toDelete.map(obj => ({ obj, parent: obj.parent || objectsGroup }));
+                    
+                    toDelete.forEach(obj => {
+                        if (obj.parent) obj.parent.remove(obj);
+                    });
+
+                    addHistory(
+                        () => { deleteData.forEach(data => data.parent.add(data.obj)); },
+                        () => { 
+                            deleteData.forEach(data => { if(data.obj.parent) data.obj.parent.remove(data.obj); });
+                            clearSelection(); 
+                        }
+                    );
+                    updateTransformControls();
+                } 
+                else {
+                    // Transform tools selection logic
+                    if (event.shiftKey) {
+                        if (selectedObjects.includes(object)) {
+                            deselectObject(object);
+                        } else {
+                            selectObject(object);
+                        }
+                    } else {
+                        if (!selectedObjects.includes(object)) {
+                            clearSelection();
+                            selectObject(object);
+                        }
+                    }
+                    updateTransformControls();
+                }
+            } else {
+                if (!event.shiftKey) {
+                    clearSelection();
+                }
+            }
+        }
+
+        function onPointerMove(e) {
+            if (isMarqueeSelecting) {
+                const currentX = e.clientX;
+                const currentY = e.clientY;
+                marqueeDiv.style.left = Math.min(startClientX, currentX) + 'px';
+                marqueeDiv.style.top = Math.min(startClientY, currentY) + 'px';
+                marqueeDiv.style.width = Math.abs(currentX - startClientX) + 'px';
+                marqueeDiv.style.height = Math.abs(currentY - startClientY) + 'px';
+            }
+        }
+
+        function onPointerUp(e) {
+            if (isMarqueeSelecting) {
+                isMarqueeSelecting = false;
+                marqueeDiv.classList.add('hidden');
+                orbitControls.enabled = true;
+
+                const dx = e.clientX - startClientX;
+                const dy = e.clientY - startClientY;
+
+                if (Math.abs(dx) < 4 && Math.abs(dy) < 4) {
+                    // Treat as click instead of drag
+                    performSingleSelect(e);
+                } else {
+                    // Box Selection
+                    selectionBox.endPoint.set(
+                        (e.clientX / window.innerWidth) * 2 - 1,
+                        -(e.clientY / window.innerHeight) * 2 + 1,
+                        0.5
+                    );
+
+                    const allSelected = selectionBox.select();
+                    
+                    if (!e.shiftKey) clearSelection();
+
+                    allSelected.forEach(mesh => {
+                        if (mesh.isMesh) {
+                            let obj = mesh;
+                            let isValid = false;
+                            // Find root selectable object
+                            while (obj && obj !== scene) {
+                                if (obj.userData && obj.userData.isSelectable) {
+                                    // verify it belongs to our working groups
+                                    let p = obj.parent;
+                                    while(p) {
+                                        if (p === objectsGroup || p === selectionGroup) {
+                                            isValid = true;
+                                            break;
+                                        }
+                                        p = p.parent;
+                                    }
+                                    if (isValid) {
+                                        selectObject(obj);
+                                        break;
+                                    }
+                                }
+                                obj = obj.parent;
+                            }
+                            // Fallback for basic un-nested shapes
+                            if (!isValid && (mesh.parent === objectsGroup || mesh.parent === selectionGroup)) {
+                                 selectObject(mesh);
+                            }
+                        }
+                    });
+                    updateTransformControls();
+                }
+            }
+        }
+
+        function performSingleSelect(event) {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+
+            const interactables = [...objectsGroup.children, ...selectionGroup.children];
+            const intersects = raycaster.intersectObjects(interactables, true);
+
+            if (intersects.length > 0) {
+                let object = intersects[0].object;
+                while (object && !object.userData.isSelectable && object.parent && object !== objectsGroup && object !== selectionGroup) {
+                    object = object.parent;
+                }
+                if (!object || object === objectsGroup || object === selectionGroup) {
+                    object = intersects[0].object;
+                }
+
+                if (event.shiftKey) {
+                    if (selectedObjects.includes(object)) deselectObject(object);
+                    else selectObject(object);
+                } else {
+                    if (!selectedObjects.includes(object)) {
+                        clearSelection();
+                        selectObject(object);
+                    }
+                }
+                updateTransformControls();
+            } else {
+                if (!event.shiftKey) clearSelection();
+            }
+        }
+
+        function clearScene() {
+            clearSelection();
+            const items = [...objectsGroup.children];
+            items.forEach(child => {
+                objectsGroup.remove(child);
+            });
+            
+            addHistory(
+                () => { items.forEach(child => objectsGroup.add(child)); },
+                () => { items.forEach(child => objectsGroup.remove(child)); clearSelection(); }
+            );
+        }
+
+        function duplicateSelected() {
+            if (selectedObjects.length === 0 || isPreviewMode) return;
+
+            // Ensure objects are detached from selectionGroup to get true world transforms
+            transformControls.detach();
+            while(selectionGroup.children.length > 0) {
+                objectsGroup.attach(selectionGroup.children[0]);
+            }
+
+            const newObjects = [];
+
+            selectedObjects.forEach(obj => {
+                const clone = obj.clone(true); // Deep clone
+                
+                // Deep clone materials so copies can be painted independently
+                clone.traverse((child) => {
+                    if (child.isMesh && child.material) {
+                        child.material = child.material.clone();
+                        child.material.isCustomCloned = true;
+                        if (child.material.emissive) {
+                            child.material.emissive.setHex(0x000000); // Strip highlight logic
+                        }
+                    }
+                });
+                
+                // Add exactly at the original position (no offset)
+                objectsGroup.add(clone);
+                newObjects.push(clone);
+            });
+
+            addHistory(
+                () => { 
+                    newObjects.forEach(obj => {
+                        objectsGroup.remove(obj);
+                        const idx = selectionHelpers.findIndex(h => h.target === obj);
+                        if (idx > -1) {
+                            scene.remove(selectionHelpers[idx].helper);
+                            selectionHelpers.splice(idx, 1);
+                        }
+                    }); 
+                    clearSelection(); 
+                },
+                () => { newObjects.forEach(obj => objectsGroup.add(obj)); }
+            );
+
+            clearSelection();
+            newObjects.forEach(obj => {
+                selectObject(obj);
+            });
+            updateTransformControls();
+        }
+
+        // --- Export Logic ---
+        function exportGLTF() {
+            // Restore selection state safely into objectsGroup so it actually exports correctly
+            const hadSelection = selectedObjects.length > 0;
+            while(selectionGroup.children.length > 0) {
+                objectsGroup.attach(selectionGroup.children[0]);
+            }
+            transformControls.detach();
+
+            if (objectsGroup.children.length === 0) {
+                alert("The scene is empty! Add some shapes first.");
+                if(hadSelection) updateTransformControls(); // restore
+                return;
+            }
+
+            const exporter = new GLTFExporter();
+            exporter.parse(
+                objectsGroup,
+                function (gltf) {
+                    if(hadSelection) updateTransformControls(); // Re-attach selection visual state
+
+                    const blob = new Blob([gltf], { type: 'application/octet-stream' });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.style.display = 'none';
+                    link.href = url;
+                    link.download = 'my_3d_model.glb';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(url);
+                },
+                function (error) {
+                    console.error('An error happened during parsing', error);
+                    alert("Error exporting GLTF. See console for details.");
+                },
+                { binary: true }
+            );
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // Intercept TransformControls logic for custom center vs corner scaling
+        transformControls.addEventListener('dragging-changed', function (event) {
+            orbitControls.enabled = !event.value;
+            isDraggingTransform = event.value;
+
+            if (event.value) {
+                // Drag start - capture state for undo
+                transformStartStates = selectedObjects.map(obj => {
+                    const pos = new THREE.Vector3();
+                    const quat = new THREE.Quaternion();
+                    const scale = new THREE.Vector3();
+                    obj.getWorldPosition(pos);
+                    obj.getWorldQuaternion(quat);
+                    obj.getWorldScale(scale);
+                    return { obj, pos, quat, scale };
+                });
+            } else {
+                // Drag end - capture end state and push history
+                if (transformStartStates.length > 0) {
+                    const transformEndStates = selectedObjects.map(obj => {
+                        const pos = new THREE.Vector3();
+                        const quat = new THREE.Quaternion();
+                        const scale = new THREE.Vector3();
+                        obj.getWorldPosition(pos);
+                        obj.getWorldQuaternion(quat);
+                        obj.getWorldScale(scale);
+                        return { obj, pos, quat, scale };
+                    });
+
+                    const start = transformStartStates;
+                    const end = transformEndStates;
+                    addHistory(
+                        () => applyTransforms(start),
+                        () => applyTransforms(end)
+                    );
+                    transformStartStates = []; // reset
+                }
+            }
+
+            if (event.value && currentAction === 'scale') {
+                const obj = transformControls.object;
+                if (obj) {
+                    dragStartScale.copy(obj.scale);
+                    dragStartPosition.copy(obj.position);
+                    scaleAxis = transformControls.axis;
+                }
+            }
+        });
+
+        transformControls.addEventListener('change', function (event) {
+            if (isDraggingTransform && currentAction === 'scale') {
+                const obj = transformControls.object;
+                if (obj && scaleAxis) {
+                    
+                    // Handle Uniform Scaling (Alt key)
+                    if (isAltDown && scaleAxis !== 'XYZ') {
+                        let ratio = 1;
+                        // Find the ratio of the axis actively being dragged
+                        if (scaleAxis.includes('X') && dragStartScale.x !== 0) ratio = obj.scale.x / dragStartScale.x;
+                        else if (scaleAxis.includes('Y') && dragStartScale.y !== 0) ratio = obj.scale.y / dragStartScale.y;
+                        else if (scaleAxis.includes('Z') && dragStartScale.z !== 0) ratio = obj.scale.z / dragStartScale.z;
+
+                        // Apply the exact same proportion to all axes
+                        obj.scale.set(
+                            dragStartScale.x * ratio,
+                            dragStartScale.y * ratio,
+                            dragStartScale.z * ratio
+                        );
+                    }
+                }
+            }
+        });
+
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            const time = performance.now();
+            const delta = (time - lastTime) / 1000;
+            lastTime = time;
+
+            if (isPreviewMode) {
+                // FPS Movement physics
+                fpVelocity.x -= fpVelocity.x * 10.0 * delta;
+                fpVelocity.z -= fpVelocity.z * 10.0 * delta;
+
+                fpDirection.z = Number( moveForward ) - Number( moveBackward );
+                fpDirection.x = Number( moveRight ) - Number( moveLeft );
+                fpDirection.normalize();
+
+                if ( moveForward || moveBackward ) fpVelocity.z -= fpDirection.z * 40.0 * delta;
+                if ( moveLeft || moveRight ) fpVelocity.x -= fpDirection.x * 40.0 * delta;
+
+                fpControls.moveRight( - fpVelocity.x * delta );
+                fpControls.moveForward( - fpVelocity.z * delta );
+
+                // ADS Interpolation
+                const targetGunPos = isAiming ? adsPos : hipPos;
+                currentGunBasePos.lerp(targetGunPos, 0.15);
+                
+                const targetFov = isAiming ? 50 : 75;
+                camera.fov += (targetFov - camera.fov) * 0.2;
+                camera.updateProjectionMatrix();
+
+                // Simple gun bobbing animation
+                const isMoving = moveForward || moveBackward || moveLeft || moveRight;
+                const bobMultiplier = isAiming ? 0.2 : 1.0; // Less bob while aiming
+                let currentBobY = 0;
+                let currentBobX = 0;
+
+                if (isMoving) {
+                    currentBobY = Math.sin(time * 0.015) * 0.01 * bobMultiplier;
+                    currentBobX = Math.cos(time * 0.0075) * 0.01 * bobMultiplier;
+                } else {
+                    // Subtle idle breathing
+                    currentBobY = Math.sin(time * 0.002) * 0.002 * bobMultiplier;
+                    currentBobX = 0;
+                }
+                
+                // Apply base position minus centering offset, plus active bobbing
+                objectsGroup.position.copy(currentGunBasePos).sub(gunOffset);
+                objectsGroup.position.y += currentBobY;
+                objectsGroup.position.x += currentBobX;
+            } else {
+                orbitControls.update();
+            }
+
+            // Custom render pass for the main scene and the overlay viewHelper
+            renderer.clear();
+            renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
+            
+            // Keep Highlight Boxes tightly matched to object positions
+            selectionHelpers.forEach(item => {
+                item.target.updateMatrixWorld(true);
+                item.helper.update();
+            });
+
+            renderer.render(scene, camera);
+
+            if (viewHelper.animating === true) {
+                viewHelper.update(clock.getDelta());
+            }
+            // Renders to bottom right corner
+            viewHelper.render(renderer);
+        }
+    </script>
+</body>
+</html>
