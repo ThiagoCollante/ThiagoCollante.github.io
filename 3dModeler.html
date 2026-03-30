@@ -40,105 +40,110 @@
     <div class="absolute inset-0 pointer-events-none flex flex-col justify-between">
         
         <!-- ViewHelper Div (Axis Graph) moved here to top-left -->
-        <div id="viewHelper" class="absolute top-4 left-4 w-[128px] h-[128px] cursor-pointer pointer-events-auto z-50"></div>
+        <div id="viewHelper" class="absolute top-2 left-2 w-[100px] h-[100px] cursor-pointer pointer-events-auto z-50"></div>
 
         <!-- Top Bar -->
-        <div class="w-full p-4 flex justify-end items-center bg-gradient-to-b from-black/60 to-transparent">
-            <div class="pointer-events-auto flex gap-3">
-                <button id="btn-undo" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-md text-sm font-semibold backdrop-blur transition-colors border border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed" disabled>Undo</button>
-                <button id="btn-redo" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-md text-sm font-semibold backdrop-blur transition-colors border border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed" disabled>Redo</button>
-                <button id="btn-toggle-menus" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-md text-sm font-semibold backdrop-blur transition-colors border border-gray-600">Toggle Tools</button>
-                <button id="btn-preview" class="px-4 py-2 bg-purple-600/80 hover:bg-purple-500 text-white rounded-md text-sm font-semibold backdrop-blur transition-colors shadow-lg shadow-purple-900/50">FPS Preview</button>
-                <button id="btn-import" class="px-4 py-2 bg-blue-600/80 hover:bg-blue-500 text-white rounded-md text-sm font-semibold backdrop-blur transition-colors">Import Model</button>
+        <div class="w-full p-2 flex justify-end items-center bg-gradient-to-b from-black/60 to-transparent">
+            <div class="pointer-events-auto flex gap-2">
+                <button id="btn-undo" class="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded text-xs font-semibold backdrop-blur transition-colors border border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed" disabled>Undo</button>
+                <button id="btn-redo" class="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded text-xs font-semibold backdrop-blur transition-colors border border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed" disabled>Redo</button>
+                <button id="btn-toggle-menus" class="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded text-xs font-semibold backdrop-blur transition-colors border border-gray-600">Toggle Tools</button>
+                <button id="btn-preview" class="px-3 py-1.5 bg-purple-600/80 hover:bg-purple-500 text-white rounded text-xs font-semibold backdrop-blur transition-colors shadow-lg shadow-purple-900/50">FPS Preview</button>
+                <button id="btn-import" class="px-3 py-1.5 bg-blue-600/80 hover:bg-blue-500 text-white rounded text-xs font-semibold backdrop-blur transition-colors">Import Model</button>
                 <input type="file" id="file-input" accept=".glb,.gltf" class="hidden">
-                <button id="btn-clear" class="px-4 py-2 bg-red-600/80 hover:bg-red-500 text-white rounded-md text-sm font-semibold backdrop-blur transition-colors">Clear Scene</button>
-                <button id="btn-export" class="px-4 py-2 bg-emerald-600/80 hover:bg-emerald-500 text-white rounded-md text-sm font-semibold backdrop-blur transition-colors shadow-lg shadow-emerald-900/50">Export .GLB</button>
+                <button id="btn-clear" class="px-3 py-1.5 bg-red-600/80 hover:bg-red-500 text-white rounded text-xs font-semibold backdrop-blur transition-colors">Clear Scene</button>
+                <button id="btn-export" class="px-3 py-1.5 bg-emerald-600/80 hover:bg-emerald-500 text-white rounded text-xs font-semibold backdrop-blur transition-colors shadow-lg shadow-emerald-900/50">Export .GLB</button>
             </div>
         </div>
 
-        <div class="flex-1 flex items-center justify-between px-4">
+        <div class="flex-1 flex items-start justify-between px-2 pt-2">
             
             <!-- Left Toolbar: Shapes -->
-            <div id="left-toolbar" class="pointer-events-auto flex flex-col gap-2 bg-gray-900/80 p-3 rounded-xl backdrop-blur border border-gray-700 shadow-xl max-h-[80vh] overflow-y-auto no-scrollbar mt-24 transition-opacity">
-                <div class="text-xs text-gray-400 mb-1 text-center font-bold uppercase tracking-wider">Shapes</div>
-                <button class="tool-btn shape-btn px-3 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded text-sm border border-gray-600" data-shape="cube">Cube</button>
-                <button class="tool-btn shape-btn px-3 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded text-sm border border-gray-600" data-shape="sphere">Sphere</button>
-                <button class="tool-btn shape-btn px-3 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded text-sm border border-gray-600" data-shape="cylinder">Cylinder</button>
-                <button class="tool-btn shape-btn px-3 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded text-sm border border-gray-600" data-shape="wedge">Wedge</button>
-                <button class="tool-btn shape-btn px-3 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded text-sm border border-gray-600" data-shape="slope">Curved Slope</button>
-                <button class="tool-btn shape-btn px-3 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded text-sm border border-gray-600" data-shape="ring">Ring</button>
+            <div id="left-toolbar" class="pointer-events-auto flex flex-col gap-1 bg-gray-900/80 p-2 rounded-lg backdrop-blur border border-gray-700 shadow-xl max-h-[80vh] overflow-y-auto no-scrollbar mt-24 transition-opacity">
+                <div class="text-[10px] text-gray-400 mb-1 text-center font-bold uppercase tracking-wider">Shapes</div>
+                <button class="tool-btn shape-btn px-2 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded text-xs border border-gray-600" data-shape="cube">Cube</button>
+                <button class="tool-btn shape-btn px-2 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded text-xs border border-gray-600" data-shape="sphere">Sphere</button>
+                <button class="tool-btn shape-btn px-2 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded text-xs border border-gray-600" data-shape="cylinder">Cylinder</button>
+                <button class="tool-btn shape-btn px-2 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded text-xs border border-gray-600" data-shape="wedge">Wedge</button>
+                <button class="tool-btn shape-btn px-2 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded text-xs border border-gray-600" data-shape="slope">Curved Slope</button>
+                <button class="tool-btn shape-btn px-2 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded text-xs border border-gray-600" data-shape="ring">Ring</button>
             </div>
 
             <!-- Right Toolbar: Tools & Paint -->
-            <div id="right-toolbar" class="pointer-events-auto flex flex-col gap-2 bg-gray-900/80 p-3 rounded-xl backdrop-blur border border-gray-700 shadow-xl transition-opacity">
-                <div class="text-xs text-gray-400 mb-1 text-center font-bold uppercase tracking-wider">Tools</div>
+            <div id="right-toolbar" class="pointer-events-auto flex flex-col gap-1 bg-gray-900/80 p-2 rounded-lg backdrop-blur border border-gray-700 shadow-xl transition-opacity w-40">
+                <div class="text-[10px] text-gray-400 mb-1 text-center font-bold uppercase tracking-wider">Tools</div>
                 
-                <button class="tool-btn action-btn px-3 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded text-sm border border-gray-600 flex items-center gap-2" data-action="select">
+                <button class="tool-btn action-btn px-2 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded text-xs border border-gray-600 flex items-center gap-1" data-action="select">
                     <span>Box Select</span>
                 </button>
 
                 <hr class="border-gray-700 my-1"/>
                 
-                <button class="tool-btn action-btn active px-3 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded text-sm border border-gray-600 flex items-center gap-2" data-action="move">
+                <button class="tool-btn action-btn active px-2 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded text-xs border border-gray-600 flex items-center gap-1" data-action="move">
                     <span>Move</span>
                 </button>
-                <button class="tool-btn action-btn px-3 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded text-sm border border-gray-600 flex items-center gap-2" data-action="rotate">
+                <button class="tool-btn action-btn px-2 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded text-xs border border-gray-600 flex items-center gap-1" data-action="rotate">
                     <span>Rotate</span>
                 </button>
-                <button class="tool-btn action-btn px-3 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded text-sm border border-gray-600 flex items-center gap-2" data-action="scale">
+                <button class="tool-btn action-btn px-2 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded text-xs border border-gray-600 flex items-center gap-1" data-action="scale">
                     <span>Scale</span>
                 </button>
                 
                 <hr class="border-gray-700 my-1"/>
 
-                <button id="btn-snap" class="tool-btn px-3 py-2 bg-gray-800 hover:bg-gray-700 text-gray-400 rounded text-sm border border-gray-600 flex items-center justify-between transition-colors">
-                    <span>Snap to Grid</span>
-                    <span class="text-xs font-bold bg-gray-700 px-1.5 py-0.5 rounded text-gray-400 indicator">OFF</span>
+                <button id="btn-snap" class="tool-btn px-2 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-400 rounded text-xs border border-gray-600 flex items-center justify-between transition-colors">
+                    <span>Snap</span>
+                    <span class="text-[10px] font-bold bg-gray-700 px-1 py-0.5 rounded text-gray-400 indicator">OFF</span>
                 </button>
                 
-                <div class="flex flex-col px-1 mt-1">
-                    <label for="gridSizeInput" class="text-[10px] text-gray-400 mb-1">Cell Size</label>
-                    <input type="number" id="gridSizeInput" value="1" min="0.1" step="0.1" class="w-full bg-gray-900 text-gray-200 text-sm p-1.5 rounded border border-gray-600 outline-none focus:border-blue-500">
+                <div class="flex flex-col px-1">
+                    <label for="gridSizeInput" class="text-[9px] text-gray-400">Cell Size</label>
+                    <input type="number" id="gridSizeInput" value="1" min="0.1" step="0.1" class="w-full bg-gray-900 text-gray-200 text-xs p-1 rounded border border-gray-600 outline-none focus:border-blue-500">
                 </div>
 
-                <div class="flex flex-col px-1 mt-2">
-                    <label for="rotSnapInput" class="text-[10px] text-gray-400 mb-1">Rotation Snap (°)</label>
-                    <input type="number" id="rotSnapInput" value="45" min="1" step="1" class="w-full bg-gray-900 text-gray-200 text-sm p-1.5 rounded border border-gray-600 outline-none focus:border-blue-500">
+                <div class="flex flex-col px-1">
+                    <label for="rotSnapInput" class="text-[9px] text-gray-400">Rotation (°)</label>
+                    <input type="number" id="rotSnapInput" value="45" min="1" step="1" class="w-full bg-gray-900 text-gray-200 text-xs p-1 rounded border border-gray-600 outline-none focus:border-blue-500">
                 </div>
 
                 <hr class="border-gray-700 my-1"/>
                 
-                <button class="tool-btn action-btn px-3 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded text-sm border border-gray-600 flex items-center gap-2" data-action="paint_mode">
+                <button class="tool-btn action-btn px-2 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded text-xs border border-gray-600 flex items-center gap-1" data-action="paint_mode">
                     <span>Paint Mode</span>
                 </button>
                 
                 <!-- Paint Mode Tools (Hidden by default) -->
-                <div id="paint-tools-panel" class="hidden flex flex-col gap-2 p-2 bg-gray-950/50 rounded border border-gray-700">
+                <div id="paint-tools-panel" class="hidden flex flex-col gap-1.5 p-1.5 bg-gray-950/50 rounded border border-gray-700 mt-1">
                     <div class="flex gap-1 justify-between">
-                        <button class="paint-sub-btn active flex-1 py-1 bg-blue-600 hover:bg-blue-500 text-xs text-white rounded border border-gray-600 transition-colors" data-painttool="brush">Brush</button>
-                        <button class="paint-sub-btn flex-1 py-1 bg-gray-700 hover:bg-blue-500 text-xs text-white rounded border border-gray-600 transition-colors" data-painttool="fill">Fill</button>
-                        <button class="paint-sub-btn flex-1 py-1 bg-gray-700 hover:bg-blue-500 text-xs text-white rounded border border-gray-600 transition-colors" data-painttool="eraser">Eraser</button>
+                        <button class="paint-sub-btn active flex-1 py-1 bg-blue-600 hover:bg-blue-500 text-[10px] text-white rounded border border-gray-600 transition-colors" data-painttool="brush">Brush</button>
+                        <button class="paint-sub-btn flex-1 py-1 bg-gray-700 hover:bg-blue-500 text-[10px] text-white rounded border border-gray-600 transition-colors" data-painttool="fill">Fill</button>
+                        <button class="paint-sub-btn flex-1 py-1 bg-gray-700 hover:bg-blue-500 text-[10px] text-white rounded border border-gray-600 transition-colors" data-painttool="eraser">Erase</button>
                     </div>
                     
                     <div class="flex items-center justify-between mt-1">
                         <label for="colorPicker" class="text-[10px] text-gray-400">Color</label>
-                        <input type="color" id="colorPicker" value="#3b82f6" class="w-8 h-8 p-0 border-0 rounded cursor-pointer bg-transparent"/>
+                        <input type="color" id="colorPicker" value="#3b82f6" class="w-6 h-6 p-0 border-0 rounded cursor-pointer bg-transparent"/>
                     </div>
                     
-                    <div class="flex flex-col mt-1">
-                        <label for="brushSize" class="text-[10px] text-gray-400 mb-1">Brush Size</label>
+                    <div class="flex flex-col mt-0.5">
+                        <label for="brushSize" class="text-[10px] text-gray-400">Size</label>
                         <input type="range" id="brushSize" min="1" max="100" step="1" value="10" class="w-full accent-blue-500 h-1 rounded-lg appearance-none bg-gray-700">
+                    </div>
+
+                    <div class="flex items-center gap-1 mt-1">
+                        <input type="checkbox" id="paintAllFaces" class="w-3 h-3 accent-blue-500 cursor-pointer">
+                        <label for="paintAllFaces" class="text-[10px] text-gray-400 cursor-pointer">Paint All Faces</label>
                     </div>
                 </div>
 
-                <div class="flex flex-col items-center mt-2 px-1">
-                    <label for="opacitySlider" class="text-[10px] text-gray-400 mb-1">Opacity</label>
-                    <input type="range" id="opacitySlider" min="0.1" max="1" step="0.05" value="1" class="w-full accent-blue-500 cursor-pointer bg-gray-700 h-1 rounded-lg appearance-none">
+                <div class="flex flex-col items-center mt-1 px-1">
+                    <label for="opacitySlider" class="text-[10px] text-gray-400 w-full text-left">Opacity</label>
+                    <input type="range" id="opacitySlider" min="0.1" max="1" step="0.05" value="1" class="w-full accent-blue-500 cursor-pointer bg-gray-700 h-1 rounded-lg appearance-none mt-1">
                 </div>
 
                 <hr class="border-gray-700 my-1"/>
 
-                <button class="tool-btn action-btn px-3 py-2 bg-gray-800 hover:bg-red-900/80 text-red-300 rounded text-sm border border-gray-600 flex items-center gap-2" data-action="delete">
+                <button class="tool-btn action-btn px-2 py-1.5 bg-gray-800 hover:bg-red-900/80 text-red-300 rounded text-xs border border-gray-600 flex items-center gap-1" data-action="delete">
                     <span>Delete</span>
                 </button>
             </div>
@@ -146,8 +151,8 @@
         </div>
         
         <!-- Bottom Bar (Instructions) -->
-        <div class="w-full p-4 text-center pointer-events-none">
-            <span id="instruction-text" class="px-4 py-2 bg-black/50 text-gray-300 rounded-full text-sm backdrop-blur inline-block">
+        <div class="w-full p-2 text-center pointer-events-none">
+            <span id="instruction-text" class="px-3 py-1 bg-black/50 text-gray-300 rounded-full text-xs backdrop-blur inline-block">
                 Select a tool and interact with objects.
             </span>
         </div>
@@ -155,10 +160,10 @@
         <!-- FPS Preview UI -->
         <div id="preview-ui" class="absolute inset-0 pointer-events-none hidden flex justify-center items-center z-50">
             <div class="w-1 h-1 bg-green-400 rounded-full shadow-[0_0_2px_black]"></div>
-            <div class="absolute top-4 left-1/2 -translate-x-1/2 bg-black/70 text-white px-4 py-2 rounded-full font-bold shadow-lg">Press ESC to exit FPS Preview</div>
-            <div class="absolute bottom-4 right-4 bg-black/70 text-white px-4 py-2 rounded-lg font-bold shadow-lg flex flex-col items-end gap-1">
+            <div class="absolute top-4 left-1/2 -translate-x-1/2 bg-black/70 text-white px-4 py-2 rounded-full font-bold shadow-lg text-sm">Press ESC to exit FPS Preview</div>
+            <div class="absolute bottom-4 right-4 bg-black/70 text-white px-4 py-2 rounded-lg font-bold shadow-lg flex flex-col items-end gap-1 text-sm">
                 <span>WASD to Move</span>
-                <span class="text-gray-300 text-sm">Right Click to ADS</span>
+                <span class="text-gray-300 text-xs">Right Click to ADS</span>
             </div>
         </div>
     </div>
@@ -219,6 +224,7 @@
         let isPainting = false;
         let lastPaintTarget = null;
         let lastPaintUV = null;
+        let lastPaintMatIndex = null;
         let paintStrokeStartData = null;
 
         // ADS variables
@@ -493,8 +499,9 @@
                 initialOpacities = selectedObjects.map(obj => {
                     let startOp = 1;
                     obj.traverse(child => {
-                        if (child.isMesh && child.material && child.material.opacity !== undefined) {
-                            startOp = child.material.opacity;
+                        if (child.isMesh && child.material) {
+                            const mat = Array.isArray(child.material) ? child.material[0] : child.material;
+                            if (mat && mat.opacity !== undefined) startOp = mat.opacity;
                         }
                     });
                     return { obj: obj, opacity: startOp };
@@ -710,7 +717,7 @@
                 'move': 'Move Tool: Click to select (Shift+Click for multiple). Drag arrows to move.',
                 'rotate': 'Rotate Tool: Click to select (Shift+Click for multiple). Drag rings to rotate.',
                 'scale': 'Scale Tool: Click to select. Drag blocks to scale. (ALT: uniform)',
-                'paint_mode': 'Paint Mode: Use Brush to texture paint faces, Fill to bucket fill, or Eraser.',
+                'paint_mode': 'Paint Mode: Use Brush to texture paint faces, Fill to bucket fill, or Erase.',
                 'delete': 'Delete Tool: Click object(s) to remove.'
             };
             textEl.textContent = messages[currentAction] || 'Select a tool.';
@@ -743,7 +750,15 @@
             }
 
             if (geometry) {
-                const mesh = new THREE.Mesh(geometry, material);
+                // Ensure individual material slots exist for individual face painting
+                let numMats = 1;
+                if (geometry.groups && geometry.groups.length > 0) {
+                    numMats = Math.max(...geometry.groups.map(g => g.materialIndex || 0)) + 1;
+                }
+                const materials = [];
+                for(let i=0; i<numMats; i++) materials.push(material.clone());
+
+                const mesh = new THREE.Mesh(geometry, numMats > 1 ? materials : materials[0]);
                 mesh.castShadow = true;
                 mesh.receiveShadow = true;
                 mesh.userData.isSelectable = true;
@@ -793,7 +808,6 @@
         }
 
         function addHighlight(obj) {
-            // Add a bright blue BoxHelper for clear selection
             const helper = new THREE.BoxHelper(obj, 0x3b82f6); 
             helper.material.depthTest = false; 
             helper.material.transparent = true;
@@ -803,8 +817,12 @@
         }
 
         function updateEmissive(obj, hex) {
-            if (obj.isMesh && obj.material && obj.material.emissive) {
-                obj.material.emissive.setHex(hex);
+            if (obj.isMesh && obj.material) {
+                const isArray = Array.isArray(obj.material);
+                const mats = isArray ? obj.material : [obj.material];
+                mats.forEach(m => {
+                    if (m.emissive) m.emissive.setHex(hex);
+                });
             }
             if (obj.children) {
                 obj.children.forEach(child => updateEmissive(child, hex));
@@ -839,8 +857,9 @@
                 if (!firstMesh && child.isMesh) firstMesh = child;
             });
             if (firstMesh && firstMesh.material) {
+                const mat = Array.isArray(firstMesh.material) ? firstMesh.material[0] : firstMesh.material;
                 const opacitySlider = document.getElementById('opacitySlider');
-                if(opacitySlider) opacitySlider.value = firstMesh.material.opacity !== undefined ? firstMesh.material.opacity : 1;
+                if(opacitySlider && mat) opacitySlider.value = mat.opacity !== undefined ? mat.opacity : 1;
             }
 
             if (['move', 'rotate', 'scale'].includes(currentAction)) {
@@ -866,93 +885,119 @@
         }
 
         // --- Texture Painting Core ---
-        function ensureTexture(obj) {
-            if (!obj.userData.paintCanvas) {
+        function ensureTexture(obj, matIndex = 0) {
+            if (!obj.userData.paintData) obj.userData.paintData = [];
+            
+            if (!obj.userData.paintData[matIndex]) {
                 const canvas = document.createElement('canvas');
                 canvas.width = 1024;
                 canvas.height = 1024;
                 const ctx = canvas.getContext('2d', { willReadFrequently: true });
                 
-                // Fill with current solid color to maintain visuals
-                const currentColor = obj.material.color.getStyle();
+                let targetMat = Array.isArray(obj.material) ? obj.material[matIndex] : obj.material;
+                if(!targetMat) return null; // Protect against index out of bounds on raw GLTFs
+                
+                const currentColor = targetMat.color.getStyle();
                 ctx.fillStyle = currentColor;
                 ctx.fillRect(0, 0, 1024, 1024);
                 
                 const tex = new THREE.CanvasTexture(canvas);
                 tex.colorSpace = THREE.SRGBColorSpace;
                 
-                if (!obj.material.isCustomCloned) {
-                    obj.material = obj.material.clone();
-                    obj.material.isCustomCloned = true;
+                if (!targetMat.isCustomCloned) {
+                    targetMat = targetMat.clone();
+                    targetMat.isCustomCloned = true;
+                    if (Array.isArray(obj.material)) obj.material[matIndex] = targetMat;
+                    else obj.material = targetMat;
                 }
                 
-                // Set base color to white so texture colors are accurate
-                obj.material.color.setHex(0xffffff);
-                obj.material.map = tex;
-                obj.material.needsUpdate = true;
+                targetMat.color.setHex(0xffffff);
+                targetMat.map = tex;
+                targetMat.needsUpdate = true;
                 
-                obj.userData.paintCanvas = canvas;
-                obj.userData.paintCtx = ctx;
+                obj.userData.paintData[matIndex] = { canvas, ctx };
             }
-            return obj.userData;
+            return obj.userData.paintData[matIndex];
         }
 
-        function restoreTexture(obj, dataUrl) {
-            const { paintCanvas, paintCtx } = ensureTexture(obj);
-            const img = new Image();
-            img.onload = () => {
-                paintCtx.clearRect(0, 0, 1024, 1024);
-                paintCtx.drawImage(img, 0, 0);
-                obj.material.map.needsUpdate = true;
-            };
-            img.src = dataUrl;
+        function restoreTexture(obj, dataMap) {
+            Object.keys(dataMap).forEach(idx => {
+                const texData = ensureTexture(obj, idx);
+                if (!texData) return;
+                const { ctx } = texData;
+                const img = new Image();
+                img.onload = () => {
+                    ctx.clearRect(0, 0, 1024, 1024);
+                    ctx.drawImage(img, 0, 0);
+                    const mat = Array.isArray(obj.material) ? obj.material[idx] : obj.material;
+                    if(mat && mat.map) mat.map.needsUpdate = true;
+                };
+                img.src = dataMap[idx];
+            });
         }
 
-        function fillObject(obj, colorHex) {
-            const { paintCanvas, paintCtx } = ensureTexture(obj);
-            paintCtx.fillStyle = colorHex;
-            paintCtx.fillRect(0, 0, paintCanvas.width, paintCanvas.height);
-            obj.material.map.needsUpdate = true;
+        function fillObject(obj, colorHex, matIndex, paintAll) {
+            const indices = paintAll ? (Array.isArray(obj.material) ? obj.material.map((_, i) => i) : [0]) : [matIndex];
+            indices.forEach(idx => {
+                const texData = ensureTexture(obj, idx);
+                if (!texData) return;
+                const { canvas, ctx } = texData;
+                ctx.fillStyle = colorHex;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                const mat = Array.isArray(obj.material) ? obj.material[idx] : obj.material;
+                if(mat && mat.map) mat.map.needsUpdate = true;
+            });
         }
 
-        function paintStroke(obj, uv1, uv2, color, size, isEraser) {
-            const { paintCanvas, paintCtx } = ensureTexture(obj);
-            const w = paintCanvas.width;
-            const h = paintCanvas.height;
-            
-            paintCtx.beginPath();
-            if (uv1) {
-                paintCtx.moveTo(uv1.x * w, (1 - uv1.y) * h);
-                paintCtx.lineTo(uv2.x * w, (1 - uv2.y) * h);
-            } else {
-                paintCtx.arc(uv2.x * w, (1 - uv2.y) * h, size/2, 0, Math.PI * 2);
-            }
-            
-            paintCtx.globalCompositeOperation = 'source-over';
-            paintCtx.lineWidth = size;
-            paintCtx.lineCap = 'round';
-            paintCtx.lineJoin = 'round';
-            
-            // Default object color is #cccccc, so erase restores to that
-            const paintColor = isEraser ? '#cccccc' : color;
-            paintCtx.strokeStyle = paintColor;
-            paintCtx.fillStyle = paintColor;
-            
-            if (uv1) paintCtx.stroke();
-            else paintCtx.fill();
-            
-            obj.material.map.needsUpdate = true;
+        function paintStroke(obj, uv1, uv2, color, size, isEraser, matIndex, paintAll) {
+            const indices = paintAll ? (Array.isArray(obj.material) ? obj.material.map((_, i) => i) : [0]) : [matIndex];
+            indices.forEach(idx => {
+                const texData = ensureTexture(obj, idx);
+                if (!texData) return;
+                const { canvas, ctx } = texData;
+                const w = canvas.width;
+                const h = canvas.height;
+                
+                ctx.beginPath();
+                if (uv1) {
+                    ctx.moveTo(uv1.x * w, (1 - uv1.y) * h);
+                    ctx.lineTo(uv2.x * w, (1 - uv2.y) * h);
+                } else {
+                    ctx.arc(uv2.x * w, (1 - uv2.y) * h, size/2, 0, Math.PI * 2);
+                }
+                
+                ctx.globalCompositeOperation = 'source-over';
+                ctx.lineWidth = size;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                
+                const paintColor = isEraser ? '#cccccc' : color;
+                ctx.strokeStyle = paintColor;
+                ctx.fillStyle = paintColor;
+                
+                if (uv1) ctx.stroke();
+                else ctx.fill();
+                
+                const mat = Array.isArray(obj.material) ? obj.material[idx] : obj.material;
+                if(mat && mat.map) mat.map.needsUpdate = true;
+            });
         }
 
         function setOpacityObject(obj, opacity) {
             if (obj.isMesh && obj.material) {
-                if (!obj.material.isCustomCloned) {
-                    obj.material = obj.material.clone();
-                    obj.material.isCustomCloned = true;
+                const isArray = Array.isArray(obj.material);
+                const mats = isArray ? obj.material : [obj.material];
+                
+                for (let i = 0; i < mats.length; i++) {
+                    if (!mats[i].isCustomCloned) {
+                        mats[i] = mats[i].clone();
+                        mats[i].isCustomCloned = true;
+                    }
+                    mats[i].opacity = opacity;
+                    mats[i].transparent = opacity < 1;
+                    mats[i].needsUpdate = true;
                 }
-                obj.material.opacity = opacity;
-                obj.material.transparent = opacity < 1;
-                obj.material.needsUpdate = true;
+                obj.material = isArray ? mats : mats[0];
             }
             if (obj.children) {
                 obj.children.forEach(child => setOpacityObject(child, opacity));
@@ -1054,14 +1099,27 @@
                     if (!intersects[0].uv) return; // Guard for geometries lacking UVs
                     
                     orbitControls.enabled = false;
+                    const paintAll = document.getElementById('paintAllFaces').checked;
+                    const matIndex = (intersects[0].face && Array.isArray(object.material)) ? (intersects[0].face.materialIndex || 0) : 0;
+                    
                     const colorHex = document.getElementById('colorPicker').value;
                     const brushSize = parseInt(document.getElementById('brushSize').value);
 
                     if (currentPaintTool === 'fill') {
-                        const { paintCanvas } = ensureTexture(object);
-                        const oldData = paintCanvas.toDataURL();
-                        fillObject(object, colorHex);
-                        const newData = paintCanvas.toDataURL();
+                        const indicesToFill = paintAll ? (Array.isArray(object.material) ? object.material.map((_, i) => i) : [0]) : [matIndex];
+                        const oldData = {};
+                        indicesToFill.forEach(idx => {
+                            const tex = ensureTexture(object, idx);
+                            if(tex) oldData[idx] = tex.canvas.toDataURL();
+                        });
+                        
+                        fillObject(object, colorHex, matIndex, paintAll);
+                        
+                        const newData = {};
+                        indicesToFill.forEach(idx => {
+                            const tex = ensureTexture(object, idx);
+                            if(tex) newData[idx] = tex.canvas.toDataURL();
+                        });
                         
                         const targetObj = object;
                         addHistory(
@@ -1072,11 +1130,16 @@
                         isPainting = true;
                         lastPaintTarget = object;
                         lastPaintUV = intersects[0].uv;
+                        lastPaintMatIndex = matIndex;
                         
-                        const { paintCanvas } = ensureTexture(object);
-                        paintStrokeStartData = paintCanvas.toDataURL();
+                        paintStrokeStartData = {};
+                        const indicesToPaint = paintAll ? (Array.isArray(object.material) ? object.material.map((_, i) => i) : [0]) : [matIndex];
+                        indicesToPaint.forEach(idx => {
+                            const tex = ensureTexture(object, idx);
+                            if(tex) paintStrokeStartData[idx] = tex.canvas.toDataURL();
+                        });
                         
-                        paintStroke(object, null, lastPaintUV, colorHex, brushSize, currentPaintTool === 'eraser');
+                        paintStroke(object, null, lastPaintUV, colorHex, brushSize, currentPaintTool === 'eraser', matIndex, paintAll);
                     }
                     return;
                 }
@@ -1144,11 +1207,31 @@
                 const intersects = raycaster.intersectObject(lastPaintTarget, true);
                 if (intersects.length > 0 && intersects[0].uv) {
                     const currentUV = intersects[0].uv;
+                    const paintAll = document.getElementById('paintAllFaces').checked;
+                    const currentMatIndex = (intersects[0].face && Array.isArray(lastPaintTarget.material)) ? (intersects[0].face.materialIndex || 0) : 0;
+                    
                     const colorHex = document.getElementById('colorPicker').value;
                     const brushSize = parseInt(document.getElementById('brushSize').value);
                     
-                    paintStroke(lastPaintTarget, lastPaintUV, currentUV, colorHex, brushSize, currentPaintTool === 'eraser');
+                    // Capture start state for a new face if we crossed boundaries
+                    const indicesToPaint = paintAll ? (Array.isArray(lastPaintTarget.material) ? lastPaintTarget.material.map((_, i) => i) : [0]) : [currentMatIndex];
+                    indicesToPaint.forEach(idx => {
+                        if (paintStrokeStartData[idx] === undefined) {
+                            const tex = ensureTexture(lastPaintTarget, idx);
+                            if(tex) paintStrokeStartData[idx] = tex.canvas.toDataURL();
+                        }
+                    });
+
+                    if (currentMatIndex !== lastPaintMatIndex && !paintAll) {
+                        // Restart stroke cleanly on new face
+                        paintStroke(lastPaintTarget, null, currentUV, colorHex, brushSize, currentPaintTool === 'eraser', currentMatIndex, paintAll);
+                    } else {
+                        // Continue stroke
+                        paintStroke(lastPaintTarget, lastPaintUV, currentUV, colorHex, brushSize, currentPaintTool === 'eraser', currentMatIndex, paintAll);
+                    }
+                    
                     lastPaintUV = currentUV;
+                    lastPaintMatIndex = currentMatIndex;
                 }
             }
 
@@ -1167,8 +1250,12 @@
                 isPainting = false;
                 orbitControls.enabled = true;
                 
-                const { paintCanvas } = ensureTexture(lastPaintTarget);
-                const paintStrokeEndData = paintCanvas.toDataURL();
+                const paintStrokeEndData = {};
+                Object.keys(paintStrokeStartData).forEach(idx => {
+                    const tex = ensureTexture(lastPaintTarget, idx);
+                    if(tex) paintStrokeEndData[idx] = tex.canvas.toDataURL();
+                });
+                
                 const targetObj = lastPaintTarget;
                 const startData = paintStrokeStartData;
                 
@@ -1179,6 +1266,7 @@
                 
                 lastPaintTarget = null;
                 lastPaintUV = null;
+                lastPaintMatIndex = null;
                 paintStrokeStartData = null;
             }
 
@@ -1298,13 +1386,40 @@
             selectedObjects.forEach(obj => {
                 const clone = obj.clone(true); // Deep clone
                 
-                // Deep clone materials so copies can be painted independently
+                // Deep clone materials and canvas textures so copies can be painted independently
                 clone.traverse((child) => {
                     if (child.isMesh && child.material) {
-                        child.material = child.material.clone();
-                        child.material.isCustomCloned = true;
-                        if (child.material.emissive) {
-                            child.material.emissive.setHex(0x000000); // Strip highlight logic
+                        const isArray = Array.isArray(child.material);
+                        const mats = isArray ? child.material : [child.material];
+                        
+                        const clonedMats = mats.map(m => {
+                            const newMat = m.clone();
+                            newMat.isCustomCloned = true;
+                            if (newMat.emissive) newMat.emissive.setHex(0x000000);
+                            return newMat;
+                        });
+                        
+                        child.material = isArray ? clonedMats : clonedMats[0];
+                        
+                        // Deep clone paint canvases
+                        if (child.userData.paintData) {
+                            const newPaintData = [];
+                            child.userData.paintData.forEach((pd, idx) => {
+                                if (pd) {
+                                    const newCanvas = document.createElement('canvas');
+                                    newCanvas.width = pd.canvas.width;
+                                    newCanvas.height = pd.canvas.height;
+                                    const newCtx = newCanvas.getContext('2d', {willReadFrequently: true});
+                                    newCtx.drawImage(pd.canvas, 0, 0);
+                                    
+                                    const tex = new THREE.CanvasTexture(newCanvas);
+                                    tex.colorSpace = THREE.SRGBColorSpace;
+                                    clonedMats[idx].map = tex;
+                                    
+                                    newPaintData[idx] = { canvas: newCanvas, ctx: newCtx };
+                                }
+                            });
+                            child.userData.paintData = newPaintData;
                         }
                     }
                 });
