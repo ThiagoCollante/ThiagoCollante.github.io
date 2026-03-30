@@ -108,13 +108,27 @@
 
                 <hr class="border-gray-700 my-1"/>
                 
-                <button class="tool-btn action-btn px-3 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded text-sm border border-gray-600 flex items-center gap-2" data-action="paint">
-                    <span>Paint</span>
+                <button class="tool-btn action-btn px-3 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded text-sm border border-gray-600 flex items-center gap-2" data-action="paint_mode">
+                    <span>Paint Mode</span>
                 </button>
                 
-                <div class="flex flex-col items-center mt-1">
-                    <label for="colorPicker" class="text-[10px] text-gray-400 mb-1">Color</label>
-                    <input type="color" id="colorPicker" value="#3b82f6" class="w-10 h-10 p-0 border-0 rounded cursor-pointer bg-transparent"/>
+                <!-- Paint Mode Tools (Hidden by default) -->
+                <div id="paint-tools-panel" class="hidden flex flex-col gap-2 p-2 bg-gray-950/50 rounded border border-gray-700">
+                    <div class="flex gap-1 justify-between">
+                        <button class="paint-sub-btn active flex-1 py-1 bg-blue-600 hover:bg-blue-500 text-xs text-white rounded border border-gray-600 transition-colors" data-painttool="brush">Brush</button>
+                        <button class="paint-sub-btn flex-1 py-1 bg-gray-700 hover:bg-blue-500 text-xs text-white rounded border border-gray-600 transition-colors" data-painttool="fill">Fill</button>
+                        <button class="paint-sub-btn flex-1 py-1 bg-gray-700 hover:bg-blue-500 text-xs text-white rounded border border-gray-600 transition-colors" data-painttool="eraser">Eraser</button>
+                    </div>
+                    
+                    <div class="flex items-center justify-between mt-1">
+                        <label for="colorPicker" class="text-[10px] text-gray-400">Color</label>
+                        <input type="color" id="colorPicker" value="#3b82f6" class="w-8 h-8 p-0 border-0 rounded cursor-pointer bg-transparent"/>
+                    </div>
+                    
+                    <div class="flex flex-col mt-1">
+                        <label for="brushSize" class="text-[10px] text-gray-400 mb-1">Brush Size</label>
+                        <input type="range" id="brushSize" min="1" max="100" step="1" value="10" class="w-full accent-blue-500 h-1 rounded-lg appearance-none bg-gray-700">
+                    </div>
                 </div>
 
                 <div class="flex flex-col items-center mt-2 px-1">
@@ -199,6 +213,13 @@
         let fpVelocity = new THREE.Vector3();
         let fpDirection = new THREE.Vector3();
         let lastTime = performance.now();
+
+        // Texture Painting variables
+        let currentPaintTool = 'brush';
+        let isPainting = false;
+        let lastPaintTarget = null;
+        let lastPaintUV = null;
+        let paintStrokeStartData = null;
 
         // ADS variables
         let isAiming = false;
@@ -327,7 +348,7 @@
             window.addEventListener('resize', onWindowResize);
             renderer.domElement.addEventListener('pointerdown', onPointerDown);
 
-            // Global pointer events for marquee selection
+            // Global pointer events for marquee selection and painting
             window.addEventListener('pointermove', onPointerMove);
             window.addEventListener('pointerup', onPointerUp);
 
@@ -406,6 +427,13 @@
                     targetBtn.classList.add('active');
                     
                     currentAction = targetBtn.dataset.action;
+                    
+                    if (currentAction === 'paint_mode') {
+                        document.getElementById('paint-tools-panel').classList.remove('hidden');
+                    } else {
+                        document.getElementById('paint-tools-panel').classList.add('hidden');
+                    }
+                    
                     updateInstructionText();
 
                     if (['move', 'rotate', 'scale'].includes(currentAction)) {
@@ -434,6 +462,20 @@
                     snapIndicator.classList.add('bg-gray-700', 'text-gray-400');
                 }
                 updateSnapSettings();
+            });
+
+            // Paint Sub-Tools Logic
+            document.querySelectorAll('.paint-sub-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    document.querySelectorAll('.paint-sub-btn').forEach(b => {
+                        b.classList.remove('active', 'bg-blue-600');
+                        b.classList.add('bg-gray-700');
+                    });
+                    const targetBtn = e.target;
+                    targetBtn.classList.add('active', 'bg-blue-600');
+                    targetBtn.classList.remove('bg-gray-700');
+                    currentPaintTool = targetBtn.dataset.painttool;
+                });
             });
 
             // Toggle Tools Menu
@@ -537,8 +579,7 @@
                         
                         if (['move', 'rotate', 'scale'].includes(currentAction)) {
                             clearSelection();
-                            selectedObjects.push(wrapper);
-                            updateEmissive(wrapper, 0x333333);
+                            selectObject(wrapper);
                             updateTransformControls();
                         }
                     }, function(error) {
@@ -669,7 +710,7 @@
                 'move': 'Move Tool: Click to select (Shift+Click for multiple). Drag arrows to move.',
                 'rotate': 'Rotate Tool: Click to select (Shift+Click for multiple). Drag rings to rotate.',
                 'scale': 'Scale Tool: Click to select. Drag blocks to scale. (ALT: uniform)',
-                'paint': 'Paint Tool: Select a color and click object(s) to paint.',
+                'paint_mode': 'Paint Mode: Use Brush to texture paint faces, Fill to bucket fill, or Eraser.',
                 'delete': 'Delete Tool: Click object(s) to remove.'
             };
             textEl.textContent = messages[currentAction] || 'Select a tool.';
@@ -798,7 +839,8 @@
                 if (!firstMesh && child.isMesh) firstMesh = child;
             });
             if (firstMesh && firstMesh.material) {
-                document.getElementById('opacitySlider').value = firstMesh.material.opacity !== undefined ? firstMesh.material.opacity : 1;
+                const opacitySlider = document.getElementById('opacitySlider');
+                if(opacitySlider) opacitySlider.value = firstMesh.material.opacity !== undefined ? firstMesh.material.opacity : 1;
             }
 
             if (['move', 'rotate', 'scale'].includes(currentAction)) {
@@ -823,17 +865,83 @@
             }
         }
 
-        function paintObject(obj, colorHex) {
-            if (obj.isMesh && obj.material) {
+        // --- Texture Painting Core ---
+        function ensureTexture(obj) {
+            if (!obj.userData.paintCanvas) {
+                const canvas = document.createElement('canvas');
+                canvas.width = 1024;
+                canvas.height = 1024;
+                const ctx = canvas.getContext('2d', { willReadFrequently: true });
+                
+                // Fill with current solid color to maintain visuals
+                const currentColor = obj.material.color.getStyle();
+                ctx.fillStyle = currentColor;
+                ctx.fillRect(0, 0, 1024, 1024);
+                
+                const tex = new THREE.CanvasTexture(canvas);
+                tex.colorSpace = THREE.SRGBColorSpace;
+                
                 if (!obj.material.isCustomCloned) {
                     obj.material = obj.material.clone();
                     obj.material.isCustomCloned = true;
                 }
-                obj.material.color.set(colorHex);
+                
+                // Set base color to white so texture colors are accurate
+                obj.material.color.setHex(0xffffff);
+                obj.material.map = tex;
+                obj.material.needsUpdate = true;
+                
+                obj.userData.paintCanvas = canvas;
+                obj.userData.paintCtx = ctx;
             }
-            if (obj.children) {
-                obj.children.forEach(child => paintObject(child, colorHex));
+            return obj.userData;
+        }
+
+        function restoreTexture(obj, dataUrl) {
+            const { paintCanvas, paintCtx } = ensureTexture(obj);
+            const img = new Image();
+            img.onload = () => {
+                paintCtx.clearRect(0, 0, 1024, 1024);
+                paintCtx.drawImage(img, 0, 0);
+                obj.material.map.needsUpdate = true;
+            };
+            img.src = dataUrl;
+        }
+
+        function fillObject(obj, colorHex) {
+            const { paintCanvas, paintCtx } = ensureTexture(obj);
+            paintCtx.fillStyle = colorHex;
+            paintCtx.fillRect(0, 0, paintCanvas.width, paintCanvas.height);
+            obj.material.map.needsUpdate = true;
+        }
+
+        function paintStroke(obj, uv1, uv2, color, size, isEraser) {
+            const { paintCanvas, paintCtx } = ensureTexture(obj);
+            const w = paintCanvas.width;
+            const h = paintCanvas.height;
+            
+            paintCtx.beginPath();
+            if (uv1) {
+                paintCtx.moveTo(uv1.x * w, (1 - uv1.y) * h);
+                paintCtx.lineTo(uv2.x * w, (1 - uv2.y) * h);
+            } else {
+                paintCtx.arc(uv2.x * w, (1 - uv2.y) * h, size/2, 0, Math.PI * 2);
             }
+            
+            paintCtx.globalCompositeOperation = 'source-over';
+            paintCtx.lineWidth = size;
+            paintCtx.lineCap = 'round';
+            paintCtx.lineJoin = 'round';
+            
+            // Default object color is #cccccc, so erase restores to that
+            const paintColor = isEraser ? '#cccccc' : color;
+            paintCtx.strokeStyle = paintColor;
+            paintCtx.fillStyle = paintColor;
+            
+            if (uv1) paintCtx.stroke();
+            else paintCtx.fill();
+            
+            obj.material.map.needsUpdate = true;
         }
 
         function setOpacityObject(obj, opacity) {
@@ -845,9 +953,6 @@
                 obj.material.opacity = opacity;
                 obj.material.transparent = opacity < 1;
                 obj.material.needsUpdate = true;
-                
-                // If it casts shadows, sometimes highly transparent objects look better without casting solid shadows
-                // obj.castShadow = opacity > 0.5; 
             }
             if (obj.children) {
                 obj.children.forEach(child => setOpacityObject(child, opacity));
@@ -902,9 +1007,7 @@
 
             previouslySelected.forEach(obj => {
                 if (obj.parent) {
-                    selectedObjects.push(obj);
-                    updateEmissive(obj, 0x333333);
-                    addHighlight(obj);
+                    selectObject(obj);
                 }
             });
             updateTransformControls();
@@ -946,6 +1049,38 @@
             if (intersects.length > 0) {
                 // Find root selectable object (ensures imported models are selected as a whole)
                 let object = intersects[0].object;
+                
+                if (currentAction === 'paint_mode') {
+                    if (!intersects[0].uv) return; // Guard for geometries lacking UVs
+                    
+                    orbitControls.enabled = false;
+                    const colorHex = document.getElementById('colorPicker').value;
+                    const brushSize = parseInt(document.getElementById('brushSize').value);
+
+                    if (currentPaintTool === 'fill') {
+                        const { paintCanvas } = ensureTexture(object);
+                        const oldData = paintCanvas.toDataURL();
+                        fillObject(object, colorHex);
+                        const newData = paintCanvas.toDataURL();
+                        
+                        const targetObj = object;
+                        addHistory(
+                            () => restoreTexture(targetObj, oldData),
+                            () => restoreTexture(targetObj, newData)
+                        );
+                    } else {
+                        isPainting = true;
+                        lastPaintTarget = object;
+                        lastPaintUV = intersects[0].uv;
+                        
+                        const { paintCanvas } = ensureTexture(object);
+                        paintStrokeStartData = paintCanvas.toDataURL();
+                        
+                        paintStroke(object, null, lastPaintUV, colorHex, brushSize, currentPaintTool === 'eraser');
+                    }
+                    return;
+                }
+
                 while (object && !object.userData.isSelectable && object.parent && object !== objectsGroup && object !== selectionGroup) {
                     object = object.parent;
                 }
@@ -953,36 +1088,7 @@
                     object = intersects[0].object; // fallback
                 }
 
-                if (currentAction === 'paint') {
-                    const colorHex = document.getElementById('colorPicker').value;
-                    let targetObjects = selectedObjects.includes(object) ? [...selectedObjects] : [object];
-                    
-                    // Capture old colors for undo
-                    const oldColors = [];
-                    function captureColors(o) {
-                        if (o.isMesh && o.material) {
-                            oldColors.push({ obj: o, color: o.material.color.getHex() });
-                        }
-                        if (o.children) o.children.forEach(captureColors);
-                    }
-                    targetObjects.forEach(captureColors);
-
-                    targetObjects.forEach(obj => paintObject(obj, colorHex));
-
-                    const applyColorCommand = (colorDataArray, newCol) => {
-                        if (newCol !== undefined) {
-                            targetObjects.forEach(obj => paintObject(obj, newCol));
-                        } else {
-                            colorDataArray.forEach(data => paintObject(data.obj, data.color));
-                        }
-                    };
-
-                    addHistory(
-                        () => applyColorCommand(oldColors),
-                        () => applyColorCommand(null, colorHex)
-                    );
-                } 
-                else if (currentAction === 'delete') {
+                if (currentAction === 'delete') {
                     let toDelete = [];
                     if (selectedObjects.includes(object)) {
                         toDelete = [...selectedObjects];
@@ -1030,6 +1136,22 @@
         }
 
         function onPointerMove(e) {
+            if (isPainting && lastPaintTarget) {
+                mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+                mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+                raycaster.setFromCamera(mouse, camera);
+                
+                const intersects = raycaster.intersectObject(lastPaintTarget, true);
+                if (intersects.length > 0 && intersects[0].uv) {
+                    const currentUV = intersects[0].uv;
+                    const colorHex = document.getElementById('colorPicker').value;
+                    const brushSize = parseInt(document.getElementById('brushSize').value);
+                    
+                    paintStroke(lastPaintTarget, lastPaintUV, currentUV, colorHex, brushSize, currentPaintTool === 'eraser');
+                    lastPaintUV = currentUV;
+                }
+            }
+
             if (isMarqueeSelecting) {
                 const currentX = e.clientX;
                 const currentY = e.clientY;
@@ -1041,6 +1163,25 @@
         }
 
         function onPointerUp(e) {
+            if (isPainting && lastPaintTarget) {
+                isPainting = false;
+                orbitControls.enabled = true;
+                
+                const { paintCanvas } = ensureTexture(lastPaintTarget);
+                const paintStrokeEndData = paintCanvas.toDataURL();
+                const targetObj = lastPaintTarget;
+                const startData = paintStrokeStartData;
+                
+                addHistory(
+                    () => restoreTexture(targetObj, startData),
+                    () => restoreTexture(targetObj, paintStrokeEndData)
+                );
+                
+                lastPaintTarget = null;
+                lastPaintUV = null;
+                paintStrokeStartData = null;
+            }
+
             if (isMarqueeSelecting) {
                 isMarqueeSelecting = false;
                 marqueeDiv.classList.add('hidden');
