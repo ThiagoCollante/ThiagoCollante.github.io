@@ -434,6 +434,14 @@
                     
                     currentAction = targetBtn.dataset.action;
                     
+                    // Safety reset when switching tools to prevent stuck camera
+                    orbitControls.enabled = true;
+                    isPainting = false;
+                    if (isMarqueeSelecting) {
+                        isMarqueeSelecting = false;
+                        marqueeDiv.classList.add('hidden');
+                    }
+                    
                     if (currentAction === 'paint_mode') {
                         document.getElementById('paint-tools-panel').classList.remove('hidden');
                     } else {
@@ -1126,6 +1134,8 @@
                             () => restoreTexture(targetObj, oldData),
                             () => restoreTexture(targetObj, newData)
                         );
+                        
+                        orbitControls.enabled = true; // Re-enable orbit controls after fill
                     } else {
                         isPainting = true;
                         lastPaintTarget = object;
