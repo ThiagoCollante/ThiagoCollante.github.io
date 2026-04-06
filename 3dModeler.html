@@ -381,10 +381,10 @@
                     } else if (e.key.toLowerCase() === 'y') {
                         redo();
                         e.preventDefault();
-                    } else if (e.key.toLowerCase() === 'd') {
-                        duplicateSelected();
-                        e.preventDefault();
                     }
+                } else if (!isPreviewMode && e.key.toLowerCase() === 'd') {
+                    duplicateSelected();
+                    e.preventDefault();
                 }
 
                 if (!isPreviewMode) {
