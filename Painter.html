@@ -1,0 +1,2690 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pixel Art Studio - XP Edition</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/opentype.js@1.3.4/dist/opentype.min.js"></script>
+    <style>
+        /* Classic Windows XP Styles */
+        body {
+            font-family: Tahoma, "Trebuchet MS", sans-serif;
+            font-size: 11px;
+            color: #000;
+        }
+        
+        .xp-desktop {
+            background-color: #004E98; /* Classic WinXP background blue */
+        }
+        
+        .xp-window {
+            background-color: #ECE9D8; /* Classic Luna window gray */
+            border: 1px solid #00138C;
+            border-radius: 4px 4px 0 0;
+            box-shadow: 2px 2px 6px rgba(0,0,0,0.5);
+        }
+        
+        .xp-titlebar {
+            background: linear-gradient(to right, #0058e6, #3a93ff);
+            color: white;
+            font-weight: bold;
+            padding: 3px 6px;
+            font-size: 13px;
+            text-shadow: 1px 1px 1px #00138C;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-radius: 3px 3px 0 0;
+            user-select: none;
+        }
+
+        .xp-close-btn {
+            background: linear-gradient(to bottom, #e27d60 0%, #c43926 100%);
+            border: 1px solid white;
+            border-radius: 3px;
+            width: 20px; 
+            height: 20px;
+            display: flex; 
+            align-items: center; 
+            justify-content: center;
+            color: white;
+            font-family: Arial, sans-serif; 
+            font-size: 14px; 
+            font-weight: bold;
+            line-height: 1; 
+            cursor: pointer; 
+            box-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+            text-shadow: none;
+        }
+        .xp-close-btn:active {
+            background: #a32c1b;
+            box-shadow: inset 1px 1px 2px rgba(0,0,0,0.5);
+        }
+
+        .xp-btn {
+            background-color: #ECE9D8;
+            border-top: 1px solid #FFF;
+            border-left: 1px solid #FFF;
+            border-bottom: 1px solid #ACA899;
+            border-right: 1px solid #ACA899;
+            box-shadow: 1px 1px 0px #716F64;
+            border-radius: 2px;
+            padding: 3px;
+            cursor: pointer;
+            display: inline-flex; 
+            align-items: center; 
+            justify-content: center;
+            color: #000;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+        .xp-btn:active, .xp-btn.active {
+            border-top: 1px solid #ACA899;
+            border-left: 1px solid #ACA899;
+            border-bottom: 1px solid #FFF;
+            border-right: 1px solid #FFF;
+            box-shadow: inset 1px 1px 0px #716F64;
+            background-color: #E0DCD3;
+            padding: 4px 2px 2px 4px; 
+        }
+        
+        .xp-inset {
+            background-color: #FFFFFF;
+            border-top: 2px solid #ACA899;
+            border-left: 2px solid #ACA899;
+            border-bottom: 2px solid #FFFFFF;
+            border-right: 2px solid #FFFFFF;
+        }
+
+        .xp-panel {
+            background-color: #ECE9D8;
+            border-top: 1px solid #FFFFFF;
+            border-left: 1px solid #FFFFFF;
+            border-bottom: 1px solid #716F64;
+            border-right: 1px solid #716F64;
+        }
+
+        .checkerboard {
+            background-color: #fff;
+            background-image: 
+                linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%, #ccc),
+                linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%, #ccc);
+            background-size: 20px 20px;
+            background-position: 0 0, 10px 10px;
+        }
+        
+        canvas {
+            image-rendering: pixelated; 
+            touch-action: none; 
+        }
+
+        input[type="number"], input[type="text"] {
+            color: #000;
+        }
+
+        .xp-statusbar {
+            background-color: #ECE9D8;
+            border-top: 1px solid #FFFFFF;
+            border-bottom: 1px solid #716F64;
+            padding: 2px 6px;
+            display: flex;
+            align-items: center;
+            font-size: 11px;
+            color: #000;
+        }
+        .xp-statusbar-panel {
+            border-top: 1px solid #ACA899;
+            border-left: 1px solid #ACA899;
+            border-bottom: 1px solid #FFFFFF;
+            border-right: 1px solid #FFFFFF;
+            padding: 2px 6px;
+            height: 100%;
+        }
+
+        .xp-balloon {
+            background-color: #FFFFE1;
+            border: 1px solid #000000;
+            color: #000;
+            border-radius: 4px;
+            box-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            font-family: Tahoma, sans-serif;
+            font-size: 11px;
+        }
+
+        /* Layer List Item Active State */
+        .layer-item.active {
+            background-color: #0058e6;
+            color: white;
+        }
+    </style>
+</head>
+<body class="h-screen w-screen overflow-hidden flex flex-col font-sans">
+
+    <!-- Desktop Background -->
+    <div class="fixed inset-0 xp-desktop -z-10"></div>
+
+    <!-- Home Screen Overlay -->
+    <div id="home-screen" class="fixed inset-0 z-[100] flex flex-col items-center justify-center pointer-events-none transition-opacity duration-300">
+        <div class="absolute inset-0 xp-desktop pointer-events-auto -z-10"></div>
+        
+        <!-- Grouped Draggable Container for Home Menu -->
+        <div class="draggable-window pointer-events-auto flex flex-col items-center gap-4">
+            
+            <!-- Standalone Title Window -->
+            <div class="xp-window shadow-xl w-[300px]">
+                <div class="xp-titlebar cursor-move h-7">
+                    <span class="flex items-center gap-1">title</span>
+                    <div class="flex gap-1">
+                        <button class="xp-btn w-5 h-5 flex items-center justify-center" style="font-size: 10px; padding:0; border-radius:0;">_</button>
+                        <button class="xp-btn w-5 h-5 flex items-center justify-center" style="font-size: 10px; padding:0; border-radius:0;">□</button>
+                        <button class="xp-close-btn">×</button>
+                    </div>
+                </div>
+                <!-- Title in the body of the window -->
+                <div class="p-4 flex items-center justify-center gap-3 bg-[#ECE9D8]">
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/e/e4/Windows_XP_paint_icon.png" width="32" height="32" alt="icon" onerror="this.style.display='none'">
+                    <span class="text-2xl font-bold text-gray-800 tracking-wide">Paint.Exe</span>
+                </div>
+            </div>
+
+            <!-- Options Window -->
+            <div class="xp-window w-[512px] max-w-full shadow-2xl">
+                <div class="xp-titlebar cursor-move">
+                    <span class="flex items-center gap-1">
+                        Options
+                    </span>
+                    <button class="xp-close-btn" disabled>×</button>
+                </div>
+                <div class="p-6">
+                    
+                    <div class="flex gap-4">
+                        <!-- New File -->
+                        <div class="flex-1 xp-panel p-4">
+                            <h2 class="font-bold mb-3 border-b border-gray-400 pb-1">New Project</h2>
+                            <div class="space-y-3 mb-4">
+                                <div class="flex items-center justify-between">
+                                    <label>Width (px):</label>
+                                    <input type="number" id="new-width" value="16" min="1" max="1920" class="xp-inset w-16 px-1 py-1">
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <label>Height (px):</label>
+                                    <input type="number" id="new-height" value="16" min="1" max="1080" class="xp-inset w-16 px-1 py-1">
+                                </div>
+                            </div>
+                            <button id="btn-create-new" class="xp-btn w-full py-1 font-bold">Create Canvas</button>
+                        </div>
+
+                        <!-- Open File -->
+                        <div class="flex-1 xp-panel p-4">
+                            <h2 class="font-bold mb-3 border-b border-gray-400 pb-1">Open Image</h2>
+                            <p class="text-[10px] mb-3 leading-tight">Max size: 1920x1080. Larger images will be scaled down.</p>
+                            
+                            <div class="xp-inset p-4 text-center cursor-pointer relative h-20 flex flex-col items-center justify-center bg-white hover:bg-[#e0efff]">
+                                <input type="file" id="file-upload" accept="image/png, image/jpeg, image/gif, image/webp" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                                <span class="font-bold underline text-[#00138C]">Browse...</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Font Creator Mode -->
+                    <div class="xp-panel p-4 mt-4">
+                        <h2 class="font-bold mb-3 border-b border-gray-400 pb-1">Font Creator</h2>
+                        <p class="text-[10px] mb-3 leading-tight">Create a custom pixel font. Trace over template characters. Exports as a standard .ttf file.</p>
+                        <div class="flex items-center gap-4">
+                            <div class="flex items-center gap-2">
+                                <label>Char Size (px):</label>
+                                <input type="number" id="font-size-input" value="16" min="8" max="128" class="xp-inset w-16 px-1 py-1">
+                            </div>
+                            <button id="btn-create-font" class="xp-btn flex-1 py-1 font-bold">New Font</button>
+                            <div class="relative flex-1">
+                                <button class="xp-btn w-full py-1 font-bold">Load .TTF</button>
+                                <input type="file" id="font-upload-input" accept=".ttf" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 flex justify-end gap-2">
+                        <!-- Restored missing widgets button here -->
+                        <button id="btn-open-widgets-home" class="xp-btn font-bold px-4 py-1 flex items-center gap-1">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                            Widgets
+                        </button>
+                        <button id="btn-open-settings-home" class="xp-btn font-bold px-4 py-1 flex items-center gap-1">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                            Settings
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Widgets Window Overlay -->
+    <div id="widgets-window" class="fixed inset-0 z-[200] flex items-center justify-center hidden pointer-events-none">
+        <div class="absolute inset-0 bg-black/50 pointer-events-auto" id="widgets-backdrop"></div>
+        <div class="xp-window w-[300px] relative z-10 shadow-2xl draggable-window pointer-events-auto">
+            <div class="xp-titlebar cursor-move">
+                <span class="flex items-center gap-1">Widgets & Mods</span>
+                <button class="xp-close-btn" id="btn-close-widgets">×</button>
+            </div>
+            <div class="p-4 bg-[#ECE9D8]">
+                <p class="text-[10px] mb-3 leading-tight border-b border-gray-400 pb-2">Enable extra tools for your drawing experience.</p>
+                <div class="flex flex-col gap-3 my-4 pl-2">
+                    <label class="flex items-center gap-2 cursor-pointer font-bold text-xs">
+                        <input type="checkbox" id="toggle-widget-ref" class="w-4 h-4"> Reference Viewer
+                    </label>
+                    <label class="flex items-center gap-2 cursor-pointer font-bold text-xs">
+                        <input type="checkbox" id="toggle-widget-timer" class="w-4 h-4"> Speedrun Timer
+                    </label>
+                </div>
+                <div class="mt-4 flex justify-end">
+                    <button class="xp-btn px-6 font-bold" id="btn-save-widgets">OK</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Window Overlay -->
+    <div id="settings-window" class="fixed inset-0 z-[200] flex items-center justify-center hidden pointer-events-none">
+        <div class="absolute inset-0 bg-black/50 pointer-events-auto" id="settings-backdrop"></div>
+        <div class="xp-window w-[340px] relative z-10 shadow-2xl draggable-window pointer-events-auto">
+            <div class="xp-titlebar cursor-move">
+                <span class="flex items-center gap-1">Configuration</span>
+                <button class="xp-close-btn" id="btn-close-settings">×</button>
+            </div>
+            <div class="p-4 bg-[#ECE9D8]">
+                <h2 class="font-bold mb-3 border-b border-gray-400 pb-1">Keybinds</h2>
+                <p class="text-[10px] mb-3">Click an input and press a key combination to rebind.</p>
+                <div class="grid grid-cols-4 gap-y-3 gap-x-2 text-xs items-center">
+                    <label class="text-right font-bold">Pencil:</label> 
+                    <input type="text" class="keybind-input xp-inset w-full px-1 py-1 text-center font-mono cursor-pointer outline-none focus:bg-blue-100" data-action="pencil" value="p" readonly>
+                    <label class="text-right font-bold">Line:</label> 
+                    <input type="text" class="keybind-input xp-inset w-full px-1 py-1 text-center font-mono cursor-pointer outline-none focus:bg-blue-100" data-action="line" value="l" readonly>
+                    
+                    <label class="text-right font-bold">Eraser:</label> 
+                    <input type="text" class="keybind-input xp-inset w-full px-1 py-1 text-center font-mono cursor-pointer outline-none focus:bg-blue-100" data-action="eraser" value="e" readonly>
+                    <label class="text-right font-bold">Circle:</label> 
+                    <input type="text" class="keybind-input xp-inset w-full px-1 py-1 text-center font-mono cursor-pointer outline-none focus:bg-blue-100" data-action="circle" value="o" readonly>
+                    
+                    <label class="text-right font-bold">Bucket:</label> 
+                    <input type="text" class="keybind-input xp-inset w-full px-1 py-1 text-center font-mono cursor-pointer outline-none focus:bg-blue-100" data-action="bucket" value="f" readonly>
+                    <label class="text-right font-bold">Square:</label> 
+                    <input type="text" class="keybind-input xp-inset w-full px-1 py-1 text-center font-mono cursor-pointer outline-none focus:bg-blue-100" data-action="square" value="r" readonly>
+                    
+                    <label class="text-right font-bold">Picker:</label> 
+                    <input type="text" class="keybind-input xp-inset w-full px-1 py-1 text-center font-mono cursor-pointer outline-none focus:bg-blue-100" data-action="picker" value="i" readonly>
+                    <label class="text-right font-bold">Clear:</label> 
+                    <input type="text" class="keybind-input xp-inset w-full px-1 py-1 text-center font-mono cursor-pointer outline-none focus:bg-blue-100" data-action="clear" value="c" readonly>
+
+                    <label class="text-right font-bold">Undo:</label> 
+                    <input type="text" class="keybind-input xp-inset w-full px-1 py-1 text-center font-mono cursor-pointer outline-none focus:bg-blue-100" data-action="undo" value="ctrl+z" readonly>
+                    <label class="text-right font-bold">Redo:</label> 
+                    <input type="text" class="keybind-input xp-inset w-full px-1 py-1 text-center font-mono cursor-pointer outline-none focus:bg-blue-100" data-action="redo" value="ctrl+y" readonly>
+                </div>
+                <div class="mt-6 flex justify-end">
+                    <button class="xp-btn px-6 font-bold" id="btn-save-settings">OK</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Outline Window Overlay -->
+    <div id="outline-window" class="fixed inset-0 z-[200] flex items-center justify-center hidden pointer-events-none">
+        <div class="absolute inset-0 bg-black/50 pointer-events-auto" id="outline-backdrop"></div>
+        <div class="xp-window w-[280px] relative z-10 shadow-2xl draggable-window pointer-events-auto">
+            <div class="xp-titlebar cursor-move">
+                <span class="flex items-center gap-1">Outline Layer</span>
+                <button class="xp-close-btn" id="btn-close-outline">×</button>
+            </div>
+            <div class="p-4 bg-[#ECE9D8]">
+                <p class="text-[10px] mb-3 leading-tight border-b border-gray-400 pb-2">Generate an outline around existing pixels on the current layer.</p>
+                <div class="flex flex-col gap-3 my-4 pl-2">
+                    <div class="flex items-center justify-between">
+                        <label class="font-bold text-xs">Outline Color:</label>
+                        <input type="color" id="outline-color-input" value="#000000" class="w-12 h-6 cursor-pointer p-0 border-0 outline-none">
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <label class="font-bold text-xs">Thickness (px):</label>
+                        <input type="number" id="outline-thickness" value="1" min="1" max="10" class="xp-inset w-12 px-1 py-1 text-center font-mono">
+                    </div>
+                    <label class="flex items-center gap-2 cursor-pointer font-bold text-xs">
+                        <input type="checkbox" id="outline-diagonals" class="w-4 h-4"> Include Diagonals
+                    </label>
+                </div>
+                <div class="mt-4 flex justify-end gap-2">
+                    <button class="xp-btn px-4" id="btn-cancel-outline">Cancel</button>
+                    <button class="xp-btn px-6 font-bold" id="btn-apply-outline">Apply</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Application Container -->
+    <div class="fixed inset-0 pointer-events-none z-10">
+        
+        <!-- Canvas Window (Like a desktop window) -->
+        <div class="xp-window flex flex-col shadow-2xl draggable-window pointer-events-auto absolute" style="width: 75%; height: 80%; top: 10%; left: 5%;">
+            
+            <div class="xp-titlebar cursor-move">
+                <span>untitled - Pixel Studio</span>
+                <div class="flex gap-1">
+                    <button class="xp-btn w-5 h-5 flex items-center justify-center" style="font-size: 10px; padding:0; border-radius:0;">_</button>
+                    <button class="xp-btn w-5 h-5 flex items-center justify-center" style="font-size: 10px; padding:0; border-radius:0;">□</button>
+                    <button class="xp-close-btn">×</button>
+                </div>
+            </div>
+
+            <div id="workspace" class="flex-1 bg-[#808080] relative overflow-hidden touch-none" style="cursor: crosshair;">
+                <!-- Canvas Container -->
+                <div id="canvas-wrapper" class="absolute xp-inset checkerboard origin-top-left">
+                    <canvas id="bgCanvas" class="absolute inset-0 block w-full h-full pointer-events-none"></canvas>
+                    <canvas id="pixelCanvas" class="block w-full h-full cursor-crosshair"></canvas>
+                    <canvas id="overlayCanvas" class="absolute inset-0 block w-full h-full pointer-events-none"></canvas>
+                </div>
+            </div>
+
+            <!-- Status Bar -->
+            <div class="xp-statusbar h-6 flex gap-2">
+                <div class="xp-statusbar-panel flex-1 flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"></path><path d="M12 12v9"></path><path d="m8 17 4 4 4-4"></path></svg>
+                    Scroll to zoom. Hold Space, Middle-click, or Alt+click to pan.
+                </div>
+                <div class="xp-statusbar-panel w-32 flex items-center justify-center">
+                    <span id="canvas-size-label">16 x 16</span>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Tool Configuration Horizontal Window -->
+    <div id="tool-config-window" class="fixed top-2 left-1/2 -translate-x-1/2 z-40 xp-window shadow-xl draggable-window pointer-events-auto">
+        <div class="xp-titlebar cursor-move h-5">
+            <span class="text-[10px]">Tool Properties</span>
+        </div>
+        <div class="p-2 bg-[#ECE9D8] flex items-center gap-4 border-t border-white border-l border-white border-b border-[#716F64] border-r border-[#716F64]">
+            <div class="flex items-center gap-2">
+                <label class="font-bold text-[11px]">Size:</label>
+                <input type="number" id="brush-size-input" value="1" min="1" max="64" class="xp-inset w-12 px-1 py-1 text-[11px] font-mono">
+                <span class="text-[10px] text-gray-600">px</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <label class="font-bold text-[11px]">Shape:</label>
+                <select id="brush-shape-select" class="xp-inset px-2 py-1 text-[11px]">
+                    <option value="square">Square</option>
+                    <option value="circle">Circle</option>
+                </select>
+            </div>
+            
+            <!-- Symmetry Tools moved here -->
+            <div class="flex items-center gap-1 border-l border-[#ACA899] pl-4 ml-1">
+                <label class="font-bold text-[11px] mr-1">Sym:</label>
+                <button id="btn-sym-x" class="xp-btn w-6 h-6 p-1" title="Horizontal Symmetry (X)">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="3" x2="12" y2="21"></line><polyline points="8 16 4 12 8 8"></polyline><polyline points="16 8 20 12 16 16"></polyline></svg>
+                </button>
+                <button id="btn-sym-y" class="xp-btn w-6 h-6 p-1" title="Vertical Symmetry (Y)">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><polyline points="8 8 12 4 16 8"></polyline><polyline points="16 16 12 20 8 16"></polyline></svg>
+                </button>
+                <button id="btn-sym-d1" class="xp-btn w-6 h-6 p-1" title="Main Diagonal Symmetry">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="4" x2="20" y2="20"></line><circle cx="15" cy="9" r="2" fill="currentColor" stroke="none"></circle><circle cx="9" cy="15" r="2" fill="currentColor" stroke="none"></circle></svg>
+                </button>
+                <button id="btn-sym-d2" class="xp-btn w-6 h-6 p-1" title="Anti-Diagonal Symmetry">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="20" y1="4" x2="4" y2="20"></line><circle cx="9" cy="9" r="2" fill="currentColor" stroke="none"></circle><circle cx="15" cy="15" r="2" fill="currentColor" stroke="none"></circle></svg>
+                </button>
+            </div>
+
+            <button id="btn-deselect" class="xp-btn px-2 py-1 text-[10px] hidden font-bold text-red-700 ml-2">Deselect (Esc)</button>
+        </div>
+    </div>
+
+    <!-- Top Left Toggles (Floating WinXP Toolbox) -->
+    <div class="fixed top-4 left-4 z-40 flex flex-col gap-2 pointer-events-auto">
+        <div class="flex gap-2">
+            <button id="btn-open-color" class="xp-btn w-12 h-12 flex flex-col items-center justify-center p-1 shadow-lg" title="Toggle Colors">
+                <div class="w-full h-full xp-inset checkerboard relative pointer-events-none">
+                     <div id="btn-open-color-fill" class="absolute inset-0" style="background-color: #000000;"></div>
+                </div>
+            </button>
+            <button id="btn-toggle-layers" class="xp-btn w-12 h-12 flex flex-col items-center justify-center p-1 shadow-lg font-bold text-[10px]" title="Toggle Layers">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+                Layers
+            </button>
+        </div>
+        <!-- Reference Widget Toggle Button -->
+        <button id="btn-toggle-reference" class="xp-btn w-12 h-12 flex flex-col items-center justify-center p-1 shadow-lg font-bold text-[10px] hidden" title="Toggle Reference Image">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+            Ref
+        </button>
+    </div>
+
+    <!-- Floating Colors Window -->
+    <div id="color-menu" class="fixed top-20 left-4 z-40 xp-window w-[190px] shadow-xl draggable-window transition-opacity duration-200 pointer-events-auto">
+        <div class="xp-titlebar cursor-move">
+            <span>Colors</span>
+            <button class="xp-close-btn" id="btn-close-color">×</button>
+        </div>
+        <div class="p-2 flex flex-col items-center bg-[#ECE9D8]">
+            
+            <!-- Advanced Color Picker -->
+            <div id="color-picker-container" class="relative w-[160px] h-[160px] mb-2 touch-none cursor-crosshair xp-inset">
+                <canvas id="hue-ring-canvas" width="160" height="160" class="absolute inset-0 block w-full h-full pointer-events-none"></canvas>
+                <canvas id="sv-square-canvas" width="80" height="80" class="absolute block border border-black pointer-events-none" style="top: 40px; left: 40px;"></canvas>
+                <div id="hue-cursor" class="absolute w-4 h-4 rounded-full border border-black pointer-events-none shadow-md" style="transform: translate(-50%, -50%); border-style: dotted;"></div>
+                <div id="sv-cursor" class="absolute w-3 h-3 border border-white pointer-events-none shadow-sm" style="transform: translate(-50%, -50%); box-shadow: 0 0 0 1px #000;"></div>
+            </div>
+            
+            <!-- Alpha Slider -->
+            <div class="w-full mb-2 flex items-center gap-1">
+                <div class="relative flex-1 h-3 xp-inset checkerboard">
+                    <div id="alpha-bg" class="absolute inset-0 pointer-events-none" style="background: linear-gradient(to right, transparent, #ff0000);"></div>
+                    <input type="range" id="alpha-slider" min="0" max="100" value="100" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10">
+                    <div id="alpha-cursor" class="absolute top-1/2 -translate-y-1/2 w-2 h-4 bg-gray-300 border border-black pointer-events-none" style="left: 100%; transform: translate(-50%, -50%);"></div>
+                </div>
+                <span id="alpha-label" class="w-8 text-right text-[10px]">100%</span>
+            </div>
+
+            <!-- Inputs: HEX & RGB -->
+            <div class="w-full flex flex-col gap-1 mb-2 border-b border-gray-400 pb-2">
+                <div class="flex items-center justify-between gap-1">
+                    <label class="font-bold w-6 text-[10px]">HEX</label>
+                    <input type="text" id="hex-input" class="flex-1 xp-inset px-1 text-[10px] font-mono uppercase" value="#000000FF">
+                </div>
+                <div class="flex items-center justify-between gap-0.5">
+                    <label class="font-bold text-[10px]">R</label>
+                    <input type="number" id="r-input" min="0" max="255" class="w-10 xp-inset px-1 text-[10px] font-mono" value="0">
+                    <label class="font-bold text-[10px] ml-1">G</label>
+                    <input type="number" id="g-input" min="0" max="255" class="w-10 xp-inset px-1 text-[10px] font-mono" value="0">
+                    <label class="font-bold text-[10px] ml-1">B</label>
+                    <input type="number" id="b-input" min="0" max="255" class="w-10 xp-inset px-1 text-[10px] font-mono" value="0">
+                </div>
+            </div>
+            
+            <!-- Palette -->
+            <div class="w-full">
+                <div class="grid grid-cols-5 gap-1 xp-inset p-1 bg-[#c0c0c0]" id="palette-container">
+                    <!-- Palette colors generated by JS -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Tools Strip (Floating WinXP Toolbox) -->
+    <div id="right-tools-panel" class="fixed right-4 top-16 z-40 xp-window shadow-xl w-[80px] draggable-window pointer-events-auto">
+        <div class="xp-titlebar cursor-move" style="padding: 2px;">
+            <span class="text-[10px] ml-1">Tools</span>
+        </div>
+        
+        <div class="p-1 bg-[#ECE9D8] flex flex-col gap-2 border-t border-white border-l border-white border-b border-[#716F64] border-r border-[#716F64]">
+            
+            <!-- Selection Tools -->
+            <div class="grid grid-cols-2 gap-[2px]">
+                <button id="btn-select-box" class="xp-btn w-full h-8" title="Box Select (M)">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="2 2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg>
+                </button>
+                <button id="btn-select-lasso" class="xp-btn w-full h-8" title="Lasso Select (L)">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s-8-4.5-8-11.8A8 8 0 0 1 12 2a8 8 0 0 1 8 8.2c0 7.3-8 11.8-8 11.8z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                </button>
+                <button id="btn-select-wand" class="xp-btn w-full h-8" title="Magic Wand (W)">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4V2"></path><path d="M15 16v-2"></path><path d="M8 9h2"></path><path d="M20 9h2"></path><path d="M17.8 11.8L19 13"></path><path d="M15 9h.01"></path><path d="M17.8 6.2L19 5"></path><path d="M3 21l9-9"></path><path d="M12.2 6.2L11 5"></path></svg>
+                </button>
+                <button id="btn-picker" class="xp-btn w-full h-8" title="Color Picker (I)">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/><path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4Z"/></svg>
+                </button>
+            </div>
+
+            <div class="h-[1px] w-full bg-gray-400 border-b border-white"></div>
+
+            <!-- Drawing Tools -->
+            <div class="grid grid-cols-2 gap-[2px]">
+                <button id="btn-pencil" class="xp-btn active w-full h-8" title="Pencil (P)">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
+                </button>
+                <button id="btn-eraser" class="xp-btn w-full h-8" title="Eraser (E)">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"></path><path d="M22 21H7"></path><path d="m5 11 9 9"></path></svg>
+                </button>
+                <button id="btn-line" class="xp-btn w-full h-8" title="Line Tool (L)">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="20" x2="20" y2="4"></line></svg>
+                </button>
+                <button id="btn-circle" class="xp-btn w-full h-8" title="Circle Tool (O)">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle></svg>
+                </button>
+                <button id="btn-square" class="xp-btn w-full h-8" title="Rectangle Tool (R)">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16"></rect></svg>
+                </button>
+                <button id="btn-bucket" class="xp-btn w-full h-8" title="Fill Bucket (F)">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m19 11-8-8-8.6 8.6a2 2 0 0 0 0 2.8l5.2 5.2c.8.8 2 .8 2.8 0L19 11Z"></path><path d="m5 2 5 5"></path><path d="M2 13h15"></path><path d="M22 20a2 2 0 1 1-4 0c0-1.6 1.7-2.4 2-4 .3 1.6 2 2.4 2 4Z"></path></svg>
+                </button>
+            </div>
+            
+            <div class="h-[1px] w-full bg-gray-400 border-b border-white"></div>
+            
+            <!-- Actions -->
+            <div class="flex flex-col gap-1">
+                <button id="btn-undo" class="xp-btn w-full h-6 text-[10px]" title="Undo">Undo</button>
+                <button id="btn-redo" class="xp-btn w-full h-6 text-[10px]" title="Redo">Redo</button>
+                <div class="h-[1px] w-full bg-gray-400 border-b border-white my-1"></div>
+                <button id="btn-clear" class="xp-btn w-full h-6 text-[10px]" title="Clear Layer">Clear</button>
+                <button id="btn-download" class="xp-btn w-full h-6 text-[10px]" title="Download PNG / TTF">Save As...</button>
+                <button id="btn-open-widgets-canvas" class="xp-btn w-full h-6 text-[10px]" title="Widgets">Widgets</button>
+                <button id="btn-open-settings-canvas" class="xp-btn w-full h-6 text-[10px]" title="Settings">Config</button>
+                <button id="btn-home" class="xp-btn w-full h-6 text-[10px]" title="Back to Home">Home</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Layers Window (Floating) -->
+    <div id="layers-window" class="fixed right-[100px] top-16 z-40 xp-window shadow-xl w-[140px] draggable-window transition-opacity duration-200 pointer-events-auto">
+        <div class="xp-titlebar cursor-move" style="padding: 2px;">
+            <span class="text-[10px] ml-1">Layers</span>
+            <button class="xp-close-btn" id="btn-close-layers" style="width: 14px; height: 14px; font-size: 10px;">×</button>
+        </div>
+        <div class="p-1 bg-[#ECE9D8] flex flex-col gap-1 border-t border-white border-l border-white border-b border-[#716F64] border-r border-[#716F64]">
+            <div id="layers-list" class="bg-white border border-[#716F64] h-28 overflow-y-auto flex flex-col-reverse text-[10px]">
+                <!-- Layers go here -->
+            </div>
+            <div class="flex gap-1 mt-1">
+                <button id="btn-add-layer" class="xp-btn w-full text-[10px]" title="New Layer">New</button>
+                <button id="btn-del-layer" class="xp-btn w-full text-[10px]" title="Delete Layer">Del</button>
+            </div>
+            <div class="flex gap-1">
+                <button id="btn-up-layer" class="xp-btn w-full text-[10px]" title="Move Up">Up</button>
+                <button id="btn-down-layer" class="xp-btn w-full text-[10px]" title="Move Down">Dn</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reference Image Widget Window (Floating) -->
+    <div id="reference-window" class="fixed top-24 left-24 z-40 xp-window shadow-2xl draggable-window hidden transition-opacity duration-200 pointer-events-auto">
+        <div class="xp-titlebar cursor-move" style="padding: 2px;">
+            <span class="text-[10px] ml-1">Reference Image</span>
+            <button class="xp-close-btn" id="btn-close-reference" style="width: 14px; height: 14px; font-size: 10px;">×</button>
+        </div>
+        <div class="p-1 bg-[#ECE9D8] flex flex-col gap-1 border-t border-white border-l border-white border-b border-[#716F64] border-r border-[#716F64]">
+            <div class="flex gap-1">
+                <div class="relative flex-1">
+                    <button class="xp-btn w-full text-[10px]">Load Image</button>
+                    <input type="file" id="ref-upload-input" accept="image/*" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                </div>
+                <button id="btn-ref-clear" class="xp-btn flex-1 text-[10px]">Clear</button>
+            </div>
+            <!-- Resizable Container for Reference -->
+            <div id="ref-image-container" class="bg-white border border-[#716F64] relative flex items-center justify-center overflow-hidden" style="resize: both; width: 200px; height: 200px; min-width: 50px; min-height: 50px; max-width: 90vw; max-height: 90vh;">
+                <span id="ref-placeholder" class="text-gray-400 text-[10px] font-bold pointer-events-none text-center">Drag bottom-right corner to scale</span>
+                <img id="ref-image" class="absolute inset-0 w-full h-full object-contain hidden pointer-events-none" />
+            </div>
+        </div>
+    </div>
+
+    <!-- Timer Widget Window (Floating) -->
+    <div id="timer-window" class="fixed bottom-10 left-4 z-40 xp-window shadow-xl draggable-window hidden pointer-events-auto">
+        <div class="xp-titlebar cursor-move" style="padding: 2px;">
+            <span class="text-[10px] ml-1">Speedrun Timer</span>
+            <button class="xp-close-btn" id="btn-close-timer" style="width: 14px; height: 14px; font-size: 10px;">×</button>
+        </div>
+        <div class="p-2 bg-[#ECE9D8] border-t border-white border-l border-white border-b border-[#716F64] border-r border-[#716F64]">
+            <div class="xp-inset px-2 py-1 bg-black text-[#00FF00] font-mono text-xl text-center tracking-widest shadow-inner select-none pointer-events-none" id="timer-display">
+                00:00:00:000
+            </div>
+            <div class="flex gap-1 mt-2">
+                <button id="btn-timer-reset" class="xp-btn w-full text-[10px]">Reset Timer</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Font Editor Navigation Panel (Floating) -->
+    <div id="font-nav-panel" class="fixed bottom-10 left-1/2 transform -translate-x-1/2 xp-window z-50 hidden shadow-xl border border-black select-none draggable-window pointer-events-auto">
+        <div class="xp-titlebar cursor-move py-1">
+            <span class="text-[10px] mx-1">Font Editor Navigation</span>
+        </div>
+        <div class="p-2 bg-[#ECE9D8] flex items-center gap-2 border-t border-white border-l border-white border-b border-[#716F64] border-r border-[#716F64]">
+            <button id="btn-prev-char" class="xp-btn px-4 py-1 font-bold">&lt; Prev</button>
+            <div class="xp-inset px-4 py-1.5 font-bold text-center w-32" id="current-char-label">Char: A</div>
+            <button id="btn-next-char" class="xp-btn px-4 py-1 font-bold">Next &gt;</button>
+        </div>
+    </div>
+
+    <!-- UI Overlay Messages (Balloon Tip Style) -->
+    <div id="toast" class="fixed bottom-10 right-4 xp-balloon px-4 py-3 transform translate-y-10 opacity-0 transition-all duration-300 z-50 flex items-center gap-2 pointer-events-auto">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+        <span id="toast-msg">Image saved successfully!</span>
+    </div>
+
+    <script>
+        /**
+         * Pixel Art Studio Application Logic
+         */
+        
+        // --- Configuration & State ---
+        let gridWidth = 16;
+        let gridHeight = 16;
+        let pixelSize = Math.max(1, Math.round(512 / Math.max(gridWidth, gridHeight)));
+        
+        // Layer System State
+        let layers = [];
+        let activeLayerIndex = 0;
+
+        let appMode = 'art'; 
+        const FONT_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.,!?'-/() Ññ";
+        let currentFontCharIndex = 0;
+        let fontPixelData = {}; 
+
+        let currentColor = '#000000';
+        let currentTool = 'pencil'; 
+        let isDrawing = false;
+        
+        let symmetryX = false;
+        let symmetryY = false;
+        let symmetryDiag1 = false;
+        let symmetryDiag2 = false;
+
+        // Tool Config State
+        let brushSize = 1;
+        let brushShape = 'square';
+        let brushOffsets = [{dx: 0, dy: 0}]; // Cached footprint offsets for speed
+        let hoverX = -1;
+        let hoverY = -1;
+
+        // Shape Drawing State
+        let isDrawingShape = false;
+        let shapeStartX = -1;
+        let shapeStartY = -1;
+        let shapeCurrentX = -1;
+        let shapeCurrentY = -1;
+
+        // Selection State
+        let selectionMask = null; // 2D boolean array or null
+        let isSelecting = false;
+        let selectStartX = -1, selectStartY = -1;
+        let lassoPoints = [];
+
+        // Viewport & Pan/Zoom State
+        let zoomLevel = 1;
+        let panX = 0;
+        let panY = 0;
+        let isPanning = false;
+        let startPanX = 0;
+        let startPanY = 0;
+        let isSpacePressed = false;
+        let isShiftPressed = false;
+        let isCtrlPressed = false;
+
+        // Undo & Redo State
+        let undoStack = [];
+        let redoStack = [];
+        const MAX_HISTORY = 15;
+        let strokeChanged = false;
+
+        // Widgets State
+        let isWidgetRefEnabled = false;
+        let isWidgetTimerEnabled = false;
+        let isTimerRunning = false;
+        let timerStart = 0;
+        let timerInterval = null;
+
+        // Keybinds Configuration
+        let keybinds = {
+            pencil: 'p',
+            eraser: 'e',
+            bucket: 'f',
+            line: 'l',
+            circle: 'o',
+            square: 'r',
+            picker: 'i',
+            undo: 'ctrl+z',
+            redo: 'ctrl+y',
+            clear: 'c'
+        };
+
+        // Color Picker State
+        let customHue = 0;
+        let customSat = 0;
+        let customVal = 1;
+        let customAlpha = 1;
+        let isPickingWheelColor = false;
+        let isDraggingHue = false;
+        let isDraggingSV = false;
+
+        let lastX = -1;
+        let lastY = -1;
+
+        const defaultPalette = [
+            '#000000', '#FFFFFF', '#808080', '#C0C0C0', 
+            '#800000', '#FF0000', '#808000', '#FFFF00',
+            '#008000', '#00FF00', '#008080', '#00FFFF',
+            '#000080', '#0000FF', '#800080', '#FF00FF',
+            '#808040', '#FFFF80', '#004040', '#00FF80'
+        ];
+
+        // --- DOM Elements ---
+        const canvas = document.getElementById('pixelCanvas');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        
+        const bgCanvas = document.getElementById('bgCanvas');
+        const bgCtx = bgCanvas.getContext('2d');
+
+        const overlayCanvas = document.getElementById('overlayCanvas');
+        const overlayCtx = overlayCanvas.getContext('2d');
+
+        // Selection Visual Offscreen Canvas
+        const selVisualCanvas = document.createElement('canvas');
+        const selVisualCtx = selVisualCanvas.getContext('2d');
+        
+        const workspace = document.getElementById('workspace');
+        const canvasWrapper = document.getElementById('canvas-wrapper');
+        
+        const btnOpenColor = document.getElementById('btn-open-color');
+        const btnOpenColorFill = document.getElementById('btn-open-color-fill');
+        const colorMenu = document.getElementById('color-menu');
+        const paletteContainer = document.getElementById('palette-container');
+        
+        const btnToggleLayers = document.getElementById('btn-toggle-layers');
+        const layersWindow = document.getElementById('layers-window');
+        const btnCloseLayers = document.getElementById('btn-close-layers');
+
+        // Mod Widgets Elements
+        const toggleWidgetRef = document.getElementById('toggle-widget-ref');
+        const toggleWidgetTimer = document.getElementById('toggle-widget-timer');
+        
+        const btnToggleRef = document.getElementById('btn-toggle-reference');
+        const referenceWindow = document.getElementById('reference-window');
+        const btnCloseReference = document.getElementById('btn-close-reference');
+        const refUploadInput = document.getElementById('ref-upload-input');
+        const refImage = document.getElementById('ref-image');
+        const refPlaceholder = document.getElementById('ref-placeholder');
+        const btnRefClear = document.getElementById('btn-ref-clear');
+        
+        const timerWindow = document.getElementById('timer-window');
+        const btnCloseTimer = document.getElementById('btn-close-timer');
+        const timerDisplay = document.getElementById('timer-display');
+        const btnTimerReset = document.getElementById('btn-timer-reset');
+
+        const colorPickerContainer = document.getElementById('color-picker-container');
+        const hueRingCanvas = document.getElementById('hue-ring-canvas');
+        const hueRingCtx = hueRingCanvas.getContext('2d', { willReadFrequently: true });
+        const svSquareCanvas = document.getElementById('sv-square-canvas');
+        const svSquareCtx = svSquareCanvas.getContext('2d', { willReadFrequently: true });
+        const hueCursor = document.getElementById('hue-cursor');
+        const svCursor = document.getElementById('sv-cursor');
+        
+        const alphaSlider = document.getElementById('alpha-slider');
+        const alphaBg = document.getElementById('alpha-bg');
+        const alphaCursor = document.getElementById('alpha-cursor');
+        const alphaLabel = document.getElementById('alpha-label');
+        
+        const hexInput = document.getElementById('hex-input');
+        const rInput = document.getElementById('r-input');
+        const gInput = document.getElementById('g-input');
+        const bInput = document.getElementById('b-input');
+        
+        const rightToolsPanel = document.getElementById('right-tools-panel');
+        const btnToggleTools = document.getElementById('btn-toggle-tools');
+        
+        const btnPencil = document.getElementById('btn-pencil');
+        const btnEraser = document.getElementById('btn-eraser');
+        const btnBucket = document.getElementById('btn-bucket');
+        const btnLine = document.getElementById('btn-line');
+        const btnCircle = document.getElementById('btn-circle');
+        const btnSquare = document.getElementById('btn-square');
+        const btnPicker = document.getElementById('btn-picker');
+        const btnSelectBox = document.getElementById('btn-select-box');
+        const btnSelectLasso = document.getElementById('btn-select-lasso');
+        const btnSelectWand = document.getElementById('btn-select-wand');
+        
+        const btnSymX = document.getElementById('btn-sym-x');
+        const btnSymY = document.getElementById('btn-sym-y');
+        const btnSymD1 = document.getElementById('btn-sym-d1');
+        const btnSymD2 = document.getElementById('btn-sym-d2');
+        
+        const btnClear = document.getElementById('btn-clear');
+        const btnDownload = document.getElementById('btn-download');
+        const btnHome = document.getElementById('btn-home');
+        
+        const canvasSizeLabel = document.getElementById('canvas-size-label');
+        
+        const homeScreen = document.getElementById('home-screen');
+        const btnCreateNew = document.getElementById('btn-create-new');
+        const btnCreateFont = document.getElementById('btn-create-font');
+        const fontSizeInput = document.getElementById('font-size-input');
+        const newWidthInput = document.getElementById('new-width');
+        const newHeightInput = document.getElementById('new-height');
+        const fileUpload = document.getElementById('file-upload');
+        const fontUploadInput = document.getElementById('font-upload-input');
+        
+        // Tool Config Elements
+        const btnDeselect = document.getElementById('btn-deselect');
+        const brushSizeInput = document.getElementById('brush-size-input');
+        const brushShapeSelect = document.getElementById('brush-shape-select');
+
+        // Widgets window elements
+        const widgetsWindow = document.getElementById('widgets-window');
+        const btnOpenWidgetsHome = document.getElementById('btn-open-widgets-home');
+        const btnOpenWidgetsCanvas = document.getElementById('btn-open-widgets-canvas');
+        const btnCloseWidgets = document.getElementById('btn-close-widgets');
+        const btnSaveWidgets = document.getElementById('btn-save-widgets');
+
+        // Settings / Options elements
+        const settingsWindow = document.getElementById('settings-window');
+        const btnOpenSettingsHome = document.getElementById('btn-open-settings-home');
+        const btnOpenSettingsCanvas = document.getElementById('btn-open-settings-canvas');
+        const btnCloseSettings = document.getElementById('btn-close-settings');
+        const btnSaveSettings = document.getElementById('btn-save-settings');
+        const btnUndo = document.getElementById('btn-undo');
+        const btnRedo = document.getElementById('btn-redo');
+
+        // Outline window elements
+        const outlineWindow = document.getElementById('outline-window');
+        const btnCloseOutline = document.getElementById('btn-close-outline');
+        const btnCancelOutline = document.getElementById('btn-cancel-outline');
+        const btnApplyOutline = document.getElementById('btn-apply-outline');
+        const outlineColorInput = document.getElementById('outline-color-input');
+        const outlineThickness = document.getElementById('outline-thickness');
+        const outlineDiagonals = document.getElementById('outline-diagonals');
+
+        // Layers elements
+        const layersList = document.getElementById('layers-list');
+        const btnAddLayer = document.getElementById('btn-add-layer');
+        const btnDelLayer = document.getElementById('btn-del-layer');
+        const btnUpLayer = document.getElementById('btn-up-layer');
+        const btnDownLayer = document.getElementById('btn-down-layer');
+
+        const fontNavPanel = document.getElementById('font-nav-panel');
+        const btnPrevChar = document.getElementById('btn-prev-char');
+        const btnNextChar = document.getElementById('btn-next-char');
+        const currentCharLabel = document.getElementById('current-char-label');
+
+        const toast = document.getElementById('toast');
+        const toastMsg = document.getElementById('toast-msg');
+
+        // Fast Rendering Globals
+        const renderLayerCanvas = document.createElement('canvas');
+        const renderLayerCtx = renderLayerCanvas.getContext('2d', { willReadFrequently: true });
+        const colorCache = {};
+
+        function parseHexColor(color) {
+            if (colorCache[color]) return colorCache[color];
+            let r = parseInt(color.slice(1, 3), 16);
+            let g = parseInt(color.slice(3, 5), 16);
+            let b = parseInt(color.slice(5, 7), 16);
+            let a = color.length === 9 ? parseInt(color.slice(7, 9), 16) : 255;
+            const val = {r, g, b, a};
+            colorCache[color] = val;
+            return val;
+        }
+
+        // --- Initialization ---
+        function init() {
+            initPalette();
+            updateBrushOffsets(); // Precalculate brush shape for efficiency
+            setupEventListeners();
+            
+            newWidthInput.value = gridWidth;
+            newHeightInput.value = gridHeight;
+            
+            drawHueRing();
+            setColor('#000000'); 
+        }
+
+        function createEmptyLayerData() {
+            const data = [];
+            for (let y = 0; y < gridHeight; y++) {
+                let row = [];
+                for (let x = 0; x < gridWidth; x++) {
+                    row.push(null); 
+                }
+                data.push(row);
+            }
+            return data;
+        }
+
+        function resetPixelData() {
+            layers = [{
+                id: Date.now(),
+                name: 'Layer 1',
+                visible: true,
+                data: createEmptyLayerData()
+            }];
+            activeLayerIndex = 0;
+            selectionMask = null;
+            updateSelectionVisual();
+            renderLayersUI();
+        }
+
+        function startCanvas() {
+            pixelSize = Math.max(1, Math.round(512 / Math.max(gridWidth, gridHeight)));
+            
+            canvas.width = gridWidth * pixelSize;
+            canvas.height = gridHeight * pixelSize;
+            
+            bgCanvas.width = canvas.width;
+            bgCanvas.height = canvas.height;
+
+            overlayCanvas.width = canvas.width;
+            overlayCanvas.height = canvas.height;
+
+            selVisualCanvas.width = canvas.width;
+            selVisualCanvas.height = canvas.height;
+
+            canvasSizeLabel.textContent = `${gridWidth} x ${gridHeight} px`;
+            
+            undoStack = [];
+            redoStack = [];
+            strokeChanged = false;
+            
+            resetPixelData();
+            fitAndCenterCanvas();
+            renderAll();
+            renderOverlay();
+            
+            homeScreen.style.display = 'none';
+        }
+
+        // --- Widgets Timer Logic ---
+        function startTimer() {
+            if (isTimerRunning || !isWidgetTimerEnabled) return;
+            isTimerRunning = true;
+            timerStart = Date.now();
+            timerInterval = setInterval(() => {
+                const diff = Date.now() - timerStart;
+                const ms = diff % 1000;
+                const s = Math.floor(diff / 1000) % 60;
+                const m = Math.floor(diff / 60000) % 60;
+                const h = Math.floor(diff / 3600000);
+                timerDisplay.textContent = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}:${String(ms).padStart(3, '0')}`;
+            }, 13); // fast loop for accurate ms display
+        }
+        function stopTimer() {
+            if (!isTimerRunning) return;
+            isTimerRunning = false;
+            clearInterval(timerInterval);
+        }
+        function resetTimer() {
+            stopTimer();
+            timerDisplay.textContent = "00:00:00:000";
+        }
+
+        // --- Layers Logic ---
+        function renderLayersUI() {
+            layersList.innerHTML = '';
+            layers.forEach((layer, index) => {
+                const el = document.createElement('div');
+                el.className = `layer-item px-2 py-1 flex items-center justify-between cursor-pointer border-b border-[#ECE9D8] ${index === activeLayerIndex ? 'active' : 'bg-white text-black hover:bg-gray-200'}`;
+                
+                const visBtn = document.createElement('span');
+                visBtn.textContent = layer.visible ? '👁️' : '➖';
+                visBtn.className = "mr-2 cursor-pointer";
+                visBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    layer.visible = !layer.visible;
+                    renderLayersUI();
+                    renderAll();
+                };
+
+                const nameSpan = document.createElement('span');
+                nameSpan.textContent = layer.name;
+                nameSpan.className = "flex-1 select-none pointer-events-none";
+
+                el.onclick = () => {
+                    activeLayerIndex = index;
+                    renderLayersUI();
+                };
+
+                el.appendChild(visBtn);
+                el.appendChild(nameSpan);
+                layersList.appendChild(el);
+            });
+        }
+
+        // --- Font Creator Logic ---
+        function saveCurrentChar() {
+            if (appMode !== 'font') return;
+            const char = FONT_CHARS[currentFontCharIndex];
+            // Shallow clone layer structure, deep clone data
+            fontPixelData[char] = cloneLayers(layers);
+        }
+
+        function loadCurrentChar() {
+            if (appMode !== 'font') return;
+            const char = FONT_CHARS[currentFontCharIndex];
+            currentCharLabel.textContent = `Char: ${char === ' ' ? 'Space' : char}`;
+            
+            if (fontPixelData[char]) {
+                layers = cloneLayers(fontPixelData[char]);
+                activeLayerIndex = 0;
+            } else {
+                resetPixelData();
+            }
+            
+            renderLayersUI();
+            renderFontTemplate();
+            renderAll();
+        }
+
+        function renderFontTemplate() {
+            bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+            if (appMode === 'font') {
+                bgCtx.fillStyle = "rgba(0, 0, 0, 0.2)"; 
+                bgCtx.font = `bold ${bgCanvas.height * 0.8}px Tahoma, sans-serif`;
+                bgCtx.textAlign = "center";
+                bgCtx.textBaseline = "middle";
+                const char = FONT_CHARS[currentFontCharIndex];
+                bgCtx.fillText(char, bgCanvas.width / 2, bgCanvas.height / 2 + (bgCanvas.height * 0.05));
+            }
+        }
+
+        function exportTTF() {
+            saveCurrentChar(); 
+
+            if (typeof opentype === 'undefined') {
+                showToast('Error: Font generation library failed to load.');
+                return;
+            }
+
+            const unitsPerEm = 1024;
+            const pixelScale = Math.floor(unitsPerEm / gridHeight);
+            const advanceWidth = gridWidth * pixelScale;
+            const glyphs = [];
+
+            const notdefPath = new opentype.Path();
+            notdefPath.moveTo(0, 0);
+            notdefPath.lineTo(0, unitsPerEm);
+            notdefPath.lineTo(advanceWidth, unitsPerEm);
+            notdefPath.lineTo(advanceWidth, 0);
+            notdefPath.close();
+            glyphs.push(new opentype.Glyph({ name: '.notdef', unicode: 0, advanceWidth: advanceWidth, path: notdefPath }));
+
+            for (let i = 0; i < FONT_CHARS.length; i++) {
+                const char = FONT_CHARS[i];
+                const charLayers = fontPixelData[char];
+                const path = new opentype.Path();
+
+                if (charLayers) {
+                    // Combine all visible layers for font geometry
+                    for (let y = 0; y < gridHeight; y++) {
+                        for (let x = 0; x < gridWidth; x++) {
+                            let hasColor = false;
+                            for (let l = 0; l < charLayers.length; l++) {
+                                if (charLayers[l].visible && charLayers[l].data[y][x]) {
+                                    hasColor = true; break;
+                                }
+                            }
+                            if (hasColor) {
+                                const xLeft = x * pixelScale;
+                                const xRight = (x + 1) * pixelScale;
+                                const yBottom = unitsPerEm - ((y + 1) * pixelScale);
+                                const yTop = unitsPerEm - (y * pixelScale);
+
+                                path.moveTo(xLeft, yTop);
+                                path.lineTo(xRight, yTop);
+                                path.lineTo(xRight, yBottom);
+                                path.lineTo(xLeft, yBottom);
+                                path.close();
+                            }
+                        }
+                    }
+                }
+
+                let glyphName = char;
+                if (char === ' ') glyphName = 'space';
+                else if (char === '.') glyphName = 'period';
+                else if (char === ',') glyphName = 'comma';
+                else if (char === '!') glyphName = 'exclam';
+                else if (char === '?') glyphName = 'question';
+                else if (char === "'") glyphName = 'quotesingle';
+                else if (char === "-") glyphName = 'hyphen';
+                else if (char === "/") glyphName = 'slash';
+                else if (char === "(") glyphName = 'parenleft';
+                else if (char === ")") glyphName = 'parenright';
+                else if (char === "Ñ") glyphName = 'Ntilde';
+                else if (char === "ñ") glyphName = 'ntilde';
+
+                glyphs.push(new opentype.Glyph({ name: glyphName, unicode: char.charCodeAt(0), advanceWidth: advanceWidth, path: path }));
+            }
+
+            const font = new opentype.Font({
+                familyName: 'PixelStudioFont', styleName: 'Regular', unitsPerEm: unitsPerEm,
+                ascender: unitsPerEm, descender: 0, glyphs: glyphs
+            });
+
+            font.download('PixelStudioFont.ttf');
+            showToast('TTF Font exported successfully!');
+        }
+
+        function initPalette() {
+            paletteContainer.innerHTML = '';
+            defaultPalette.forEach(color => {
+                const btn = document.createElement('button');
+                btn.className = 'w-full aspect-square xp-inset focus:outline-none';
+                btn.style.backgroundColor = color;
+                btn.title = color;
+                btn.addEventListener('click', () => setColor(color));
+                paletteContainer.appendChild(btn);
+            });
+        }
+
+        // --- Rendering ---
+        function renderAll() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            if (renderLayerCanvas.width !== gridWidth || renderLayerCanvas.height !== gridHeight) {
+                renderLayerCanvas.width = gridWidth;
+                renderLayerCanvas.height = gridHeight;
+            }
+
+            ctx.imageSmoothingEnabled = false;
+
+            layers.forEach(layer => {
+                if (!layer.visible) return;
+                
+                const imgData = renderLayerCtx.createImageData(gridWidth, gridHeight);
+                const data = imgData.data;
+                
+                for (let y = 0; y < gridHeight; y++) {
+                    for (let x = 0; x < gridWidth; x++) {
+                        const color = layer.data[y][x];
+                        if (color) {
+                            const parsed = parseHexColor(color);
+                            const idx = (y * gridWidth + x) * 4;
+                            data[idx] = parsed.r;
+                            data[idx+1] = parsed.g;
+                            data[idx+2] = parsed.b;
+                            data[idx+3] = parsed.a;
+                        }
+                    }
+                }
+                
+                renderLayerCtx.putImageData(imgData, 0, 0);
+                ctx.drawImage(renderLayerCanvas, 0, 0, gridWidth, gridHeight, 0, 0, canvas.width, canvas.height);
+            });
+        }
+
+        function updateSelectionVisual() {
+            selVisualCtx.clearRect(0, 0, selVisualCanvas.width, selVisualCanvas.height);
+            if (!selectionMask) {
+                btnDeselect.classList.add('hidden');
+                return;
+            }
+            btnDeselect.classList.remove('hidden');
+            
+            // Draw dark transparent overlay on UNSELECTED areas to highlight selection
+            selVisualCtx.fillStyle = 'rgba(0, 0, 50, 0.4)';
+            for (let y = 0; y < gridHeight; y++) {
+                for (let x = 0; x < gridWidth; x++) {
+                    if (!selectionMask[y][x]) {
+                        selVisualCtx.fillRect(x * pixelSize, y * pixelSize, pixelSize, pixelSize);
+                    }
+                }
+            }
+            
+            // Draw a subtle border inside selected areas
+            selVisualCtx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+            for (let y = 0; y < gridHeight; y++) {
+                for (let x = 0; x < gridWidth; x++) {
+                    if (selectionMask[y][x]) {
+                        // Check neighbors
+                        if (y===0 || !selectionMask[y-1][x]) selVisualCtx.fillRect(x*pixelSize, y*pixelSize, pixelSize, 1);
+                        if (y===gridHeight-1 || !selectionMask[y+1][x]) selVisualCtx.fillRect(x*pixelSize, (y+1)*pixelSize-1, pixelSize, 1);
+                        if (x===0 || !selectionMask[y][x-1]) selVisualCtx.fillRect(x*pixelSize, y*pixelSize, 1, pixelSize);
+                        if (x===gridWidth-1 || !selectionMask[y][x+1]) selVisualCtx.fillRect((x+1)*pixelSize-1, y*pixelSize, 1, pixelSize);
+                    }
+                }
+            }
+        }
+
+        function updateBrushOffsets() {
+            brushOffsets = [];
+            const size = brushSize;
+            if (size === 1) { brushOffsets.push({dx: 0, dy: 0}); return; }
+
+            const offset = Math.floor(size / 2);
+            const isEven = size % 2 === 0;
+            const start = -offset;
+            const end = offset - (isEven ? 1 : 0);
+            const r = size / 2;
+            
+            for (let y = start; y <= end; y++) {
+                for (let x = start; x <= end; x++) {
+                    if (brushShape === 'circle') {
+                        const dx = x + (isEven ? 0.5 : 0);
+                        const dy = y + (isEven ? 0.5 : 0);
+                        if (dx*dx + dy*dy <= r*r) {
+                            brushOffsets.push({dx: x, dy: y});
+                        }
+                    } else {
+                        brushOffsets.push({dx: x, dy: y});
+                    }
+                }
+            }
+        }
+
+        function getBrushFootprint(cx, cy) {
+            return brushOffsets.map(off => ({x: cx + off.dx, y: cy + off.dy}));
+        }
+
+        function getLinePoints(x0, y0, x1, y1) {
+            let points = [];
+            let dx = Math.abs(x1 - x0), dy = Math.abs(y1 - y0);
+            let sx = (x0 < x1) ? 1 : -1, sy = (y0 < y1) ? 1 : -1;
+            let err = dx - dy;
+            while (true) {
+                points.push({x: x0, y: y0});
+                if (x0 === x1 && y0 === y1) break;
+                let e2 = 2 * err;
+                if (e2 > -dy) { err -= dy; x0 += sx; }
+                if (e2 < dx) { err += dx; y0 += sy; }
+            }
+            return points;
+        }
+
+        function getEllipsePoints(x0, y0, x1, y1) {
+            let points = [];
+            let a = Math.abs(x1 - x0), b = Math.abs(y1 - y0), b1 = b & 1;
+            let dx = 4 * (1 - a) * b * b, dy = 4 * (b1 + 1) * a * a;
+            let err = dx + dy + b1 * a * a, e2;
+
+            if (x0 > x1) { x0 = x1; x1 += a; }
+            if (y0 > y1) y0 = y1;
+            y0 += (b + 1) >> 1; y1 = y0 - b1;
+            a *= 8 * a; b1 = 8 * b * b;
+
+            do {
+                points.push({x: x1, y: y0});
+                points.push({x: x0, y: y0});
+                points.push({x: x0, y: y1});
+                points.push({x: x1, y: y1});
+                e2 = 2 * err;
+                if (e2 <= dy) { y0++; y1--; err += dy += a; }
+                if (e2 >= dx || 2 * err > dy) { x0++; x1--; err += dx += b1; }
+            } while (x0 <= x1);
+
+            while (y0 - y1 < b) {
+                points.push({x: x0 - 1, y: y0});
+                points.push({x: x1 + 1, y: y0++});
+                points.push({x: x0 - 1, y: y1});
+                points.push({x: x1 + 1, y: y1--});
+            }
+            
+            // Filter duplicates out to prevent brush overdraw
+            const uniquePoints = [];
+            const seen = new Set();
+            for(const p of points) {
+                const key = `${p.x},${p.y}`;
+                if(!seen.has(key)) { seen.add(key); uniquePoints.push(p); }
+            }
+            return uniquePoints;
+        }
+
+        function getRectanglePoints(x0, y0, x1, y1) {
+            let points = [];
+            let minX = Math.min(x0, x1);
+            let maxX = Math.max(x0, x1);
+            let minY = Math.min(y0, y1);
+            let maxY = Math.max(y0, y1);
+
+            for (let x = minX; x <= maxX; x++) {
+                points.push({x: x, y: minY});
+                points.push({x: x, y: maxY});
+            }
+            for (let y = minY + 1; y < maxY; y++) {
+                points.push({x: minX, y: y});
+                points.push({x: maxX, y: y});
+            }
+            
+            const uniquePoints = [];
+            const seen = new Set();
+            for(const p of points) {
+                const key = `${p.x},${p.y}`;
+                if(!seen.has(key)) { seen.add(key); uniquePoints.push(p); }
+            }
+            return uniquePoints;
+        }
+
+        function getShapePoints(startX, startY, currentX, currentY, tool, shift, ctrl) {
+            let x0 = startX, y0 = startY, x1 = currentX, y1 = currentY;
+
+            if (tool === 'line') {
+                if (shift) {
+                    let dx = x1 - x0;
+                    let dy = y1 - y0;
+                    let absDx = Math.abs(dx);
+                    let absDy = Math.abs(dy);
+                    
+                    if (absDx > absDy * 2) { dy = 0; }
+                    else if (absDy > absDx * 2) { dx = 0; }
+                    else {
+                        let maxD = Math.max(absDx, absDy);
+                        dx = Math.sign(dx) * maxD;
+                        dy = Math.sign(dy) * maxD;
+                    }
+                    x1 = x0 + dx;
+                    y1 = y0 + dy;
+                }
+                return getLinePoints(x0, y0, x1, y1);
+            } else if (tool === 'circle') {
+                let bx0, by0, bx1, by1;
+                if (ctrl) {
+                    // Center draw
+                    let rx = Math.abs(x1 - x0);
+                    let ry = Math.abs(y1 - y0);
+                    if (shift) { let maxR = Math.max(rx, ry); rx = maxR; ry = maxR; }
+                    bx0 = x0 - rx; bx1 = x0 + rx;
+                    by0 = y0 - ry; by1 = y0 + ry;
+                } else {
+                    // Corner draw
+                    let dx = x1 - x0; 
+                    let dy = y1 - y0;
+                    if (shift) {
+                        let size = Math.max(Math.abs(dx), Math.abs(dy));
+                        x1 = x0 + (dx === 0 ? 0 : Math.sign(dx)) * size;
+                        y1 = y0 + (dy === 0 ? 0 : Math.sign(dy)) * size;
+                    }
+                    bx0 = Math.min(x0, x1); bx1 = Math.max(x0, x1);
+                    by0 = Math.min(y0, y1); by1 = Math.max(y0, y1);
+                }
+                return getEllipsePoints(bx0, by0, bx1, by1);
+            } else if (tool === 'square') {
+                let bx0, by0, bx1, by1;
+                if (ctrl) {
+                    let rx = Math.abs(x1 - x0);
+                    let ry = Math.abs(y1 - y0);
+                    if (shift) { let maxR = Math.max(rx, ry); rx = maxR; ry = maxR; }
+                    bx0 = x0 - rx; bx1 = x0 + rx;
+                    by0 = y0 - ry; by1 = y0 + ry;
+                } else {
+                    let dx = x1 - x0; 
+                    let dy = y1 - y0;
+                    if (shift) {
+                        let size = Math.max(Math.abs(dx), Math.abs(dy));
+                        x1 = x0 + (dx === 0 ? 0 : Math.sign(dx)) * size;
+                        y1 = y0 + (dy === 0 ? 0 : Math.sign(dy)) * size;
+                    }
+                    bx0 = Math.min(x0, x1); bx1 = Math.max(x0, x1);
+                    by0 = Math.min(y0, y1); by1 = Math.max(y0, y1);
+                }
+                return getRectanglePoints(bx0, by0, bx1, by1);
+            }
+            return [];
+        }
+
+        function renderOverlay() {
+            overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+            
+            // Draw Selection Mask
+            if (selectionMask) {
+                overlayCtx.drawImage(selVisualCanvas, 0, 0);
+            }
+
+            // Draw active selection creation tools
+            if (isSelecting) {
+                if (currentTool === 'select-box') {
+                    overlayCtx.strokeStyle = 'white';
+                    overlayCtx.setLineDash([4, 4]);
+                    overlayCtx.lineWidth = 1;
+                    
+                    const minX = Math.min(selectStartX, hoverX);
+                    const minY = Math.min(selectStartY, hoverY);
+                    const maxX = Math.max(selectStartX, hoverX) + 1;
+                    const maxY = Math.max(selectStartY, hoverY) + 1;
+                    
+                    overlayCtx.strokeRect(minX * pixelSize, minY * pixelSize, (maxX - minX) * pixelSize, (maxY - minY) * pixelSize);
+                    overlayCtx.setLineDash([]);
+                } else if (currentTool === 'select-lasso' && lassoPoints.length > 0) {
+                    overlayCtx.strokeStyle = 'white';
+                    overlayCtx.setLineDash([4, 4]);
+                    overlayCtx.lineWidth = 1;
+                    overlayCtx.beginPath();
+                    overlayCtx.moveTo(lassoPoints[0].x * pixelSize, lassoPoints[0].y * pixelSize);
+                    for (let i = 1; i < lassoPoints.length; i++) {
+                        overlayCtx.lineTo(lassoPoints[i].x * pixelSize, lassoPoints[i].y * pixelSize);
+                    }
+                    overlayCtx.lineTo(hoverX * pixelSize, hoverY * pixelSize);
+                    overlayCtx.stroke();
+                    overlayCtx.setLineDash([]);
+                }
+            }
+
+            // Draw Active Shape Geometry Preview (Lines and Circles)
+            if (isDrawingShape) {
+                const drawColor = currentTool === 'eraser' ? null : currentColor;
+                const pts = getShapePoints(shapeStartX, shapeStartY, shapeCurrentX, shapeCurrentY, currentTool, isShiftPressed, isCtrlPressed);
+                
+                if (currentTool === 'eraser') overlayCtx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+                else { overlayCtx.fillStyle = currentColor; overlayCtx.globalAlpha = 0.6; }
+                
+                const tempGrid = new Uint8Array(gridWidth * gridHeight);
+                pts.forEach(baseP => {
+                    executeWithSymmetry(baseP.x, baseP.y, -1, -1, (cx, cy) => {
+                        brushOffsets.forEach(off => {
+                            let px = cx + off.dx; let py = cy + off.dy;
+                            if (px >= 0 && px < gridWidth && py >= 0 && py < gridHeight) {
+                                tempGrid[py * gridWidth + px] = 1;
+                            }
+                        });
+                    });
+                });
+
+                overlayCtx.beginPath();
+                for (let y = 0; y < gridHeight; y++) {
+                    for (let x = 0; x < gridWidth; x++) {
+                        if (tempGrid[y * gridWidth + x] === 1) {
+                            overlayCtx.rect(x * pixelSize, y * pixelSize, pixelSize, pixelSize);
+                        }
+                    }
+                }
+                overlayCtx.fill();
+                overlayCtx.globalAlpha = 1.0;
+            }
+
+            // Draw Symmetry Lines
+            overlayCtx.strokeStyle = 'rgba(0, 0, 255, 0.5)';
+            overlayCtx.lineWidth = 1;
+            const w = overlayCanvas.width;
+            const h = overlayCanvas.height;
+            const cx = w / 2;
+            const cy = h / 2;
+            if (symmetryX) { overlayCtx.beginPath(); overlayCtx.moveTo(cx, 0); overlayCtx.lineTo(cx, h); overlayCtx.stroke(); }
+            if (symmetryY) { overlayCtx.beginPath(); overlayCtx.moveTo(0, cy); overlayCtx.lineTo(w, cy); overlayCtx.stroke(); }
+            if (symmetryDiag1) { overlayCtx.beginPath(); overlayCtx.moveTo(0, cy - cx); overlayCtx.lineTo(w, w - cx + cy); overlayCtx.stroke(); }
+            if (symmetryDiag2) { overlayCtx.beginPath(); overlayCtx.moveTo(0, cx + cy); overlayCtx.lineTo(w, -w + cx + cy); overlayCtx.stroke(); }
+
+            // Draw Brush Preview Cursor
+            if (hoverX !== -1 && hoverY !== -1 && !isDrawingShape && !isPanning && !isSpacePressed) {
+                if (currentTool === 'pencil' || currentTool === 'eraser' || currentTool === 'line' || currentTool === 'circle' || currentTool === 'square') {
+                    
+                    if (currentTool === 'eraser') overlayCtx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+                    else { overlayCtx.fillStyle = currentColor; overlayCtx.globalAlpha = 0.6; }
+                    
+                    const tempGrid = new Uint8Array(gridWidth * gridHeight);
+                    const points = getBrushFootprint(hoverX, hoverY);
+
+                    points.forEach(p => {
+                        if (p.x >= 0 && p.x < gridWidth && p.y >= 0 && p.y < gridHeight) {
+                            tempGrid[p.y * gridWidth + p.x] = 1;
+                        }
+                    });
+
+                    overlayCtx.beginPath();
+                    for (let y = 0; y < gridHeight; y++) {
+                        for (let x = 0; x < gridWidth; x++) {
+                            if (tempGrid[y * gridWidth + x] === 1) {
+                                overlayCtx.rect(x * pixelSize, y * pixelSize, pixelSize, pixelSize);
+                            }
+                        }
+                    }
+                    overlayCtx.fill();
+                    overlayCtx.globalAlpha = 1.0;
+                    
+                    // Trace only the outer perimeter of the brush shape
+                    overlayCtx.lineWidth = 1;
+                    overlayCtx.translate(0.5, 0.5);
+                    
+                    overlayCtx.beginPath();
+                    for (let y = 0; y < gridHeight; y++) {
+                        for (let x = 0; x < gridWidth; x++) {
+                            if (tempGrid[y * gridWidth + x] === 1) {
+                                const px = x * pixelSize;
+                                const py = y * pixelSize;
+                                
+                                // Top edge
+                                if (y === 0 || tempGrid[(y - 1) * gridWidth + x] === 0) {
+                                    overlayCtx.moveTo(px, py); overlayCtx.lineTo(px + pixelSize, py);
+                                }
+                                // Bottom edge
+                                if (y === gridHeight - 1 || tempGrid[(y + 1) * gridWidth + x] === 0) {
+                                    overlayCtx.moveTo(px, py + pixelSize); overlayCtx.lineTo(px + pixelSize, py + pixelSize);
+                                }
+                                // Left edge
+                                if (x === 0 || tempGrid[y * gridWidth + (x - 1)] === 0) {
+                                    overlayCtx.moveTo(px, py); overlayCtx.lineTo(px, py + pixelSize);
+                                }
+                                // Right edge
+                                if (x === gridWidth - 1 || tempGrid[y * gridWidth + (x + 1)] === 0) {
+                                    overlayCtx.moveTo(px + pixelSize, py); overlayCtx.lineTo(px + pixelSize, py + pixelSize);
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Draw a white line underneath for contrast against dark backgrounds
+                    overlayCtx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+                    overlayCtx.stroke();
+                    
+                    // Draw dashed black line on top
+                    overlayCtx.strokeStyle = 'rgba(0, 0, 0, 0.9)';
+                    overlayCtx.setLineDash([3, 3]);
+                    overlayCtx.stroke();
+                    overlayCtx.setLineDash([]);
+                    
+                    overlayCtx.translate(-0.5, -0.5);
+                }
+            }
+        }
+
+        function applyTransform() {
+            canvasWrapper.style.transform = `translate(${panX}px, ${panY}px) scale(${zoomLevel})`;
+        }
+
+        function fitAndCenterCanvas() {
+            const padding = 32; 
+            const availableWidth = workspace.clientWidth - (padding * 2);
+            const availableHeight = workspace.clientHeight - (padding * 2);
+            
+            const aspectRatio = gridWidth / gridHeight;
+            let finalWidth = availableWidth;
+            let finalHeight = finalWidth / aspectRatio;
+
+            if (finalHeight > availableHeight) {
+                finalHeight = availableHeight;
+                finalWidth = finalHeight * aspectRatio;
+            }
+
+            const maxBaseDimension = 800; 
+            if (finalWidth > maxBaseDimension || finalHeight > maxBaseDimension) {
+                if (finalWidth > finalHeight) {
+                    finalWidth = maxBaseDimension;
+                    finalHeight = maxBaseDimension / aspectRatio;
+                } else {
+                    finalHeight = maxBaseDimension;
+                    finalWidth = maxBaseDimension * aspectRatio;
+                }
+            }
+
+            canvasWrapper.style.width = `${finalWidth}px`;
+            canvasWrapper.style.height = `${finalHeight}px`;
+
+            zoomLevel = 1;
+            panX = (workspace.clientWidth - finalWidth) / 2;
+            panY = (workspace.clientHeight - finalHeight) / 2;
+            applyTransform();
+        }
+
+        // --- Selection Logic ---
+
+        function generateBoxSelection(startX, startY, endX, endY) {
+            selectionMask = Array(gridHeight).fill().map(() => Array(gridWidth).fill(false));
+            const minX = Math.min(startX, endX);
+            const minY = Math.min(startY, endY);
+            const maxX = Math.max(startX, endX);
+            const maxY = Math.max(startY, endY);
+            
+            let hasSel = false;
+            for(let y=minY; y<=maxY; y++) {
+                for(let x=minX; x<=maxX; x++) {
+                    if (y >= 0 && y < gridHeight && x >= 0 && x < gridWidth) {
+                        selectionMask[y][x] = true;
+                        hasSel = true;
+                    }
+                }
+            }
+            if (!hasSel) selectionMask = null;
+            updateSelectionVisual();
+        }
+
+        function generateLassoSelection() {
+            if (lassoPoints.length < 3) {
+                selectionMask = null;
+                updateSelectionVisual();
+                return;
+            }
+            
+            const tempC = document.createElement('canvas');
+            tempC.width = gridWidth; 
+            tempC.height = gridHeight;
+            const tCtx = tempC.getContext('2d', { willReadFrequently: true });
+            
+            tCtx.beginPath();
+            tCtx.moveTo(lassoPoints[0].x, lassoPoints[0].y);
+            for(let i=1; i<lassoPoints.length; i++) {
+                tCtx.lineTo(lassoPoints[i].x, lassoPoints[i].y);
+            }
+            tCtx.closePath();
+            tCtx.fillStyle = 'white';
+            tCtx.fill();
+            
+            const data = tCtx.getImageData(0, 0, gridWidth, gridHeight).data;
+            selectionMask = Array(gridHeight).fill().map(() => Array(gridWidth).fill(false));
+            let hasSelection = false;
+            
+            for(let y=0; y<gridHeight; y++) {
+                for(let x=0; x<gridWidth; x++) {
+                    if (data[(y * gridWidth + x) * 4 + 3] > 128) {
+                        selectionMask[y][x] = true;
+                        hasSelection = true;
+                    }
+                }
+            }
+            if (!hasSelection) selectionMask = null;
+            updateSelectionVisual();
+        }
+
+        function wandSelect(startX, startY) {
+            const activeData = layers[activeLayerIndex].data;
+            const targetColor = activeData[startY][startX];
+            selectionMask = Array(gridHeight).fill().map(() => Array(gridWidth).fill(false));
+            
+            const queue = [{x: startX, y: startY}];
+            let hasSelection = false;
+
+            while(queue.length > 0) {
+                const {x, y} = queue.shift();
+                if (x < 0 || x >= gridWidth || y < 0 || y >= gridHeight) continue;
+                if (selectionMask[y][x]) continue;
+                
+                if (activeData[y][x] === targetColor) {
+                    selectionMask[y][x] = true;
+                    hasSelection = true;
+                    queue.push({x: x+1, y});
+                    queue.push({x: x-1, y});
+                    queue.push({x, y: y+1});
+                    queue.push({x, y: y-1});
+                }
+            }
+            if (!hasSelection) selectionMask = null;
+            updateSelectionVisual();
+        }
+
+        // --- Drawing Logic ---
+        
+        function getCoordinates(e) {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+
+            let clientX = e.clientX;
+            let clientY = e.clientY;
+            if (e.touches && e.touches.length > 0) { clientX = e.touches[0].clientX; clientY = e.touches[0].clientY; }
+
+            const x = Math.floor(((clientX - rect.left) * scaleX) / pixelSize);
+            const y = Math.floor(((clientY - rect.top) * scaleY) / pixelSize);
+            return { x: Math.max(0, Math.min(x, gridWidth - 1)), y: Math.max(0, Math.min(y, gridHeight - 1)) };
+        }
+
+        function cloneLayers(lyrs) {
+            return lyrs.map(l => ({ id: l.id, name: l.name, visible: l.visible, data: l.data.map(row => [...row]) }));
+        }
+
+        function saveState() {
+            undoStack.push(cloneLayers(layers));
+            if (undoStack.length > MAX_HISTORY) undoStack.shift();
+            redoStack = [];
+        }
+
+        function performUndo() {
+            if (undoStack.length === 0) return;
+            redoStack.push(cloneLayers(layers));
+            layers = undoStack.pop();
+            renderLayersUI();
+            renderAll();
+        }
+
+        function performRedo() {
+            if (redoStack.length === 0) return;
+            undoStack.push(cloneLayers(layers));
+            layers = redoStack.pop();
+            renderLayersUI();
+            renderAll();
+        }
+
+        function applyBrush(cx, cy, color) {
+            if (!layers[activeLayerIndex].visible) return false;
+
+            if (currentTool === 'bucket') {
+                return floodFill(cx, cy, color);
+            }
+            
+            if (!strokeChanged) { saveState(); strokeChanged = true; }
+
+            const activeData = layers[activeLayerIndex].data;
+            const points = getBrushFootprint(cx, cy);
+            let changed = false;
+            
+            points.forEach(p => {
+                if (p.x >= 0 && p.x < gridWidth && p.y >= 0 && p.y < gridHeight) {
+                    if (selectionMask && !selectionMask[p.y][p.x]) return; // Respect selection mask
+                    
+                    if (activeData[p.y][p.x] !== color) {
+                        activeData[p.y][p.x] = color;
+                        changed = true;
+                    }
+                }
+            });
+            return changed;
+        }
+
+        function drawLine(x0, y0, x1, y1, color) {
+            let dx = Math.abs(x1 - x0);
+            let dy = Math.abs(y1 - y0);
+            let sx = (x0 < x1) ? 1 : -1;
+            let sy = (y0 < y1) ? 1 : -1;
+            let err = dx - dy;
+            let changed = false;
+
+            while (true) {
+                if (applyBrush(x0, y0, color)) changed = true;
+                if (x0 === x1 && y0 === y1) break;
+                let e2 = 2 * err;
+                if (e2 > -dy) { err -= dy; x0 += sx; }
+                if (e2 < dx) { err += dx; y0 += sy; }
+            }
+            return changed;
+        }
+
+        function floodFill(startX, startY, fillColor) {
+            if (!layers[activeLayerIndex].visible) return false;
+            if (selectionMask && !selectionMask[startY][startX]) return false;
+
+            const activeData = layers[activeLayerIndex].data;
+            const targetColor = activeData[startY][startX];
+            if (targetColor === fillColor) return false;
+
+            if (!strokeChanged) { saveState(); strokeChanged = true; }
+
+            const queue = [{x: startX, y: startY}];
+            let changed = false;
+            
+            while (queue.length > 0) {
+                const {x, y} = queue.shift();
+                if (x < 0 || x >= gridWidth || y < 0 || y >= gridHeight) continue;
+                if (selectionMask && !selectionMask[y][x]) continue;
+                if (activeData[y][x] !== targetColor) continue;
+
+                activeData[y][x] = fillColor;
+                changed = true;
+                queue.push({x: x + 1, y}); queue.push({x: x - 1, y});
+                queue.push({x, y: y + 1}); queue.push({x, y: y - 1});
+            }
+            return changed;
+        }
+
+        function executeWithSymmetry(x, y, lastX, lastY, actionFn) {
+            let points = [{x, y, lx: lastX, ly: lastY}];
+
+            if (symmetryX) {
+                const newPoints = points.map(p => ({
+                    x: gridWidth - 1 - p.x, y: p.y,
+                    lx: p.lx === -1 ? -1 : gridWidth - 1 - p.lx, ly: p.ly
+                }));
+                points.push(...newPoints);
+            }
+            
+            if (symmetryY) {
+                const newPoints = points.map(p => ({
+                    x: p.x, y: gridHeight - 1 - p.y,
+                    lx: p.lx, ly: p.ly === -1 ? -1 : gridHeight - 1 - p.ly
+                }));
+                points.push(...newPoints);
+            }
+
+            if (symmetryDiag1) {
+                const newPoints = points.map(p => ({
+                    x: Math.round(p.y + (gridWidth - gridHeight) / 2),
+                    y: Math.round(p.x + (gridHeight - gridWidth) / 2),
+                    lx: p.lx === -1 ? -1 : Math.round(p.ly + (gridWidth - gridHeight) / 2),
+                    ly: p.ly === -1 ? -1 : Math.round(p.lx + (gridHeight - gridWidth) / 2)
+                }));
+                points.push(...newPoints);
+            }
+
+            if (symmetryDiag2) {
+                const newPoints = points.map(p => ({
+                    x: Math.round((gridWidth + gridHeight - 2) / 2 - p.y),
+                    y: Math.round((gridWidth + gridHeight - 2) / 2 - p.x),
+                    lx: p.lx === -1 ? -1 : Math.round((gridWidth + gridHeight - 2) / 2 - p.ly),
+                    ly: p.ly === -1 ? -1 : Math.round((gridWidth + gridHeight - 2) / 2 - p.lx)
+                }));
+                points.push(...newPoints);
+            }
+
+            const seen = new Set();
+            const uniquePoints = [];
+            for (const p of points) {
+                const key = `${p.x},${p.y}`;
+                if (!seen.has(key)) { seen.add(key); uniquePoints.push(p); }
+            }
+            uniquePoints.forEach(p => actionFn(p.x, p.y, p.lx, p.ly));
+        }
+
+        function pickColor(x, y) {
+            for (let i = 0; i < layers.length; i++) {
+                if (layers[i].visible && layers[i].data[y][x]) {
+                    setColor(layers[i].data[y][x]);
+                    setTool('pencil'); // Switch directly back to pencil after picking
+                    return;
+                }
+            }
+        }
+
+        function handlePointerDown(e) {
+            if (e.button === 1 || e.button === 2 || (e.button === 0 && (e.altKey || isSpacePressed))) return; 
+            
+            const { x, y } = getCoordinates(e);
+
+            // Timer Widget Trigger
+            if (isWidgetTimerEnabled && !isTimerRunning && !currentTool.startsWith('select-') && currentTool !== 'picker') {
+                startTimer();
+            }
+
+            if (currentTool === 'picker') {
+                pickColor(x, y);
+                return;
+            }
+
+            if (currentTool.startsWith('select-')) {
+                isSelecting = true;
+                if (currentTool === 'select-box') {
+                    selectStartX = x; selectStartY = y;
+                } else if (currentTool === 'select-lasso') {
+                    lassoPoints = [{x, y}];
+                } else if (currentTool === 'select-wand') {
+                    wandSelect(x, y);
+                    isSelecting = false;
+                }
+                return;
+            }
+
+            if (currentTool === 'line' || currentTool === 'circle' || currentTool === 'square') {
+                isDrawingShape = true;
+                shapeStartX = x; shapeStartY = y;
+                shapeCurrentX = x; shapeCurrentY = y;
+                renderOverlay();
+                return;
+            }
+
+            isDrawing = true;
+            let changed = false;
+            if (currentTool === 'bucket') {
+                executeWithSymmetry(x, y, -1, -1, (cx, cy) => {
+                    if (applyBrush(cx, cy, currentColor)) changed = true;
+                });
+            } else {
+                const drawColor = currentTool === 'eraser' ? null : currentColor;
+                executeWithSymmetry(x, y, -1, -1, (cx, cy) => {
+                    if (applyBrush(cx, cy, drawColor)) changed = true;
+                });
+                lastX = x; lastY = y;
+            }
+            if (changed) renderAll();
+        }
+
+        function handlePointerMove(e) {
+            const { x, y } = getCoordinates(e);
+            hoverX = x; hoverY = y;
+            
+            if (isSelecting) {
+                if (currentTool === 'select-lasso') lassoPoints.push({x, y});
+                renderOverlay();
+                return;
+            }
+
+            if (isDrawingShape) {
+                shapeCurrentX = x; shapeCurrentY = y;
+                renderOverlay();
+                return;
+            }
+
+            renderOverlay();
+
+            if (!isDrawing) return;
+            
+            if (currentTool !== 'bucket' && !currentTool.startsWith('select-')) {
+                const drawColor = currentTool === 'eraser' ? null : currentColor;
+                let changed = false;
+                executeWithSymmetry(x, y, lastX, lastY, (cx, cy, clx, cly) => {
+                    if (clx !== -1 && cly !== -1) {
+                        if (drawLine(clx, cly, cx, cy, drawColor)) changed = true;
+                    }
+                    else {
+                        if (applyBrush(cx, cy, drawColor)) changed = true;
+                    }
+                });
+                lastX = x; lastY = y;
+                if (changed) renderAll();
+            }
+        }
+
+        function handlePointerUp() {
+            if (isSelecting) {
+                if (currentTool === 'select-box') {
+                    generateBoxSelection(selectStartX, selectStartY, hoverX, hoverY);
+                } else if (currentTool === 'select-lasso') {
+                    generateLassoSelection();
+                }
+            }
+
+            if (isDrawingShape) {
+                isDrawingShape = false;
+                if (!strokeChanged) { saveState(); strokeChanged = true; }
+                const drawColor = currentTool === 'eraser' ? null : currentColor;
+                const pts = getShapePoints(shapeStartX, shapeStartY, shapeCurrentX, shapeCurrentY, currentTool, isShiftPressed, isCtrlPressed);
+                
+                let changed = false;
+                pts.forEach(p => {
+                    executeWithSymmetry(p.x, p.y, -1, -1, (cx, cy) => {
+                        if (applyBrush(cx, cy, drawColor)) changed = true;
+                    });
+                });
+                strokeChanged = false;
+                if (changed) renderAll();
+            }
+
+            isDrawing = false;
+            isSelecting = false;
+            lastX = -1; lastY = -1;
+            strokeChanged = false;
+            renderOverlay();
+        }
+
+        // --- Color Math & UI Interactions ---
+
+        function hsvToRgb(h, s, v) {
+            h = (h % 360) / 360;
+            let r, g, b;
+            let i = Math.floor(h * 6);
+            let f = h * 6 - i;
+            let p = v * (1 - s);
+            let q = v * (1 - f * s);
+            let t = v * (1 - (1 - f) * s);
+            switch (i % 6) {
+                case 0: r = v, g = t, b = p; break; case 1: r = q, g = v, b = p; break;
+                case 2: r = p, g = v, b = t; break; case 3: r = p, g = q, b = v; break;
+                case 4: r = t, g = p, b = v; break; case 5: r = v, g = p, b = q; break;
+            }
+            return { r: Math.round(r * 255), g: Math.round(g * 255), b: Math.round(b * 255) };
+        }
+
+        function hsvToHex(h, s, v, a = 1) {
+            const rgb = hsvToRgb(h, s, v);
+            const toHex = x => Math.round(x).toString(16).padStart(2, '0');
+            return `#${toHex(rgb.r)}${toHex(rgb.g)}${toHex(rgb.b)}${toHex(a * 255)}`.toUpperCase();
+        }
+        
+        function rgbToHex(r, g, b, a = 1) {
+            const toHex = x => Math.round(x).toString(16).padStart(2, '0');
+            return `#${toHex(r)}${toHex(g)}${toHex(b)}${toHex(a * 255)}`.toUpperCase();
+        }
+
+        function hexToHsv(hex) {
+            let r = 0, g = 0, b = 0, a = 1;
+            hex = hex.replace('#', '');
+            if (hex.length === 3 || hex.length === 4) {
+                r = parseInt(hex[0] + hex[0], 16); g = parseInt(hex[1] + hex[1], 16); b = parseInt(hex[2] + hex[2], 16);
+                if (hex.length === 4) a = parseInt(hex[3] + hex[3], 16) / 255;
+            } else if (hex.length === 6 || hex.length === 8) {
+                r = parseInt(hex.slice(0, 2), 16); g = parseInt(hex.slice(2, 4), 16); b = parseInt(hex.slice(4, 6), 16);
+                if (hex.length === 8) a = parseInt(hex.slice(6, 8), 16) / 255;
+            }
+            r /= 255; g /= 255; b /= 255;
+            
+            let max = Math.max(r, g, b), min = Math.min(r, g, b);
+            let h, s, v = max;
+            let d = max - min;
+            s = max === 0 ? 0 : d / max;
+            if (max === min) h = 0; 
+            else {
+                switch (max) {
+                    case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+                    case g: h = (b - r) / d + 2; break;
+                    case b: h = (r - g) / d + 4; break;
+                }
+                h /= 6;
+            }
+            return { h: h * 360, s: s, v: v, a: a };
+        }
+
+        function drawHueRing() {
+            const w = hueRingCanvas.width; const h = hueRingCanvas.height;
+            const cx = w / 2; const cy = h / 2;
+            const outerRadius = 80; const innerRadius = 64;
+
+            hueRingCtx.clearRect(0, 0, w, h);
+            if (hueRingCtx.createConicGradient) {
+                const gradient = hueRingCtx.createConicGradient(0, cx, cy);
+                gradient.addColorStop(0, '#FF0000'); gradient.addColorStop(1/6, '#FFFF00'); gradient.addColorStop(2/6, '#00FF00');
+                gradient.addColorStop(3/6, '#00FFFF'); gradient.addColorStop(4/6, '#0000FF'); gradient.addColorStop(5/6, '#FF00FF');
+                gradient.addColorStop(1, '#FF0000');
+                hueRingCtx.beginPath(); hueRingCtx.arc(cx, cy, outerRadius, 0, Math.PI * 2);
+                hueRingCtx.arc(cx, cy, innerRadius, 0, Math.PI * 2, true);
+                hueRingCtx.fillStyle = gradient; hueRingCtx.fill();
+            } else {
+                for (let angle = 0; angle <= 360; angle += 1) {
+                    hueRingCtx.beginPath();
+                    const startAngle = (angle - 1) * Math.PI / 180; const endAngle = (angle + 1) * Math.PI / 180;
+                    hueRingCtx.arc(cx, cy, outerRadius, startAngle, endAngle); hueRingCtx.arc(cx, cy, innerRadius, endAngle, startAngle, true);
+                    hueRingCtx.closePath(); hueRingCtx.fillStyle = `hsl(${angle}, 100%, 50%)`; hueRingCtx.fill();
+                }
+            }
+        }
+
+        function drawSVSquare() {
+            const w = svSquareCanvas.width; const h = svSquareCanvas.height;
+            svSquareCtx.clearRect(0, 0, w, h);
+            svSquareCtx.fillStyle = `hsl(${customHue}, 100%, 50%)`; svSquareCtx.fillRect(0, 0, w, h);
+            let gradWhite = svSquareCtx.createLinearGradient(0, 0, w, 0);
+            gradWhite.addColorStop(0, 'rgba(255,255,255,1)'); gradWhite.addColorStop(1, 'rgba(255,255,255,0)');
+            svSquareCtx.fillStyle = gradWhite; svSquareCtx.fillRect(0, 0, w, h);
+            let gradBlack = svSquareCtx.createLinearGradient(0, 0, 0, h);
+            gradBlack.addColorStop(0, 'rgba(0,0,0,0)'); gradBlack.addColorStop(1, 'rgba(0,0,0,1)');
+            svSquareCtx.fillStyle = gradBlack; svSquareCtx.fillRect(0, 0, w, h);
+        }
+
+        function updateHueCursor() {
+            const cx = 80; const cy = 80; const radius = 72; 
+            const angle = customHue * (Math.PI / 180);
+            hueCursor.style.left = `${cx + radius * Math.cos(angle)}px`; hueCursor.style.top = `${cy + radius * Math.sin(angle)}px`;
+        }
+
+        function updateSVCursor() {
+            svCursor.style.left = `${40 + (customSat * 80)}px`; svCursor.style.top = `${40 + ((1 - customVal) * 80)}px`;
+        }
+        
+        function updateAlphaCursor() {
+            alphaCursor.style.left = `${customAlpha * 100}%`; alphaLabel.textContent = Math.round(customAlpha * 100) + '%';
+        }
+
+        function updateColorFromWheel() {
+            const hex = hsvToHex(customHue, customSat, customVal, customAlpha);
+            const rgb = hsvToRgb(customHue, customSat, customVal);
+            currentColor = hex; btnOpenColorFill.style.backgroundColor = hex;
+            hexInput.value = hex; rInput.value = rgb.r; gInput.value = rgb.g; bInput.value = rgb.b;
+            const pureHex = hsvToHex(customHue, customSat, customVal, 1);
+            alphaBg.style.background = `linear-gradient(to right, transparent, ${pureHex})`;
+            if (currentTool.startsWith('select-')) setTool('pencil');
+        }
+
+        function handleColorPickerPointer(e, isDown) {
+            const rect = colorPickerContainer.getBoundingClientRect();
+            let clientX = e.clientX; let clientY = e.clientY;
+            if (e.touches && e.touches.length > 0) { clientX = e.touches[0].clientX; clientY = e.touches[0].clientY; }
+
+            const x = clientX - rect.left; const y = clientY - rect.top;
+            const cx = rect.width / 2; const cy = rect.height / 2;
+            
+            if (isDown) {
+                const distance = Math.sqrt((x - cx)*(x - cx) + (y - cy)*(y - cy));
+                if (x >= 40 && x <= 120 && y >= 40 && y <= 120) isDraggingSV = true;
+                else if (distance >= 54 && distance <= 90) isDraggingHue = true;
+            }
+
+            if (isDraggingHue) {
+                let angle = Math.atan2(y - cy, x - cx) * (180 / Math.PI);
+                if (angle < 0) angle += 360;
+                customHue = angle;
+                updateHueCursor(); drawSVSquare(); updateColorFromWheel();
+            } else if (isDraggingSV) {
+                let sx = Math.max(0, Math.min(80, x - 40));
+                let sy = Math.max(0, Math.min(80, y - 40));
+                customSat = sx / 80; customVal = 1 - (sy / 80);
+                updateSVCursor(); updateColorFromWheel(); updateAlphaCursor(); 
+            }
+        }
+
+        function setColor(hexStr) {
+            const hsv = hexToHsv(hexStr);
+            customHue = hsv.h; customSat = hsv.s; customVal = hsv.v; customAlpha = hsv.a;
+            alphaSlider.value = customAlpha * 100;
+            updateHueCursor(); drawSVSquare(); updateSVCursor(); updateAlphaCursor(); updateColorFromWheel();
+        }
+
+        function setTool(toolName) {
+            currentTool = toolName;
+            const btns = [btnPencil, btnEraser, btnBucket, btnLine, btnCircle, btnSquare, btnPicker, btnSelectBox, btnSelectLasso, btnSelectWand];
+            btns.forEach(btn => btn.classList.remove('active'));
+
+            if (toolName === 'pencil') btnPencil.classList.add('active');
+            if (toolName === 'eraser') btnEraser.classList.add('active');
+            if (toolName === 'bucket') btnBucket.classList.add('active');
+            if (toolName === 'line') btnLine.classList.add('active');
+            if (toolName === 'circle') btnCircle.classList.add('active');
+            if (toolName === 'square') btnSquare.classList.add('active');
+            if (toolName === 'picker') btnPicker.classList.add('active');
+            if (toolName === 'select-box') btnSelectBox.classList.add('active');
+            if (toolName === 'select-lasso') btnSelectLasso.classList.add('active');
+            if (toolName === 'select-wand') btnSelectWand.classList.add('active');
+
+            updateCursor();
+            renderOverlay();
+        }
+
+        function updateCursor() {
+            if (isPanning || isSpacePressed) {
+                workspace.style.cursor = isPanning ? 'grabbing' : 'grab'; canvas.style.cursor = isPanning ? 'grabbing' : 'grab';
+            } else if (currentTool === 'pencil' || currentTool === 'eraser' || currentTool === 'line' || currentTool === 'circle' || currentTool === 'square') {
+                workspace.style.cursor = 'none'; canvas.style.cursor = 'none';
+            } else if (currentTool === 'picker') {
+                workspace.style.cursor = 'crosshair'; canvas.style.cursor = 'crosshair';
+            } else {
+                workspace.style.cursor = 'crosshair'; canvas.style.cursor = 'crosshair';
+            }
+        }
+
+        function initDraggables() {
+            document.querySelectorAll('.draggable-window .xp-titlebar').forEach(handle => {
+                const el = handle.closest('.draggable-window');
+                let isDragging = false;
+                let startX, startY, initialLeft, initialTop;
+
+                handle.addEventListener('pointerdown', (e) => {
+                    if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
+                    isDragging = true;
+                    startX = e.clientX; startY = e.clientY;
+                    
+                    const rect = el.getBoundingClientRect();
+                    el.style.position = 'fixed';
+                    el.style.left = rect.left + 'px'; el.style.top = rect.top + 'px';
+                    el.style.transform = 'none'; el.style.margin = '0';
+                    el.style.bottom = 'auto'; el.style.right = 'auto';
+
+                    initialLeft = rect.left; initialTop = rect.top;
+                    handle.setPointerCapture(e.pointerId);
+                    
+                    document.querySelectorAll('.draggable-window').forEach(w => w.style.zIndex = '40');
+                    el.style.zIndex = '50';
+                    
+                    const setWin = document.getElementById('settings-window');
+                    const widWin = document.getElementById('widgets-window');
+                    const outWin = document.getElementById('outline-window');
+                    if (setWin && !setWin.classList.contains('hidden')) {
+                        setWin.style.zIndex = '200';
+                    }
+                    if (widWin && !widWin.classList.contains('hidden')) {
+                        widWin.style.zIndex = '200';
+                    }
+                    if (outWin && !outWin.classList.contains('hidden')) {
+                        outWin.style.zIndex = '200';
+                    }
+                    if (el.closest('#settings-window') || el.closest('#widgets-window') || el.closest('#outline-window')) el.style.zIndex = '201';
+                });
+
+                handle.addEventListener('pointermove', (e) => {
+                    if (!isDragging) return;
+                    let newLeft = initialLeft + (e.clientX - startX);
+                    let newTop = initialTop + (e.clientY - startY);
+                    const maxX = window.innerWidth - el.offsetWidth;
+                    const maxY = window.innerHeight - el.offsetHeight;
+
+                    el.style.left = Math.max(0, Math.min(newLeft, maxX)) + 'px';
+                    el.style.top = Math.max(0, Math.min(newTop, maxY)) + 'px';
+                });
+
+                handle.addEventListener('pointerup', (e) => {
+                    if (isDragging) { isDragging = false; handle.releasePointerCapture(e.pointerId); }
+                });
+            });
+        }
+
+        function showToast(message) {
+            toastMsg.textContent = message;
+            toast.classList.remove('translate-y-10', 'opacity-0');
+            setTimeout(() => toast.classList.add('translate-y-10', 'opacity-0'), 3000);
+        }
+
+        function setupEventListeners() {
+            canvas.addEventListener('pointerdown', handlePointerDown);
+            window.addEventListener('pointermove', handlePointerMove); 
+            window.addEventListener('pointerup', handlePointerUp);
+            canvas.addEventListener('pointerleave', () => { hoverX = -1; hoverY = -1; renderOverlay(); });
+            canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+            workspace.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                const rect = workspace.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left; const mouseY = e.clientY - rect.top;
+                const unscaledX = (mouseX - panX) / zoomLevel; const unscaledY = (mouseY - panY) / zoomLevel;
+
+                let newZoom = zoomLevel * (e.deltaY > 0 ? 0.85 : 1.15); 
+                newZoom = Math.max(0.1, Math.min(newZoom, 50)); 
+                panX = mouseX - unscaledX * newZoom; panY = mouseY - unscaledY * newZoom;
+                zoomLevel = newZoom; applyTransform();
+            }, { passive: false });
+
+            workspace.addEventListener('pointerdown', (e) => {
+                if (e.button === 1 || (e.button === 0 && (e.altKey || isSpacePressed))) { 
+                    e.preventDefault(); isPanning = true;
+                    startPanX = e.clientX - panX; startPanY = e.clientY - panY;
+                    updateCursor();
+                }
+            });
+
+            window.addEventListener('pointermove', (e) => {
+                if (isPanning) {
+                    panX = e.clientX - startPanX; panY = e.clientY - startPanY;
+                    applyTransform();
+                }
+            });
+
+            window.addEventListener('pointerup', (e) => {
+                if (isPanning) { isPanning = false; updateCursor(); }
+            });
+
+            // Widgets & Mods Logic
+            toggleWidgetRef.addEventListener('change', (e) => {
+                isWidgetRefEnabled = e.target.checked;
+                if (isWidgetRefEnabled) btnToggleRef.classList.remove('hidden');
+                else { btnToggleRef.classList.add('hidden'); referenceWindow.classList.add('hidden'); }
+            });
+
+            toggleWidgetTimer.addEventListener('change', (e) => {
+                isWidgetTimerEnabled = e.target.checked;
+                if (isWidgetTimerEnabled) { timerWindow.classList.remove('hidden'); resetTimer(); }
+                else { timerWindow.classList.add('hidden'); stopTimer(); }
+            });
+
+            btnToggleRef.addEventListener('click', () => { referenceWindow.classList.toggle('hidden'); });
+            btnCloseReference.addEventListener('click', () => { referenceWindow.classList.add('hidden'); });
+            btnCloseTimer.addEventListener('click', () => { 
+                timerWindow.classList.add('hidden');
+                toggleWidgetTimer.checked = false;
+                isWidgetTimerEnabled = false;
+                stopTimer();
+            });
+
+            btnTimerReset.addEventListener('click', resetTimer);
+
+            refUploadInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        refImage.src = event.target.result;
+                        refImage.classList.remove('hidden');
+                        refPlaceholder.classList.add('hidden');
+                    };
+                    reader.readAsDataURL(file);
+                }
+            });
+
+            btnRefClear.addEventListener('click', () => {
+                refImage.src = '';
+                refImage.classList.add('hidden');
+                refPlaceholder.classList.remove('hidden');
+                refUploadInput.value = '';
+            });
+
+            // Toggles for UI Windows
+            btnOpenColor.addEventListener('click', () => { colorMenu.classList.toggle('hidden'); });
+            document.getElementById('btn-close-color').addEventListener('click', () => { colorMenu.classList.add('hidden'); });
+            
+            btnToggleLayers.addEventListener('click', () => { layersWindow.classList.toggle('hidden'); });
+            if(btnCloseLayers) btnCloseLayers.addEventListener('click', () => { layersWindow.classList.add('hidden'); });
+
+            // Tool Handlers
+            brushSizeInput.addEventListener('input', (e) => {
+                brushSize = parseInt(e.target.value) || 1;
+                if (brushSize < 1) brushSize = 1; if (brushSize > 64) brushSize = 64;
+                updateBrushOffsets();
+                renderOverlay();
+            });
+
+            brushShapeSelect.addEventListener('change', (e) => { brushShape = e.target.value; updateBrushOffsets(); renderOverlay(); });
+            btnDeselect.addEventListener('click', () => { selectionMask = null; updateSelectionVisual(); renderOverlay(); });
+
+            // Layers Handlers
+            btnAddLayer.addEventListener('click', () => {
+                saveState();
+                layers.unshift({ id: Date.now(), name: `Layer ${layers.length + 1}`, visible: true, data: createEmptyLayerData() });
+                activeLayerIndex = 0;
+                renderLayersUI(); renderAll();
+            });
+            btnDelLayer.addEventListener('click', () => {
+                if (layers.length <= 1) return;
+                saveState();
+                layers.splice(activeLayerIndex, 1);
+                activeLayerIndex = Math.max(0, activeLayerIndex - 1);
+                renderLayersUI(); renderAll();
+            });
+            btnUpLayer.addEventListener('click', () => {
+                if (activeLayerIndex <= 0) return;
+                saveState();
+                const temp = layers[activeLayerIndex];
+                layers[activeLayerIndex] = layers[activeLayerIndex - 1];
+                layers[activeLayerIndex - 1] = temp;
+                activeLayerIndex--;
+                renderLayersUI(); renderAll();
+            });
+            btnDownLayer.addEventListener('click', () => {
+                if (activeLayerIndex >= layers.length - 1) return;
+                saveState();
+                const temp = layers[activeLayerIndex];
+                layers[activeLayerIndex] = layers[activeLayerIndex + 1];
+                layers[activeLayerIndex + 1] = temp;
+                activeLayerIndex++;
+                renderLayersUI(); renderAll();
+            });
+
+            // Widgets Menu Interactions
+            const openWidgets = () => widgetsWindow.classList.remove('hidden');
+            const closeWidgets = () => widgetsWindow.classList.add('hidden');
+            btnOpenWidgetsHome.addEventListener('click', openWidgets);
+            btnOpenWidgetsCanvas.addEventListener('click', openWidgets);
+            btnCloseWidgets.addEventListener('click', closeWidgets);
+            btnSaveWidgets.addEventListener('click', closeWidgets);
+
+            // Settings Menu Interactions
+            const openSettings = () => settingsWindow.classList.remove('hidden');
+            const closeSettings = () => settingsWindow.classList.add('hidden');
+            btnOpenSettingsHome.addEventListener('click', openSettings); btnOpenSettingsCanvas.addEventListener('click', openSettings);
+            btnCloseSettings.addEventListener('click', closeSettings); btnSaveSettings.addEventListener('click', closeSettings);
+            
+            // Outline Window Logic
+            const openOutlineWindow = () => {
+                let c = currentColor;
+                if(c && c.length > 7) c = c.substring(0, 7);
+                outlineColorInput.value = c;
+                outlineWindow.classList.remove('hidden');
+            };
+            const closeOutlineWindow = () => outlineWindow.classList.add('hidden');
+            
+            btnCloseOutline.addEventListener('click', closeOutlineWindow);
+            btnCancelOutline.addEventListener('click', closeOutlineWindow);
+            
+            btnApplyOutline.addEventListener('click', () => {
+                if (!layers[activeLayerIndex].visible) {
+                    showToast("Cannot outline a hidden layer.");
+                    return;
+                }
+                saveState();
+                const color = outlineColorInput.value.toUpperCase(); 
+                const thickness = parseInt(outlineThickness.value) || 1;
+                const useDiagonals = outlineDiagonals.checked;
+                
+                let workingData = layers[activeLayerIndex].data.map(row => [...row]);
+
+                for (let t = 0; t < thickness; t++) {
+                    let nextData = workingData.map(row => [...row]);
+                    let changed = false;
+
+                    for (let y = 0; y < gridHeight; y++) {
+                        for (let x = 0; x < gridWidth; x++) {
+                            if (workingData[y][x] === null) {
+                                let hasNeighbor = false;
+                                
+                                if (y > 0 && workingData[y-1][x] !== null) hasNeighbor = true;
+                                else if (y < gridHeight - 1 && workingData[y+1][x] !== null) hasNeighbor = true;
+                                else if (x > 0 && workingData[y][x-1] !== null) hasNeighbor = true;
+                                else if (x < gridWidth - 1 && workingData[y][x+1] !== null) hasNeighbor = true;
+
+                                if (!hasNeighbor && useDiagonals) {
+                                    if (y > 0 && x > 0 && workingData[y-1][x-1] !== null) hasNeighbor = true;
+                                    else if (y > 0 && x < gridWidth - 1 && workingData[y-1][x+1] !== null) hasNeighbor = true;
+                                    else if (y < gridHeight - 1 && x > 0 && workingData[y+1][x-1] !== null) hasNeighbor = true;
+                                    else if (y < gridHeight - 1 && x < gridWidth - 1 && workingData[y+1][x+1] !== null) hasNeighbor = true;
+                                }
+
+                                if (hasNeighbor) {
+                                    nextData[y][x] = color;
+                                    changed = true;
+                                }
+                            }
+                        }
+                    }
+                    workingData = nextData;
+                    if (!changed) break; 
+                }
+
+                layers[activeLayerIndex].data = workingData;
+                renderAll();
+                closeOutlineWindow();
+            });
+
+            document.querySelectorAll('.keybind-input').forEach(input => {
+                input.addEventListener('keydown', (e) => {
+                    e.preventDefault();
+                    let key = e.key.toLowerCase();
+                    if (['control', 'shift', 'alt', 'meta'].includes(key)) return;
+                    
+                    let bindStr = key;
+                    if (e.ctrlKey || e.metaKey) bindStr = 'ctrl+' + key; else if (e.shiftKey) bindStr = 'shift+' + key; else if (e.altKey) bindStr = 'alt+' + key;
+                    if (key === ' ') bindStr = 'space';
+                    e.target.value = bindStr; keybinds[e.target.dataset.action] = bindStr;
+                });
+            });
+
+            btnUndo.addEventListener('click', performUndo); btnRedo.addEventListener('click', performRedo);
+
+            colorPickerContainer.addEventListener('pointerdown', (e) => {
+                isPickingWheelColor = true; colorPickerContainer.setPointerCapture(e.pointerId); handleColorPickerPointer(e, true);
+            });
+            colorPickerContainer.addEventListener('pointermove', (e) => { if (isPickingWheelColor) handleColorPickerPointer(e, false); });
+            colorPickerContainer.addEventListener('pointerup', (e) => {
+                isPickingWheelColor = false; isDraggingHue = false; isDraggingSV = false; colorPickerContainer.releasePointerCapture(e.pointerId);
+            });
+            
+            alphaSlider.addEventListener('input', (e) => { customAlpha = parseInt(e.target.value) / 100; updateAlphaCursor(); updateColorFromWheel(); });
+
+            hexInput.addEventListener('change', (e) => {
+                let val = e.target.value.trim(); if (!val.startsWith('#')) val = '#' + val; setColor(val);
+            });
+
+            const handleRgbInput = () => {
+                const r = Math.max(0, Math.min(255, parseInt(rInput.value) || 0)); const g = Math.max(0, Math.min(255, parseInt(gInput.value) || 0)); const b = Math.max(0, Math.min(255, parseInt(bInput.value) || 0));
+                setColor(rgbToHex(r, g, b, customAlpha));
+            };
+            rInput.addEventListener('change', handleRgbInput); gInput.addEventListener('change', handleRgbInput); bInput.addEventListener('change', handleRgbInput);
+
+            btnCreateNew.addEventListener('click', () => {
+                let w = parseInt(newWidthInput.value); let h = parseInt(newHeightInput.value);
+                if (isNaN(w) || w < 1) w = 16; if (isNaN(h) || h < 1) h = 16;
+                if (w > 1920) w = 1920; if (h > 1080) h = 1080;
+                gridWidth = w; gridHeight = h; appMode = 'art'; fontNavPanel.classList.add('hidden');
+                startCanvas();
+            });
+
+            btnCreateFont.addEventListener('click', () => {
+                let size = parseInt(fontSizeInput.value);
+                if (isNaN(size) || size < 8) size = 16; if (size > 128) size = 128; 
+                gridWidth = size; gridHeight = size; appMode = 'font'; currentFontCharIndex = 0; fontPixelData = {}; 
+                fontNavPanel.classList.remove('hidden'); startCanvas(); loadCurrentChar();
+            });
+
+            fontUploadInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const buffer = event.target.result;
+                        const font = opentype.parse(buffer);
+                        
+                        let size = parseInt(fontSizeInput.value);
+                        if (isNaN(size) || size < 8) size = 16; 
+                        if (size > 128) size = 128; 
+                        
+                        gridWidth = size; 
+                        gridHeight = size; 
+                        appMode = 'font'; 
+                        currentFontCharIndex = 0; 
+                        fontPixelData = {}; 
+                        
+                        // Calculate metrics for drawing
+                        const scale = 1 / font.unitsPerEm * size;
+                        const baseline = font.ascender * scale;
+                        
+                        const tempCanvas = document.createElement('canvas');
+                        tempCanvas.width = gridWidth;
+                        tempCanvas.height = gridHeight;
+                        const tCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
+
+                        for (let i = 0; i < FONT_CHARS.length; i++) {
+                            const char = FONT_CHARS[i];
+                            const glyph = font.charToGlyph(char);
+                            
+                            tCtx.clearRect(0, 0, gridWidth, gridHeight);
+                            const path = glyph.getPath(0, baseline, size);
+                            path.fill = '#000000';
+                            path.draw(tCtx);
+                            
+                            const imgData = tCtx.getImageData(0, 0, gridWidth, gridHeight).data;
+                            const layerData = createEmptyLayerData();
+                            let hasPixels = false;
+                            
+                            for (let y = 0; y < gridHeight; y++) {
+                                for (let x = 0; x < gridWidth; x++) {
+                                    // Use alpha channel threshold for rasterization
+                                    const alpha = imgData[(y * gridWidth + x) * 4 + 3];
+                                    if (alpha > 128) {
+                                        layerData[y][x] = '#000000';
+                                        hasPixels = true;
+                                    }
+                                }
+                            }
+                            
+                            if (hasPixels || char === ' ') {
+                                fontPixelData[char] = [{ id: Date.now(), name: 'Layer 1', visible: true, data: layerData }];
+                            } else {
+                                fontPixelData[char] = [{ id: Date.now(), name: 'Layer 1', visible: true, data: createEmptyLayerData() }];
+                            }
+                        }
+                        
+                        fontNavPanel.classList.remove('hidden');
+                        startCanvas();
+                        loadCurrentChar();
+                        showToast('Font loaded successfully!');
+                    } catch (err) {
+                        console.error(err);
+                        showToast('Error loading TTF. Make sure it is a valid font.');
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+                e.target.value = '';
+            });
+
+            fileUpload.addEventListener('change', (e) => {
+                const file = e.target.files[0]; if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        let targetW = img.width; let targetH = img.height;
+                        const MAX_W = 1920; const MAX_H = 1080;
+                        if (targetW > MAX_W || targetH > MAX_H) {
+                            const scale = Math.min(MAX_W / targetW, MAX_H / targetH);
+                            targetW = Math.floor(targetW * scale); targetH = Math.floor(targetH * scale);
+                            showToast('Scaled down to fit limits.');
+                        }
+                        gridWidth = targetW; gridHeight = targetH;
+                        
+                        const tempCanvas = document.createElement('canvas'); tempCanvas.width = gridWidth; tempCanvas.height = gridHeight;
+                        const tCtx = tempCanvas.getContext('2d');
+                        tCtx.drawImage(img, 0, 0, gridWidth, gridHeight);
+                        const imgData = tCtx.getImageData(0, 0, gridWidth, gridHeight).data;
+                        
+                        pixelSize = Math.max(1, Math.round(512 / Math.max(gridWidth, gridHeight)));
+                        canvas.width = gridWidth * pixelSize; canvas.height = gridHeight * pixelSize;
+                        bgCanvas.width = canvas.width; bgCanvas.height = canvas.height;
+                        overlayCanvas.width = canvas.width; overlayCanvas.height = canvas.height;
+                        selVisualCanvas.width = canvas.width; selVisualCanvas.height = canvas.height;
+                        canvasSizeLabel.textContent = `${gridWidth} x ${gridHeight} px`;
+
+                        resetPixelData();
+
+                        for (let y = 0; y < gridHeight; y++) {
+                            for (let x = 0; x < gridWidth; x++) {
+                                const i = (y * gridWidth + x) * 4;
+                                const r = imgData[i]; const g = imgData[i+1]; const b = imgData[i+2]; const a = imgData[i+3];
+                                if (a > 10) {
+                                    layers[0].data[y][x] = "#" + (1 << 24 | r << 16 | g << 8 | b).toString(16).slice(1).toUpperCase();
+                                }
+                            }
+                        }
+                        
+                        fitAndCenterCanvas(); renderAll();
+                        appMode = 'art'; fontNavPanel.classList.add('hidden'); homeScreen.style.display = 'none';
+                    };
+                    img.src = event.target.result;
+                };
+                reader.readAsDataURL(file); fileUpload.value = '';
+            });
+
+            btnHome.addEventListener('click', () => {
+                if (confirm('Return to home screen? Unsaved progress will be lost.')) homeScreen.style.display = 'flex';
+            });
+
+            btnPrevChar.addEventListener('click', () => { saveCurrentChar(); currentFontCharIndex = (currentFontCharIndex - 1 + FONT_CHARS.length) % FONT_CHARS.length; loadCurrentChar(); });
+            btnNextChar.addEventListener('click', () => { saveCurrentChar(); currentFontCharIndex = (currentFontCharIndex + 1) % FONT_CHARS.length; loadCurrentChar(); });
+
+            btnPencil.addEventListener('click', () => setTool('pencil')); btnEraser.addEventListener('click', () => setTool('eraser')); btnBucket.addEventListener('click', () => setTool('bucket'));
+            btnLine.addEventListener('click', () => setTool('line')); btnCircle.addEventListener('click', () => setTool('circle')); btnSquare.addEventListener('click', () => setTool('square'));
+            btnPicker.addEventListener('click', () => setTool('picker'));
+            btnSelectBox.addEventListener('click', () => setTool('select-box')); btnSelectLasso.addEventListener('click', () => setTool('select-lasso')); btnSelectWand.addEventListener('click', () => setTool('select-wand'));
+
+            btnSymX.addEventListener('click', () => { symmetryX = !symmetryX; btnSymX.classList.toggle('active'); renderOverlay(); });
+            btnSymY.addEventListener('click', () => { symmetryY = !symmetryY; btnSymY.classList.toggle('active'); renderOverlay(); });
+            btnSymD1.addEventListener('click', () => { symmetryDiag1 = !symmetryDiag1; btnSymD1.classList.toggle('active'); renderOverlay(); });
+            btnSymD2.addEventListener('click', () => { symmetryDiag2 = !symmetryDiag2; btnSymD2.classList.toggle('active'); renderOverlay(); });
+
+            btnClear.addEventListener('click', () => {
+                if (confirm('Are you sure you want to clear the current layer?')) { saveState(); layers[activeLayerIndex].data = createEmptyLayerData(); renderAll(); }
+            });
+
+            btnDownload.addEventListener('click', () => {
+                stopTimer(); // Timer logic hook
+                if (appMode === 'font') exportTTF();
+                else {
+                    const link = document.createElement('a'); 
+                    link.download = `pixel-art-${gridWidth}x${gridHeight}-${Date.now()}.png`; 
+                    link.href = canvas.toDataURL('image/png'); 
+                    link.click(); 
+                    showToast('Image downloaded successfully!');
+                }
+            });
+            
+            window.addEventListener('keydown', (e) => {
+                if (e.target.tagName === 'INPUT' && !e.target.classList.contains('keybind-input')) return;
+                if (e.target.classList.contains('keybind-input')) return; 
+                
+                if (e.key === 'Shift') { isShiftPressed = true; if(isDrawingShape) renderOverlay(); }
+                if (e.key === 'Control') { isCtrlPressed = true; if(isDrawingShape) renderOverlay(); }
+
+                if (appMode === 'font') {
+                    if (e.key === 'ArrowLeft') { e.preventDefault(); btnPrevChar.click(); return; }
+                    if (e.key === 'ArrowRight') { e.preventDefault(); btnNextChar.click(); return; }
+                }
+
+                let key = e.key.toLowerCase(); if (key === ' ') key = 'space';
+                
+                let pressedStr = key;
+                if (e.ctrlKey || e.metaKey) pressedStr = 'ctrl+' + key; else if (e.shiftKey) pressedStr = 'shift+' + key; else if (e.altKey) pressedStr = 'alt+' + key;
+
+                if (pressedStr === 'shift+o') {
+                    e.preventDefault(); 
+                    openOutlineWindow();
+                    return;
+                }
+
+                if (pressedStr === 'space') {
+                    e.preventDefault(); 
+                    if (!isSpacePressed) { isSpacePressed = true; updateCursor(); }
+                    return;
+                }
+
+                if (pressedStr === keybinds.pencil) { e.preventDefault(); setTool('pencil'); }
+                else if (pressedStr === keybinds.eraser) { e.preventDefault(); setTool('eraser'); }
+                else if (pressedStr === keybinds.bucket) { e.preventDefault(); setTool('bucket'); }
+                else if (pressedStr === keybinds.line) { e.preventDefault(); setTool('line'); }
+                else if (pressedStr === keybinds.circle) { e.preventDefault(); setTool('circle'); }
+                else if (pressedStr === keybinds.square) { e.preventDefault(); setTool('square'); }
+                else if (pressedStr === keybinds.picker) { e.preventDefault(); setTool('picker'); }
+                else if (pressedStr === keybinds.undo) { e.preventDefault(); performUndo(); }
+                else if (pressedStr === keybinds.redo) { e.preventDefault(); performRedo(); }
+                else if (pressedStr === keybinds.clear) { 
+                    e.preventDefault(); 
+                    if (confirm('Are you sure you want to clear the layer?')) { saveState(); layers[activeLayerIndex].data = createEmptyLayerData(); renderAll(); }
+                }
+            });
+
+            window.addEventListener('keyup', (e) => {
+                if (e.key === 'Shift') { isShiftPressed = false; if(isDrawingShape) renderOverlay(); }
+                if (e.key === 'Control') { isCtrlPressed = false; if(isDrawingShape) renderOverlay(); }
+                if (e.code === 'Space') { isSpacePressed = false; updateCursor(); }
+            });
+
+            initDraggables();
+        }
+
+        init();
+
+    </script>
+</body>
+</html>
