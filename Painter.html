@@ -361,6 +361,43 @@
         </div>
     </div>
 
+    <!-- Resize Window Overlay -->
+    <div id="resize-window" class="fixed inset-0 z-[200] flex items-center justify-center hidden pointer-events-none">
+        <div class="absolute inset-0 bg-black/50 pointer-events-auto" id="resize-backdrop"></div>
+        <div class="xp-window w-[280px] relative z-10 shadow-2xl draggable-window pointer-events-auto">
+            <div class="xp-titlebar cursor-move">
+                <span class="flex items-center gap-1">Resize / Scale</span>
+                <button class="xp-close-btn" id="btn-close-resize">×</button>
+            </div>
+            <div class="p-4 bg-[#ECE9D8]">
+                <div class="flex flex-col gap-3 my-2 pl-2">
+                    <div class="flex items-center justify-between">
+                        <label class="font-bold text-xs">Width (px):</label>
+                        <input type="number" id="resize-width" value="16" min="1" max="1920" class="xp-inset w-16 px-1 py-1 text-center font-mono">
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <label class="font-bold text-xs">Height (px):</label>
+                        <input type="number" id="resize-height" value="16" min="1" max="1080" class="xp-inset w-16 px-1 py-1 text-center font-mono">
+                    </div>
+                    <label class="flex items-center gap-2 cursor-pointer font-bold text-xs">
+                        <input type="checkbox" id="resize-aspect" class="w-4 h-4" checked> Keep Aspect Ratio
+                    </label>
+                    <div class="h-[1px] w-full bg-gray-400 border-b border-white my-1"></div>
+                    <label class="flex items-center gap-2 cursor-pointer font-bold text-xs">
+                        <input type="radio" name="resize_mode" value="scale" checked class="w-4 h-4"> Scale Image
+                    </label>
+                    <label class="flex items-center gap-2 cursor-pointer font-bold text-xs">
+                        <input type="radio" name="resize_mode" value="canvas" class="w-4 h-4"> Resize Canvas Only
+                    </label>
+                </div>
+                <div class="mt-4 flex justify-end gap-2">
+                    <button class="xp-btn px-4" id="btn-cancel-resize">Cancel</button>
+                    <button class="xp-btn px-6 font-bold" id="btn-apply-resize">Apply</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Main Application Container -->
     <div class="fixed inset-0 pointer-events-none z-10">
         
@@ -566,6 +603,7 @@
                 <button id="btn-redo" class="xp-btn w-full h-6 text-[10px]" title="Redo">Redo</button>
                 <div class="h-[1px] w-full bg-gray-400 border-b border-white my-1"></div>
                 <button id="btn-clear" class="xp-btn w-full h-6 text-[10px]" title="Clear Layer">Clear</button>
+                <button id="btn-open-resize-canvas" class="xp-btn w-full h-6 text-[10px]" title="Resize Image/Canvas">Resize</button>
                 <button id="btn-download" class="xp-btn w-full h-6 text-[10px]" title="Download PNG / TTF">Save As...</button>
                 <button id="btn-open-widgets-canvas" class="xp-btn w-full h-6 text-[10px]" title="Widgets">Widgets</button>
                 <button id="btn-open-settings-canvas" class="xp-btn w-full h-6 text-[10px]" title="Settings">Config</button>
@@ -882,6 +920,16 @@
         const outlineThickness = document.getElementById('outline-thickness');
         const outlineDiagonals = document.getElementById('outline-diagonals');
 
+        // Resize window elements
+        const resizeWindow = document.getElementById('resize-window');
+        const btnOpenResizeCanvas = document.getElementById('btn-open-resize-canvas');
+        const btnCloseResize = document.getElementById('btn-close-resize');
+        const btnCancelResize = document.getElementById('btn-cancel-resize');
+        const btnApplyResize = document.getElementById('btn-apply-resize');
+        const resizeWidthInput = document.getElementById('resize-width');
+        const resizeHeightInput = document.getElementById('resize-height');
+        const resizeAspect = document.getElementById('resize-aspect');
+
         // Layers elements
         const layersList = document.getElementById('layers-list');
         const btnAddLayer = document.getElementById('btn-add-layer');
@@ -951,7 +999,7 @@
             renderLayersUI();
         }
 
-        function startCanvas() {
+        function reinitCanvasElements() {
             pixelSize = Math.max(1, Math.round(512 / Math.max(gridWidth, gridHeight)));
             
             canvas.width = gridWidth * pixelSize;
@@ -968,14 +1016,18 @@
 
             canvasSizeLabel.textContent = `${gridWidth} x ${gridHeight} px`;
             
+            fitAndCenterCanvas();
+            renderAll();
+            renderOverlay();
+        }
+
+        function startCanvas() {
             undoStack = [];
             redoStack = [];
             strokeChanged = false;
             
             resetPixelData();
-            fitAndCenterCanvas();
-            renderAll();
-            renderOverlay();
+            reinitCanvasElements();
             
             homeScreen.style.display = 'none';
         }
@@ -1705,25 +1757,49 @@
         }
 
         function saveState() {
-            undoStack.push(cloneLayers(layers));
+            undoStack.push({
+                gridWidth: gridWidth,
+                gridHeight: gridHeight,
+                layers: cloneLayers(layers)
+            });
             if (undoStack.length > MAX_HISTORY) undoStack.shift();
             redoStack = [];
         }
 
         function performUndo() {
             if (undoStack.length === 0) return;
-            redoStack.push(cloneLayers(layers));
-            layers = undoStack.pop();
+            redoStack.push({
+                gridWidth: gridWidth,
+                gridHeight: gridHeight,
+                layers: cloneLayers(layers)
+            });
+            const state = undoStack.pop();
+            gridWidth = state.gridWidth;
+            gridHeight = state.gridHeight;
+            layers = state.layers;
+            selectionMask = null;
+            updateSelectionVisual();
+            
+            reinitCanvasElements();
             renderLayersUI();
-            renderAll();
         }
 
         function performRedo() {
             if (redoStack.length === 0) return;
-            undoStack.push(cloneLayers(layers));
-            layers = redoStack.pop();
+            undoStack.push({
+                gridWidth: gridWidth,
+                gridHeight: gridHeight,
+                layers: cloneLayers(layers)
+            });
+            const state = redoStack.pop();
+            gridWidth = state.gridWidth;
+            gridHeight = state.gridHeight;
+            layers = state.layers;
+            selectionMask = null;
+            updateSelectionVisual();
+
+            reinitCanvasElements();
             renderLayersUI();
-            renderAll();
         }
 
         function applyBrush(cx, cy, color) {
@@ -2184,6 +2260,7 @@
                     const setWin = document.getElementById('settings-window');
                     const widWin = document.getElementById('widgets-window');
                     const outWin = document.getElementById('outline-window');
+                    const resWin = document.getElementById('resize-window');
                     if (setWin && !setWin.classList.contains('hidden')) {
                         setWin.style.zIndex = '200';
                     }
@@ -2193,7 +2270,10 @@
                     if (outWin && !outWin.classList.contains('hidden')) {
                         outWin.style.zIndex = '200';
                     }
-                    if (el.closest('#settings-window') || el.closest('#widgets-window') || el.closest('#outline-window')) el.style.zIndex = '201';
+                    if (resWin && !resWin.classList.contains('hidden')) {
+                        resWin.style.zIndex = '200';
+                    }
+                    if (el.closest('#settings-window') || el.closest('#widgets-window') || el.closest('#outline-window') || el.closest('#resize-window')) el.style.zIndex = '201';
                 });
 
                 handle.addEventListener('pointermove', (e) => {
@@ -2425,6 +2505,91 @@
                 layers[activeLayerIndex].data = workingData;
                 renderAll();
                 closeOutlineWindow();
+            });
+
+            // Resize Window Logic
+            const openResizeWindow = () => {
+                resizeWidthInput.value = gridWidth;
+                resizeHeightInput.value = gridHeight;
+                resizeWindow.classList.remove('hidden');
+            };
+            const closeResizeWindow = () => resizeWindow.classList.add('hidden');
+
+            btnOpenResizeCanvas.addEventListener('click', openResizeWindow);
+            btnCloseResize.addEventListener('click', closeResizeWindow);
+            btnCancelResize.addEventListener('click', closeResizeWindow);
+
+            let isResizingWidth = false;
+            let isResizingHeight = false;
+
+            resizeWidthInput.addEventListener('input', (e) => {
+                if (!resizeAspect.checked || isResizingHeight) return;
+                isResizingWidth = true;
+                const ratio = gridHeight / gridWidth;
+                let val = parseInt(e.target.value) || 1;
+                resizeHeightInput.value = Math.max(1, Math.round(val * ratio));
+                isResizingWidth = false;
+            });
+
+            resizeHeightInput.addEventListener('input', (e) => {
+                if (!resizeAspect.checked || isResizingWidth) return;
+                isResizingHeight = true;
+                const ratio = gridWidth / gridHeight;
+                let val = parseInt(e.target.value) || 1;
+                resizeWidthInput.value = Math.max(1, Math.round(val * ratio));
+                isResizingHeight = false;
+            });
+
+            btnApplyResize.addEventListener('click', () => {
+                let newW = parseInt(resizeWidthInput.value);
+                let newH = parseInt(resizeHeightInput.value);
+                
+                if (isNaN(newW) || newW < 1) newW = 16;
+                if (isNaN(newH) || newH < 1) newH = 16;
+                if (newW > 1920) newW = 1920;
+                if (newH > 1080) newH = 1080;
+
+                if (newW === gridWidth && newH === gridHeight) {
+                    closeResizeWindow();
+                    return;
+                }
+
+                saveState();
+
+                const mode = document.querySelector('input[name="resize_mode"]:checked').value;
+                const oldW = gridWidth;
+                const oldH = gridHeight;
+
+                layers.forEach(layer => {
+                    const newData = [];
+                    for (let y = 0; y < newH; y++) {
+                        let row = [];
+                        for (let x = 0; x < newW; x++) {
+                            if (mode === 'scale') {
+                                let origX = Math.floor(x * (oldW / newW));
+                                let origY = Math.floor(y * (oldH / newH));
+                                row.push(layer.data[origY][origX]);
+                            } else { // canvas
+                                if (y < oldH && x < oldW) {
+                                    row.push(layer.data[y][x]);
+                                } else {
+                                    row.push(null);
+                                }
+                            }
+                        }
+                        newData.push(row);
+                    }
+                    layer.data = newData;
+                });
+
+                gridWidth = newW;
+                gridHeight = newH;
+                selectionMask = null;
+                updateSelectionVisual();
+                
+                reinitCanvasElements();
+                closeResizeWindow();
+                showToast(mode === 'scale' ? 'Image Scaled!' : 'Canvas Resized!');
             });
 
             document.querySelectorAll('.keybind-input').forEach(input => {
