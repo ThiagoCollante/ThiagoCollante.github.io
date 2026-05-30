@@ -2620,13 +2620,34 @@
 
             btnDownload.addEventListener('click', () => {
                 stopTimer(); // Timer logic hook
-                if (appMode === 'font') exportTTF();
-                else {
+                if (appMode === 'font') {
+                    exportTTF();
+                } else {
+                    // Create an off-screen canvas strictly matching the 1:1 grid resolution
+                    const exportCanvas = document.createElement('canvas');
+                    exportCanvas.width = gridWidth;
+                    exportCanvas.height = gridHeight;
+                    const exportCtx = exportCanvas.getContext('2d');
+                    
+                    // Render layers to the exact designed resolution
+                    layers.forEach(layer => {
+                        if (!layer.visible) return;
+                        for (let y = 0; y < gridHeight; y++) {
+                            for (let x = 0; x < gridWidth; x++) {
+                                const color = layer.data[y][x];
+                                if (color) {
+                                    exportCtx.fillStyle = color;
+                                    exportCtx.fillRect(x, y, 1, 1);
+                                }
+                            }
+                        }
+                    });
+
                     const link = document.createElement('a'); 
                     link.download = `pixel-art-${gridWidth}x${gridHeight}-${Date.now()}.png`; 
-                    link.href = canvas.toDataURL('image/png'); 
+                    link.href = exportCanvas.toDataURL('image/png'); 
                     link.click(); 
-                    showToast('Image downloaded successfully!');
+                    showToast('Image downloaded at native resolution!');
                 }
             });
             
