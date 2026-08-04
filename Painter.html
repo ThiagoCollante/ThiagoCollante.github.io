@@ -599,6 +599,8 @@
             
             <!-- Actions -->
             <div class="flex flex-col gap-1">
+                <button id="btn-rotate-sel" class="xp-btn w-full h-6 text-[10px] font-bold text-blue-800" title="Rotate Selection 90° CW">Rot 90°</button>
+                <div class="h-[1px] w-full bg-gray-400 border-b border-white my-1"></div>
                 <button id="btn-undo" class="xp-btn w-full h-6 text-[10px]" title="Undo">Undo</button>
                 <button id="btn-redo" class="xp-btn w-full h-6 text-[10px]" title="Redo">Redo</button>
                 <div class="h-[1px] w-full bg-gray-400 border-b border-white my-1"></div>
@@ -737,6 +739,14 @@
         let selectStartX = -1, selectStartY = -1;
         let lassoPoints = [];
 
+        // Floating Selection State
+        let floatingSelection = null; // { x, y, w, h, pixels: [][], mask: [][] }
+        let isDraggingSelection = false;
+        let dragStartX = 0;
+        let dragStartY = 0;
+        let initialFloatX = 0;
+        let initialFloatY = 0;
+
         // Viewport & Pan/Zoom State
         let zoomLevel = 1;
         let panX = 0;
@@ -869,6 +879,7 @@
         const btnSelectBox = document.getElementById('btn-select-box');
         const btnSelectLasso = document.getElementById('btn-select-lasso');
         const btnSelectWand = document.getElementById('btn-select-wand');
+        const btnRotateSel = document.getElementById('btn-rotate-sel');
         
         const btnSymX = document.getElementById('btn-sym-x');
         const btnSymY = document.getElementById('btn-sym-y');
@@ -995,6 +1006,7 @@
             }];
             activeLayerIndex = 0;
             selectionMask = null;
+            floatingSelection = null;
             updateSelectionVisual();
             renderLayersUI();
         }
@@ -1078,6 +1090,7 @@
                 nameSpan.className = "flex-1 select-none pointer-events-none";
 
                 el.onclick = () => {
+                    if (floatingSelection) stampFloat();
                     activeLayerIndex = index;
                     renderLayersUI();
                 };
@@ -1091,6 +1104,7 @@
         // --- Font Creator Logic ---
         function saveCurrentChar() {
             if (appMode !== 'font') return;
+            if (floatingSelection) stampFloat();
             const char = FONT_CHARS[currentFontCharIndex];
             // Shallow clone layer structure, deep clone data
             fontPixelData[char] = cloneLayers(layers);
@@ -1254,7 +1268,7 @@
         function updateSelectionVisual() {
             selVisualCtx.clearRect(0, 0, selVisualCanvas.width, selVisualCanvas.height);
             if (!selectionMask) {
-                btnDeselect.classList.add('hidden');
+                if (!floatingSelection) btnDeselect.classList.add('hidden');
                 return;
             }
             btnDeselect.classList.remove('hidden');
@@ -1459,10 +1473,276 @@
             return [];
         }
 
+        // --- Selection Logic & Interaction ---
+        
+        function generateBoxSelection(startX, startY, endX, endY) {
+            if (floatingSelection) stampFloat();
+            if (!isShiftPressed || !selectionMask) {
+                selectionMask = Array(gridHeight).fill().map(() => Array(gridWidth).fill(false));
+            }
+            const minX = Math.min(startX, endX);
+            const minY = Math.min(startY, endY);
+            const maxX = Math.max(startX, endX);
+            const maxY = Math.max(startY, endY);
+            
+            let hasSel = false;
+            for(let y=0; y<gridHeight; y++) {
+                for(let x=0; x<gridWidth; x++) {
+                    if (y >= minY && y <= maxY && x >= minX && x <= maxX) {
+                        selectionMask[y][x] = true;
+                    }
+                    if (selectionMask[y][x]) hasSel = true;
+                }
+            }
+            if (!hasSel) selectionMask = null;
+            updateSelectionVisual();
+            renderOverlay();
+        }
+
+        function generateLassoSelection() {
+            if (lassoPoints.length < 3) {
+                if (!isShiftPressed) {
+                    selectionMask = null;
+                    updateSelectionVisual();
+                    renderOverlay();
+                }
+                return;
+            }
+            
+            if (floatingSelection) stampFloat();
+
+            const tempC = document.createElement('canvas');
+            tempC.width = gridWidth; 
+            tempC.height = gridHeight;
+            const tCtx = tempC.getContext('2d', { willReadFrequently: true });
+            
+            tCtx.beginPath();
+            tCtx.moveTo(lassoPoints[0].x, lassoPoints[0].y);
+            for(let i=1; i<lassoPoints.length; i++) {
+                tCtx.lineTo(lassoPoints[i].x, lassoPoints[i].y);
+            }
+            tCtx.closePath();
+            tCtx.fillStyle = 'white';
+            tCtx.fill();
+            
+            const data = tCtx.getImageData(0, 0, gridWidth, gridHeight).data;
+            if (!isShiftPressed || !selectionMask) {
+                selectionMask = Array(gridHeight).fill().map(() => Array(gridWidth).fill(false));
+            }
+            let hasSelection = false;
+            
+            for(let y=0; y<gridHeight; y++) {
+                for(let x=0; x<gridWidth; x++) {
+                    if (data[(y * gridWidth + x) * 4 + 3] > 128) {
+                        selectionMask[y][x] = true;
+                    }
+                    if (selectionMask[y][x]) hasSelection = true;
+                }
+            }
+            if (!hasSelection) selectionMask = null;
+            updateSelectionVisual();
+            renderOverlay();
+        }
+
+        function wandSelect(startX, startY) {
+            if (floatingSelection) stampFloat();
+            const activeData = layers[activeLayerIndex].data;
+            const targetColor = activeData[startY][startX];
+            
+            if (!isShiftPressed || !selectionMask) {
+                selectionMask = Array(gridHeight).fill().map(() => Array(gridWidth).fill(false));
+            }
+            
+            const queue = [{x: startX, y: startY}];
+            let hasSelection = false;
+            const visited = Array(gridHeight).fill().map(() => Array(gridWidth).fill(false));
+
+            while(queue.length > 0) {
+                const {x, y} = queue.shift();
+                if (x < 0 || x >= gridWidth || y < 0 || y >= gridHeight) continue;
+                if (visited[y][x]) continue;
+                visited[y][x] = true;
+                
+                if (activeData[y][x] === targetColor) {
+                    selectionMask[y][x] = true;
+                    queue.push({x: x+1, y});
+                    queue.push({x: x-1, y});
+                    queue.push({x, y: y+1});
+                    queue.push({x, y: y-1});
+                }
+            }
+
+            for(let y=0; y<gridHeight; y++) {
+                for(let x=0; x<gridWidth; x++) {
+                    if (selectionMask[y][x]) hasSelection = true;
+                }
+            }
+            
+            if (!hasSelection) selectionMask = null;
+            updateSelectionVisual();
+            renderOverlay();
+        }
+
+        function isInsideSelection(x, y) {
+            if (floatingSelection) {
+                let fx = x - floatingSelection.x;
+                let fy = y - floatingSelection.y;
+                if (fx >= 0 && fx < floatingSelection.w && fy >= 0 && fy < floatingSelection.h) {
+                    return floatingSelection.mask[fy][fx];
+                }
+                return false;
+            } else if (selectionMask) {
+                if (y >= 0 && y < gridHeight && x >= 0 && x < gridWidth) {
+                    return selectionMask[y][x];
+                }
+            }
+            return false;
+        }
+
+        function extractToFloat() {
+            if (!selectionMask) return;
+            if (!layers[activeLayerIndex].visible) return;
+
+            saveState();
+
+            let minX = gridWidth, minY = gridHeight, maxX = -1, maxY = -1;
+            for (let y = 0; y < gridHeight; y++) {
+                for (let x = 0; x < gridWidth; x++) {
+                    if (selectionMask[y][x]) {
+                        minX = Math.min(minX, x); minY = Math.min(minY, y);
+                        maxX = Math.max(maxX, x); maxY = Math.max(maxY, y);
+                    }
+                }
+            }
+            if (maxX === -1) return; 
+            
+            let w = maxX - minX + 1;
+            let h = maxY - minY + 1;
+            let floatPixels = Array(h).fill().map(() => Array(w).fill(null));
+            let floatMask = Array(h).fill().map(() => Array(w).fill(false));
+            
+            const layerData = layers[activeLayerIndex].data;
+            for (let y = 0; y < h; y++) {
+                for (let x = 0; x < w; x++) {
+                    let sy = minY + y; let sx = minX + x;
+                    if (selectionMask[sy][sx]) {
+                        floatMask[y][x] = true;
+                        floatPixels[y][x] = layerData[sy][sx];
+                        layerData[sy][sx] = null; 
+                    }
+                }
+            }
+            floatingSelection = { x: minX, y: minY, w, h, pixels: floatPixels, mask: floatMask };
+            selectionMask = null; 
+            updateSelectionVisual();
+            renderAll();
+            renderOverlay();
+        }
+
+        function stampFloat() {
+            if (!floatingSelection) return;
+            if (layers[activeLayerIndex].visible) {
+                const layerData = layers[activeLayerIndex].data;
+                for (let y = 0; y < floatingSelection.h; y++) {
+                    for (let x = 0; x < floatingSelection.w; x++) {
+                        if (floatingSelection.mask[y][x]) {
+                            let sy = floatingSelection.y + y;
+                            let sx = floatingSelection.x + x;
+                            if (sy >= 0 && sy < gridHeight && sx >= 0 && sx < gridWidth) {
+                                layerData[sy][sx] = floatingSelection.pixels[y][x];
+                            }
+                        }
+                    }
+                }
+            }
+            
+            selectionMask = Array(gridHeight).fill().map(() => Array(gridWidth).fill(false));
+            let hasSel = false;
+            for (let y = 0; y < floatingSelection.h; y++) {
+                for (let x = 0; x < floatingSelection.w; x++) {
+                    if (floatingSelection.mask[y][x]) {
+                        let sy = floatingSelection.y + y;
+                        let sx = floatingSelection.x + x;
+                        if (sy >= 0 && sy < gridHeight && sx >= 0 && sx < gridWidth) {
+                            selectionMask[sy][sx] = true;
+                            hasSel = true;
+                        }
+                    }
+                }
+            }
+            if (!hasSel) selectionMask = null;
+            floatingSelection = null;
+            renderAll();
+            updateSelectionVisual();
+        }
+
+        function rotateFloat() {
+            if (!floatingSelection && selectionMask) extractToFloat();
+            if (!floatingSelection) return;
+            
+            let nw = floatingSelection.h;
+            let nh = floatingSelection.w;
+            let newPixels = Array(nh).fill().map(() => Array(nw).fill(null));
+            let newMask = Array(nh).fill().map(() => Array(nw).fill(false));
+            
+            for (let y = 0; y < floatingSelection.h; y++) {
+                for (let x = 0; x < floatingSelection.w; x++) {
+                    let nx = floatingSelection.h - 1 - y;
+                    let ny = x;
+                    newPixels[ny][nx] = floatingSelection.pixels[y][x];
+                    newMask[ny][nx] = floatingSelection.mask[y][x];
+                }
+            }
+            
+            let cx = floatingSelection.x + floatingSelection.w / 2;
+            let cy = floatingSelection.y + floatingSelection.h / 2;
+            floatingSelection.x = Math.round(cx - nw / 2);
+            floatingSelection.y = Math.round(cy - nh / 2);
+            
+            floatingSelection.w = nw;
+            floatingSelection.h = nh;
+            floatingSelection.pixels = newPixels;
+            floatingSelection.mask = newMask;
+            
+            renderOverlay();
+        }
+
+
         function renderOverlay() {
             overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
             
-            // Draw Selection Mask
+            if (floatingSelection) {
+                if (!selectionMask) {
+                    overlayCtx.fillStyle = 'rgba(0, 0, 50, 0.4)';
+                    overlayCtx.fillRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+                }
+                
+                for (let y = 0; y < floatingSelection.h; y++) {
+                    for (let x = 0; x < floatingSelection.w; x++) {
+                        if (floatingSelection.mask[y][x]) {
+                            const sx = floatingSelection.x + x;
+                            const sy = floatingSelection.y + y;
+                            
+                            if (!selectionMask) {
+                                overlayCtx.clearRect(sx * pixelSize, sy * pixelSize, pixelSize, pixelSize);
+                            }
+                            
+                            if (floatingSelection.pixels[y][x]) {
+                                overlayCtx.fillStyle = floatingSelection.pixels[y][x];
+                                overlayCtx.fillRect(sx * pixelSize, sy * pixelSize, pixelSize, pixelSize);
+                            }
+                            
+                            overlayCtx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+                            if (y===0 || !floatingSelection.mask[y-1][x]) overlayCtx.fillRect(sx*pixelSize, sy*pixelSize, pixelSize, 1);
+                            if (y===floatingSelection.h-1 || !floatingSelection.mask[y+1][x]) overlayCtx.fillRect(sx*pixelSize, (sy+1)*pixelSize-1, pixelSize, 1);
+                            if (x===0 || !floatingSelection.mask[y][x-1]) overlayCtx.fillRect(sx*pixelSize, sy*pixelSize, 1, pixelSize);
+                            if (x===floatingSelection.w-1 || !floatingSelection.mask[y][x+1]) overlayCtx.fillRect((sx+1)*pixelSize-1, sy*pixelSize, 1, pixelSize);
+                        }
+                    }
+                }
+            }
+
+            // Draw Static Selection Mask
             if (selectionMask) {
                 overlayCtx.drawImage(selVisualCanvas, 0, 0);
             }
@@ -1541,7 +1821,7 @@
             if (symmetryDiag2) { overlayCtx.beginPath(); overlayCtx.moveTo(0, cx + cy); overlayCtx.lineTo(w, -w + cx + cy); overlayCtx.stroke(); }
 
             // Draw Brush Preview Cursor
-            if (hoverX !== -1 && hoverY !== -1 && !isDrawingShape && !isPanning && !isSpacePressed) {
+            if (hoverX !== -1 && hoverY !== -1 && !isDrawingShape && !isPanning && !isSpacePressed && !isDraggingSelection && !isSelecting) {
                 if (currentTool === 'pencil' || currentTool === 'eraser' || currentTool === 'line' || currentTool === 'circle' || currentTool === 'square') {
                     
                     if (currentTool === 'eraser') overlayCtx.fillStyle = 'rgba(255, 255, 255, 0.6)';
@@ -1651,92 +1931,7 @@
             applyTransform();
         }
 
-        // --- Selection Logic ---
-
-        function generateBoxSelection(startX, startY, endX, endY) {
-            selectionMask = Array(gridHeight).fill().map(() => Array(gridWidth).fill(false));
-            const minX = Math.min(startX, endX);
-            const minY = Math.min(startY, endY);
-            const maxX = Math.max(startX, endX);
-            const maxY = Math.max(startY, endY);
-            
-            let hasSel = false;
-            for(let y=minY; y<=maxY; y++) {
-                for(let x=minX; x<=maxX; x++) {
-                    if (y >= 0 && y < gridHeight && x >= 0 && x < gridWidth) {
-                        selectionMask[y][x] = true;
-                        hasSel = true;
-                    }
-                }
-            }
-            if (!hasSel) selectionMask = null;
-            updateSelectionVisual();
-        }
-
-        function generateLassoSelection() {
-            if (lassoPoints.length < 3) {
-                selectionMask = null;
-                updateSelectionVisual();
-                return;
-            }
-            
-            const tempC = document.createElement('canvas');
-            tempC.width = gridWidth; 
-            tempC.height = gridHeight;
-            const tCtx = tempC.getContext('2d', { willReadFrequently: true });
-            
-            tCtx.beginPath();
-            tCtx.moveTo(lassoPoints[0].x, lassoPoints[0].y);
-            for(let i=1; i<lassoPoints.length; i++) {
-                tCtx.lineTo(lassoPoints[i].x, lassoPoints[i].y);
-            }
-            tCtx.closePath();
-            tCtx.fillStyle = 'white';
-            tCtx.fill();
-            
-            const data = tCtx.getImageData(0, 0, gridWidth, gridHeight).data;
-            selectionMask = Array(gridHeight).fill().map(() => Array(gridWidth).fill(false));
-            let hasSelection = false;
-            
-            for(let y=0; y<gridHeight; y++) {
-                for(let x=0; x<gridWidth; x++) {
-                    if (data[(y * gridWidth + x) * 4 + 3] > 128) {
-                        selectionMask[y][x] = true;
-                        hasSelection = true;
-                    }
-                }
-            }
-            if (!hasSelection) selectionMask = null;
-            updateSelectionVisual();
-        }
-
-        function wandSelect(startX, startY) {
-            const activeData = layers[activeLayerIndex].data;
-            const targetColor = activeData[startY][startX];
-            selectionMask = Array(gridHeight).fill().map(() => Array(gridWidth).fill(false));
-            
-            const queue = [{x: startX, y: startY}];
-            let hasSelection = false;
-
-            while(queue.length > 0) {
-                const {x, y} = queue.shift();
-                if (x < 0 || x >= gridWidth || y < 0 || y >= gridHeight) continue;
-                if (selectionMask[y][x]) continue;
-                
-                if (activeData[y][x] === targetColor) {
-                    selectionMask[y][x] = true;
-                    hasSelection = true;
-                    queue.push({x: x+1, y});
-                    queue.push({x: x-1, y});
-                    queue.push({x, y: y+1});
-                    queue.push({x, y: y-1});
-                }
-            }
-            if (!hasSelection) selectionMask = null;
-            updateSelectionVisual();
-        }
-
-        // --- Drawing Logic ---
+        // --- Core Action Handling ---
         
         function getCoordinates(e) {
             const rect = canvas.getBoundingClientRect();
@@ -1767,6 +1962,7 @@
         }
 
         function performUndo() {
+            if (floatingSelection) stampFloat();
             if (undoStack.length === 0) return;
             redoStack.push({
                 gridWidth: gridWidth,
@@ -1785,6 +1981,7 @@
         }
 
         function performRedo() {
+            if (floatingSelection) stampFloat();
             if (redoStack.length === 0) return;
             undoStack.push({
                 gridWidth: gridWidth,
@@ -1947,6 +2144,23 @@
             }
 
             if (currentTool.startsWith('select-')) {
+                if (isInsideSelection(x, y)) {
+                    if (!floatingSelection) extractToFloat();
+                    if (floatingSelection) {
+                        isDraggingSelection = true;
+                        dragStartX = x; dragStartY = y;
+                        initialFloatX = floatingSelection.x; initialFloatY = floatingSelection.y;
+                    }
+                    return;
+                } else {
+                    if (floatingSelection) stampFloat();
+                    if (!isShiftPressed) {
+                        selectionMask = null;
+                        updateSelectionVisual();
+                        renderOverlay();
+                    }
+                }
+
                 isSelecting = true;
                 if (currentTool === 'select-box') {
                     selectStartX = x; selectStartY = y;
@@ -1958,6 +2172,8 @@
                 }
                 return;
             }
+
+            if (floatingSelection) stampFloat();
 
             if (currentTool === 'line' || currentTool === 'circle' || currentTool === 'square') {
                 isDrawingShape = true;
@@ -1987,6 +2203,13 @@
             const { x, y } = getCoordinates(e);
             hoverX = x; hoverY = y;
             
+            if (isDraggingSelection && floatingSelection) {
+                floatingSelection.x = initialFloatX + (x - dragStartX);
+                floatingSelection.y = initialFloatY + (y - dragStartY);
+                renderOverlay();
+                return;
+            }
+
             if (isSelecting) {
                 if (currentTool === 'select-lasso') lassoPoints.push({x, y});
                 renderOverlay();
@@ -2020,6 +2243,11 @@
         }
 
         function handlePointerUp() {
+            if (isDraggingSelection) {
+                isDraggingSelection = false;
+                return; // Wait for them to click away to stamp
+            }
+
             if (isSelecting) {
                 if (currentTool === 'select-box') {
                     generateBoxSelection(selectStartX, selectStartY, hoverX, hoverY);
@@ -2203,6 +2431,7 @@
         }
 
         function setTool(toolName) {
+            if (floatingSelection) stampFloat();
             currentTool = toolName;
             const btns = [btnPencil, btnEraser, btnBucket, btnLine, btnCircle, btnSquare, btnPicker, btnSelectBox, btnSelectLasso, btnSelectWand];
             btns.forEach(btn => btn.classList.remove('active'));
@@ -2229,6 +2458,12 @@
                 workspace.style.cursor = 'none'; canvas.style.cursor = 'none';
             } else if (currentTool === 'picker') {
                 workspace.style.cursor = 'crosshair'; canvas.style.cursor = 'crosshair';
+            } else if (currentTool.startsWith('select-')) {
+                if (isShiftPressed) {
+                    workspace.style.cursor = 'copy'; canvas.style.cursor = 'copy';
+                } else {
+                    workspace.style.cursor = 'crosshair'; canvas.style.cursor = 'crosshair';
+                }
             } else {
                 workspace.style.cursor = 'crosshair'; canvas.style.cursor = 'crosshair';
             }
@@ -2397,10 +2632,16 @@
             });
 
             brushShapeSelect.addEventListener('change', (e) => { brushShape = e.target.value; updateBrushOffsets(); renderOverlay(); });
-            btnDeselect.addEventListener('click', () => { selectionMask = null; updateSelectionVisual(); renderOverlay(); });
+            btnDeselect.addEventListener('click', () => { 
+                if (floatingSelection) stampFloat();
+                selectionMask = null; 
+                updateSelectionVisual(); 
+                renderOverlay(); 
+            });
 
             // Layers Handlers
             btnAddLayer.addEventListener('click', () => {
+                if (floatingSelection) stampFloat();
                 saveState();
                 layers.unshift({ id: Date.now(), name: `Layer ${layers.length + 1}`, visible: true, data: createEmptyLayerData() });
                 activeLayerIndex = 0;
@@ -2408,6 +2649,7 @@
             });
             btnDelLayer.addEventListener('click', () => {
                 if (layers.length <= 1) return;
+                if (floatingSelection) stampFloat();
                 saveState();
                 layers.splice(activeLayerIndex, 1);
                 activeLayerIndex = Math.max(0, activeLayerIndex - 1);
@@ -2415,6 +2657,7 @@
             });
             btnUpLayer.addEventListener('click', () => {
                 if (activeLayerIndex <= 0) return;
+                if (floatingSelection) stampFloat();
                 saveState();
                 const temp = layers[activeLayerIndex];
                 layers[activeLayerIndex] = layers[activeLayerIndex - 1];
@@ -2424,6 +2667,7 @@
             });
             btnDownLayer.addEventListener('click', () => {
                 if (activeLayerIndex >= layers.length - 1) return;
+                if (floatingSelection) stampFloat();
                 saveState();
                 const temp = layers[activeLayerIndex];
                 layers[activeLayerIndex] = layers[activeLayerIndex + 1];
@@ -2554,6 +2798,7 @@
                     return;
                 }
 
+                if (floatingSelection) stampFloat();
                 saveState();
 
                 const mode = document.querySelector('input[name="resize_mode"]:checked').value;
@@ -2774,6 +3019,8 @@
             btnPicker.addEventListener('click', () => setTool('picker'));
             btnSelectBox.addEventListener('click', () => setTool('select-box')); btnSelectLasso.addEventListener('click', () => setTool('select-lasso')); btnSelectWand.addEventListener('click', () => setTool('select-wand'));
 
+            if (btnRotateSel) btnRotateSel.addEventListener('click', rotateFloat);
+
             btnSymX.addEventListener('click', () => { symmetryX = !symmetryX; btnSymX.classList.toggle('active'); renderOverlay(); });
             btnSymY.addEventListener('click', () => { symmetryY = !symmetryY; btnSymY.classList.toggle('active'); renderOverlay(); });
             btnSymD1.addEventListener('click', () => { symmetryDiag1 = !symmetryDiag1; btnSymD1.classList.toggle('active'); renderOverlay(); });
@@ -2784,6 +3031,7 @@
             });
 
             btnDownload.addEventListener('click', () => {
+                if (floatingSelection) stampFloat();
                 stopTimer(); // Timer logic hook
                 if (appMode === 'font') {
                     exportTTF();
@@ -2820,7 +3068,7 @@
                 if (e.target.tagName === 'INPUT' && !e.target.classList.contains('keybind-input')) return;
                 if (e.target.classList.contains('keybind-input')) return; 
                 
-                if (e.key === 'Shift') { isShiftPressed = true; if(isDrawingShape) renderOverlay(); }
+                if (e.key === 'Shift') { isShiftPressed = true; if(isDrawingShape || isSelecting) renderOverlay(); updateCursor(); }
                 if (e.key === 'Control') { isCtrlPressed = true; if(isDrawingShape) renderOverlay(); }
 
                 if (appMode === 'font') {
@@ -2861,7 +3109,7 @@
             });
 
             window.addEventListener('keyup', (e) => {
-                if (e.key === 'Shift') { isShiftPressed = false; if(isDrawingShape) renderOverlay(); }
+                if (e.key === 'Shift') { isShiftPressed = false; if(isDrawingShape || isSelecting) renderOverlay(); updateCursor(); }
                 if (e.key === 'Control') { isCtrlPressed = false; if(isDrawingShape) renderOverlay(); }
                 if (e.code === 'Space') { isSpacePressed = false; updateCursor(); }
             });
