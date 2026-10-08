@@ -197,7 +197,7 @@
                     </span>
                     <button class="xp-close-btn" disabled>×</button>
                 </div>
-                <div class="p-6">
+                <div class="p-6 max-h-[78vh] overflow-y-auto">
                     
                     <div class="flex gap-4">
                         <!-- New File -->
@@ -241,6 +241,27 @@
                             <div class="relative flex-1">
                                 <button class="xp-btn w-full py-1 font-bold">Load .TTF</button>
                                 <input type="file" id="font-upload-input" accept=".ttf" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Animator Mode -->
+                    <div class="xp-panel p-4 mt-4">
+                        <h2 class="font-bold mb-3 border-b border-gray-400 pb-1">Animator</h2>
+                        <p class="text-[10px] mb-3 leading-tight">Draw frame by frame and save everything as one sprite sheet. You can also load an existing sprite sheet: it is split into frames using the frame size below.</p>
+                        <div class="flex items-center gap-3 flex-wrap">
+                            <div class="flex items-center gap-1">
+                                <label>Frame W:</label>
+                                <input type="number" id="anim-frame-w" value="16" min="1" max="512" class="xp-inset w-14 px-1 py-1">
+                            </div>
+                            <div class="flex items-center gap-1">
+                                <label>H:</label>
+                                <input type="number" id="anim-frame-h" value="16" min="1" max="512" class="xp-inset w-14 px-1 py-1">
+                            </div>
+                            <button id="btn-create-anim" class="xp-btn flex-1 py-1 font-bold">New Animation</button>
+                            <div class="relative flex-1">
+                                <button class="xp-btn w-full py-1 font-bold">Load Sprite Sheet</button>
+                                <input type="file" id="anim-sheet-upload" accept="image/png, image/jpeg, image/gif, image/webp" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
                             </div>
                         </div>
                     </div>
@@ -685,6 +706,74 @@
         </div>
     </div>
 
+    <!-- Animator Timeline Panel (Floating) -->
+    <div id="anim-panel" class="fixed bottom-10 left-1/2 -translate-x-1/2 z-40 xp-window shadow-xl select-none draggable-window pointer-events-auto hidden" style="max-width: 94vw;">
+        <div class="xp-titlebar cursor-move py-1">
+            <span class="text-[10px] mx-1">Animator - Timeline</span>
+        </div>
+        <div class="p-2 bg-[#ECE9D8] flex gap-2 items-stretch border-t border-white border-l border-white border-b border-[#716F64] border-r border-[#716F64]">
+            <div class="flex flex-col items-center gap-1" style="width: 100px;">
+                <div class="xp-inset checkerboard flex items-center justify-center overflow-hidden" style="width: 96px; height: 96px; background-size: 12px 12px; background-position: 0 0, 6px 6px;">
+                    <canvas id="anim-preview" width="16" height="16"></canvas>
+                </div>
+                <button id="btn-anim-play" class="xp-btn w-full text-[10px] font-bold py-1">&#9654; Play</button>
+            </div>
+            <div class="flex flex-col gap-1 min-w-0" style="width: 480px; max-width: calc(94vw - 150px);">
+                <div class="flex flex-wrap items-center gap-1 text-[10px]">
+                    <button id="btn-anim-prev" class="xp-btn px-2 py-1 font-bold" title="Previous frame (Left arrow)">&lt;</button>
+                    <button id="btn-anim-next" class="xp-btn px-2 py-1 font-bold" title="Next frame (Right arrow)">&gt;</button>
+                    <span class="w-[1px] h-5 bg-gray-400 mx-1"></span>
+                    <button id="btn-anim-add" class="xp-btn px-2 py-1 font-bold" title="New blank frame after this one">+ New</button>
+                    <button id="btn-anim-dup" class="xp-btn px-2 py-1 font-bold" title="Duplicate this frame">Copy</button>
+                    <button id="btn-anim-del" class="xp-btn px-2 py-1 font-bold text-red-700" title="Delete this frame">Del</button>
+                    <button id="btn-anim-left" class="xp-btn px-2 py-1 font-bold" title="Move frame earlier">&#9664;</button>
+                    <button id="btn-anim-right" class="xp-btn px-2 py-1 font-bold" title="Move frame later">&#9654;</button>
+                    <span class="w-[1px] h-5 bg-gray-400 mx-1"></span>
+                    <label class="font-bold">FPS:</label>
+                    <input type="number" id="anim-fps" value="8" min="1" max="60" class="xp-inset w-10 px-1 py-0.5 font-mono">
+                    <label class="flex items-center gap-1 font-bold cursor-pointer ml-1"><input type="checkbox" id="anim-onion" checked> Onion</label>
+                </div>
+                <div id="anim-strip" class="xp-inset flex gap-1 p-1 overflow-x-auto overflow-y-hidden" style="height: 96px;"></div>
+                <div id="anim-info" class="text-[10px]"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sprite Sheet Export Window -->
+    <div id="anim-export-window" class="fixed inset-0 z-[200] flex items-center justify-center hidden pointer-events-none">
+        <div class="absolute inset-0 bg-black/50 pointer-events-auto" id="anim-export-backdrop"></div>
+        <div class="xp-window w-[460px] max-w-[95vw] relative z-10 shadow-2xl draggable-window pointer-events-auto">
+            <div class="xp-titlebar cursor-move">
+                <span class="flex items-center gap-1">Save Sprite Sheet</span>
+                <button class="xp-close-btn" id="btn-close-anim-export">&times;</button>
+            </div>
+            <div class="p-4 bg-[#ECE9D8]">
+                <div class="grid grid-cols-2 gap-x-4 gap-y-2 text-xs items-center mb-3">
+                    <label class="font-bold">Columns:</label>
+                    <input type="number" id="exp-cols" value="4" min="1" class="xp-inset w-full px-1 py-1 font-mono">
+                    <label class="font-bold">Spacing (px):</label>
+                    <input type="number" id="exp-pad" value="0" min="0" max="64" class="xp-inset w-full px-1 py-1 font-mono">
+                    <label class="font-bold">Scale (x):</label>
+                    <input type="number" id="exp-scale" value="1" min="1" max="32" class="xp-inset w-full px-1 py-1 font-mono">
+                    <label class="font-bold">File name:</label>
+                    <input type="text" id="exp-name" value="spritesheet" class="xp-inset w-full px-1 py-1 font-mono">
+                </div>
+                <div class="flex flex-col gap-1 mb-2 text-xs">
+                    <label class="flex items-center gap-2 cursor-pointer font-bold"><input type="checkbox" id="exp-json" checked class="w-4 h-4"> Also save .json (frame positions &amp; FPS)</label>
+                    <label class="flex items-center gap-2 cursor-pointer font-bold"><input type="checkbox" id="exp-dividers" checked class="w-4 h-4"> Show cell dividers in preview</label>
+                </div>
+                <div id="exp-preview-box" class="xp-inset checkerboard flex items-center justify-center overflow-auto" style="width: 100%; height: 190px;">
+                    <canvas id="exp-preview"></canvas>
+                </div>
+                <div id="exp-info" class="text-[10px] mt-1"></div>
+                <div class="mt-3 flex justify-end gap-2">
+                    <button class="xp-btn px-4" id="btn-cancel-anim-export">Cancel</button>
+                    <button class="xp-btn px-6 font-bold" id="btn-save-anim-export">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- UI Overlay Messages (Balloon Tip Style) -->
     <div id="toast" class="fixed bottom-10 right-4 xp-balloon px-4 py-3 transform translate-y-10 opacity-0 transition-all duration-300 z-50 flex items-center gap-2 pointer-events-auto">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
@@ -977,6 +1066,7 @@
             initPalette();
             updateBrushOffsets(); // Precalculate brush shape for efficiency
             setupEventListeners();
+            setupAnimator();
             
             newWidthInput.value = gridWidth;
             newHeightInput.value = gridHeight;
@@ -1031,6 +1121,7 @@
             fitAndCenterCanvas();
             renderAll();
             renderOverlay();
+            if (appMode === 'anim') renderOnion();
         }
 
         function startCanvas() {
@@ -1263,6 +1354,7 @@
                 renderLayerCtx.putImageData(imgData, 0, 0);
                 ctx.drawImage(renderLayerCanvas, 0, 0, gridWidth, gridHeight, 0, 0, canvas.width, canvas.height);
             });
+            if (appMode === 'anim') scheduleAnimRefresh();
         }
 
         function updateSelectionVisual() {
@@ -2805,7 +2897,7 @@
                 const oldW = gridWidth;
                 const oldH = gridHeight;
 
-                layers.forEach(layer => {
+                const resizeLayer = (layer) => {
                     const newData = [];
                     for (let y = 0; y < newH; y++) {
                         let row = [];
@@ -2825,7 +2917,11 @@
                         newData.push(row);
                     }
                     layer.data = newData;
-                });
+                };
+                layers.forEach(resizeLayer);
+                if (appMode === 'anim') {
+                    animFrames.forEach((fl, fi) => { if (fi !== currentFrameIndex) fl.forEach(resizeLayer); });
+                }
 
                 gridWidth = newW;
                 gridHeight = newH;
@@ -2833,6 +2929,7 @@
                 updateSelectionVisual();
                 
                 reinitCanvasElements();
+                if (appMode === 'anim') { undoStack = []; redoStack = []; saveCurrentFrame(); renderFrameStrip(); }
                 closeResizeWindow();
                 showToast(mode === 'scale' ? 'Image Scaled!' : 'Canvas Resized!');
             });
@@ -2876,7 +2973,7 @@
                 let w = parseInt(newWidthInput.value); let h = parseInt(newHeightInput.value);
                 if (isNaN(w) || w < 1) w = 16; if (isNaN(h) || h < 1) h = 16;
                 if (w > 1920) w = 1920; if (h > 1080) h = 1080;
-                gridWidth = w; gridHeight = h; appMode = 'art'; fontNavPanel.classList.add('hidden');
+                gridWidth = w; gridHeight = h; appMode = 'art'; fontNavPanel.classList.add('hidden'); hideAnimUI();
                 startCanvas();
             });
 
@@ -2884,7 +2981,7 @@
                 let size = parseInt(fontSizeInput.value);
                 if (isNaN(size) || size < 8) size = 16; if (size > 128) size = 128; 
                 gridWidth = size; gridHeight = size; appMode = 'font'; currentFontCharIndex = 0; fontPixelData = {}; 
-                fontNavPanel.classList.remove('hidden'); startCanvas(); loadCurrentChar();
+                fontNavPanel.classList.remove('hidden'); hideAnimUI(); startCanvas(); loadCurrentChar();
             });
 
             fontUploadInput.addEventListener('change', (e) => {
@@ -2947,7 +3044,7 @@
                             }
                         }
                         
-                        fontNavPanel.classList.remove('hidden');
+                        fontNavPanel.classList.remove('hidden'); hideAnimUI();
                         startCanvas();
                         loadCurrentChar();
                         showToast('Font loaded successfully!');
@@ -3000,7 +3097,7 @@
                         }
                         
                         fitAndCenterCanvas(); renderAll();
-                        appMode = 'art'; fontNavPanel.classList.add('hidden'); homeScreen.style.display = 'none';
+                        appMode = 'art'; fontNavPanel.classList.add('hidden'); hideAnimUI(); homeScreen.style.display = 'none';
                     };
                     img.src = event.target.result;
                 };
@@ -3008,7 +3105,7 @@
             });
 
             btnHome.addEventListener('click', () => {
-                if (confirm('Return to home screen? Unsaved progress will be lost.')) homeScreen.style.display = 'flex';
+                if (confirm('Return to home screen? Unsaved progress will be lost.')) { stopPlay(); homeScreen.style.display = 'flex'; }
             });
 
             btnPrevChar.addEventListener('click', () => { saveCurrentChar(); currentFontCharIndex = (currentFontCharIndex - 1 + FONT_CHARS.length) % FONT_CHARS.length; loadCurrentChar(); });
@@ -3033,7 +3130,10 @@
             btnDownload.addEventListener('click', () => {
                 if (floatingSelection) stampFloat();
                 stopTimer(); // Timer logic hook
-                if (appMode === 'font') {
+                if (appMode === 'anim') {
+                    saveCurrentFrame();
+                    openAnimExport();
+                } else if (appMode === 'font') {
                     exportTTF();
                 } else {
                     // Create an off-screen canvas strictly matching the 1:1 grid resolution
@@ -3070,6 +3170,11 @@
                 
                 if (e.key === 'Shift') { isShiftPressed = true; if(isDrawingShape || isSelecting) renderOverlay(); updateCursor(); }
                 if (e.key === 'Control') { isCtrlPressed = true; if(isDrawingShape) renderOverlay(); }
+
+                if (appMode === 'anim') {
+                    if (e.key === 'ArrowLeft') { e.preventDefault(); selectFrame(currentFrameIndex - 1); return; }
+                    if (e.key === 'ArrowRight') { e.preventDefault(); selectFrame(currentFrameIndex + 1); return; }
+                }
 
                 if (appMode === 'font') {
                     if (e.key === 'ArrowLeft') { e.preventDefault(); btnPrevChar.click(); return; }
@@ -3115,6 +3220,482 @@
             });
 
             initDraggables();
+        }
+
+
+        // =====================================================
+        // Animator / Sprite Sheet
+        // =====================================================
+        let animFrames = [];        // each entry = array of layers for that frame
+        let currentFrameIndex = 0;
+        let animFps = 8;
+        let animOnion = true;
+        let animPlaying = false;
+        let animTimeout = null;
+        let animPlayIndex = 0;
+        let animRefreshTimer = null;
+
+        const animPanel = document.getElementById('anim-panel');
+        const animStrip = document.getElementById('anim-strip');
+        const animInfo = document.getElementById('anim-info');
+        const animPreview = document.getElementById('anim-preview');
+        const animPreviewCtx = animPreview.getContext('2d');
+        const btnAnimPlay = document.getElementById('btn-anim-play');
+        const animFpsInput = document.getElementById('anim-fps');
+        const animOnionInput = document.getElementById('anim-onion');
+
+        const animExportWindow = document.getElementById('anim-export-window');
+        const expCols = document.getElementById('exp-cols');
+        const expPad = document.getElementById('exp-pad');
+        const expScale = document.getElementById('exp-scale');
+        const expName = document.getElementById('exp-name');
+        const expJson = document.getElementById('exp-json');
+        const expDividers = document.getElementById('exp-dividers');
+        const expPreview = document.getElementById('exp-preview');
+        const expInfo = document.getElementById('exp-info');
+
+        const clampInt = (v, lo, hi, fallback) => {
+            let n = parseInt(v);
+            if (isNaN(n)) n = fallback;
+            return Math.max(lo, Math.min(hi, n));
+        };
+
+        // Flatten a set of layers into a 1:1 canvas
+        function compositeLayers(lyrs, w, h) {
+            const out = document.createElement('canvas');
+            out.width = w; out.height = h;
+            const octx = out.getContext('2d');
+            const tmp = document.createElement('canvas');
+            tmp.width = w; tmp.height = h;
+            const tctx = tmp.getContext('2d');
+            lyrs.forEach(layer => {
+                if (!layer.visible) return;
+                const img = tctx.createImageData(w, h);
+                const d = img.data;
+                for (let y = 0; y < h; y++) {
+                    const row = layer.data[y];
+                    if (!row) continue;
+                    for (let x = 0; x < w; x++) {
+                        const color = row[x];
+                        if (color) {
+                            const p = parseHexColor(color);
+                            const i = (y * w + x) * 4;
+                            d[i] = p.r; d[i+1] = p.g; d[i+2] = p.b; d[i+3] = p.a;
+                        }
+                    }
+                }
+                tctx.putImageData(img, 0, 0);
+                octx.drawImage(tmp, 0, 0);
+            });
+            return out;
+        }
+
+        function newBlankLayers() {
+            return [{ id: Date.now() + Math.random(), name: 'Layer 1', visible: true, data: createEmptyLayerData() }];
+        }
+
+        function saveCurrentFrame() {
+            if (appMode !== 'anim') return;
+            if (floatingSelection) stampFloat();
+            animFrames[currentFrameIndex] = cloneLayers(layers);
+        }
+
+        // Load a frame into the editor (does NOT save the previous one)
+        function loadFrame(i) {
+            currentFrameIndex = i;
+            layers = cloneLayers(animFrames[i]);
+            activeLayerIndex = 0;
+            selectionMask = null;
+            updateSelectionVisual();
+            undoStack = []; redoStack = [];
+            renderLayersUI();
+            renderAll();
+            renderOnion();
+            renderOverlay();
+            renderFrameStrip();
+        }
+
+        function selectFrame(i) {
+            if (appMode !== 'anim') return;
+            if (i < 0 || i >= animFrames.length) return;
+            saveCurrentFrame();
+            loadFrame(i);
+        }
+
+        function renderOnion() {
+            if (appMode !== 'anim') return;
+            bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+            if (!animOnion || currentFrameIndex === 0 || !animFrames[currentFrameIndex - 1]) return;
+            const prev = compositeLayers(animFrames[currentFrameIndex - 1], gridWidth, gridHeight);
+            bgCtx.save();
+            bgCtx.imageSmoothingEnabled = false;
+            bgCtx.globalAlpha = 0.25;
+            bgCtx.drawImage(prev, 0, 0, bgCanvas.width, bgCanvas.height);
+            bgCtx.restore();
+        }
+
+        function fitScale(w, h, box) {
+            const m = Math.max(w, h);
+            return m > box ? box / m : Math.floor(box / m);
+        }
+
+        function sizePreviewCanvas() {
+            animPreview.width = gridWidth;
+            animPreview.height = gridHeight;
+            const k = fitScale(gridWidth, gridHeight, 96);
+            animPreview.style.width = (gridWidth * k) + 'px';
+            animPreview.style.height = (gridHeight * k) + 'px';
+        }
+
+        function drawPreview(i) {
+            const lyrs = (i === currentFrameIndex) ? layers : animFrames[i];
+            if (!lyrs) return;
+            if (animPreview.width !== gridWidth || animPreview.height !== gridHeight) sizePreviewCanvas();
+            animPreviewCtx.clearRect(0, 0, animPreview.width, animPreview.height);
+            animPreviewCtx.drawImage(compositeLayers(lyrs, gridWidth, gridHeight), 0, 0);
+        }
+
+        function renderFrameStrip() {
+            if (appMode !== 'anim') return;
+            const prevScroll = animStrip.scrollLeft;
+            animStrip.innerHTML = '';
+            const k = fitScale(gridWidth, gridHeight, 48);
+            animFrames.forEach((fl, i) => {
+                const lyrs = (i === currentFrameIndex) ? layers : fl;
+                const thumb = compositeLayers(lyrs, gridWidth, gridHeight);
+                thumb.style.width = (gridWidth * k) + 'px';
+                thumb.style.height = (gridHeight * k) + 'px';
+
+                const box = document.createElement('div');
+                box.className = 'checkerboard flex items-center justify-center shrink-0 overflow-hidden';
+                box.style.cssText = 'width:52px;height:52px;background-size:12px 12px;background-position:0 0,6px 6px;border:1px solid #716F64;';
+                box.appendChild(thumb);
+
+                const label = document.createElement('div');
+                label.className = 'text-[10px] text-center font-bold';
+                label.textContent = String(i + 1);
+
+                const cell = document.createElement('div');
+                cell.className = 'flex flex-col items-center shrink-0 cursor-pointer';
+                cell.style.cssText = 'padding:2px;border:2px solid ' + (i === currentFrameIndex ? '#0058e6' : 'transparent') +
+                                     ';background:' + (i === currentFrameIndex ? '#cfe0ff' : 'transparent') + ';';
+                cell.appendChild(box);
+                cell.appendChild(label);
+                cell.addEventListener('click', () => selectFrame(i));
+                animStrip.appendChild(cell);
+            });
+            animStrip.scrollLeft = prevScroll;
+            const sel = animStrip.children[currentFrameIndex];
+            if (sel && sel.scrollIntoView) sel.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+
+            animInfo.textContent = `Frame ${currentFrameIndex + 1} / ${animFrames.length}   |   ${gridWidth} x ${gridHeight} px per frame`;
+            sizePreviewCanvas();
+            if (!animPlaying) drawPreview(currentFrameIndex);
+        }
+
+        function scheduleAnimRefresh() {
+            if (animRefreshTimer) return;
+            animRefreshTimer = setTimeout(() => {
+                animRefreshTimer = null;
+                if (appMode !== 'anim') return;
+                const cell = animStrip.children[currentFrameIndex];
+                const c = cell && cell.querySelector('canvas');
+                if (!c || c.width !== gridWidth || c.height !== gridHeight) { renderFrameStrip(); return; }
+                const cx = c.getContext('2d');
+                cx.clearRect(0, 0, c.width, c.height);
+                cx.drawImage(compositeLayers(layers, gridWidth, gridHeight), 0, 0);
+                if (!animPlaying) drawPreview(currentFrameIndex);
+            }, 120);
+        }
+
+        // --- Playback (separate preview, never touches the editing canvas) ---
+        function startPlay() {
+            if (animFrames.length === 0) return;
+            saveCurrentFrame();
+            animPlaying = true;
+            btnAnimPlay.innerHTML = '&#9632; Stop';
+            animPlayIndex = currentFrameIndex;
+            const tick = () => {
+                if (!animPlaying) return;
+                if (animPlayIndex >= animFrames.length) animPlayIndex = 0;
+                drawPreview(animPlayIndex);
+                animPlayIndex = (animPlayIndex + 1) % animFrames.length;
+                animTimeout = setTimeout(tick, 1000 / animFps);
+            };
+            tick();
+        }
+        function stopPlay() {
+            animPlaying = false;
+            clearTimeout(animTimeout);
+            animTimeout = null;
+            btnAnimPlay.innerHTML = '&#9654; Play';
+            if (appMode === 'anim' && animFrames.length) drawPreview(currentFrameIndex);
+        }
+
+        // --- Frame operations ---
+        function addFrame(duplicate) {
+            saveCurrentFrame();
+            const idx = currentFrameIndex + 1;
+            const fresh = duplicate ? cloneLayers(animFrames[currentFrameIndex]) : newBlankLayers();
+            animFrames.splice(idx, 0, fresh);
+            loadFrame(idx);
+        }
+        function deleteFrame() {
+            if (animFrames.length <= 1) { showToast('An animation needs at least one frame.'); return; }
+            if (floatingSelection) stampFloat();
+            animFrames.splice(currentFrameIndex, 1);
+            loadFrame(Math.min(currentFrameIndex, animFrames.length - 1));
+        }
+        function moveFrame(dir) {
+            saveCurrentFrame();
+            const j = currentFrameIndex + dir;
+            if (j < 0 || j >= animFrames.length) return;
+            const t = animFrames[currentFrameIndex];
+            animFrames[currentFrameIndex] = animFrames[j];
+            animFrames[j] = t;
+            currentFrameIndex = j;
+            renderOnion();
+            renderFrameStrip();
+        }
+
+        function showAnimUI() {
+            animPanel.classList.remove('hidden');
+            animFpsInput.value = animFps;
+            animOnionInput.checked = animOnion;
+            renderOnion();
+            renderFrameStrip();
+        }
+        function hideAnimUI() {
+            stopPlay();
+            animFrames = [];
+            currentFrameIndex = 0;
+            animPanel.classList.add('hidden');
+            animExportWindow.classList.add('hidden');
+        }
+
+        function startAnimation(frames) {
+            // frames: array of layer-arrays; grid size already set
+            appMode = 'anim';
+            fontNavPanel.classList.add('hidden');
+            startCanvas();
+            animFrames = frames || [cloneLayers(layers)];
+            currentFrameIndex = 0;
+            layers = cloneLayers(animFrames[0]);
+            activeLayerIndex = 0;
+            renderLayersUI();
+            renderAll();
+            showAnimUI();
+        }
+
+        // --- Load an existing sprite sheet: divide it into frames ---
+        function loadSpriteSheet(file) {
+            const fw = clampInt(document.getElementById('anim-frame-w').value, 1, 512, 16);
+            const fh = clampInt(document.getElementById('anim-frame-h').value, 1, 512, 16);
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                const img = new Image();
+                img.onload = () => {
+                    const cols = Math.floor(img.width / fw);
+                    const rows = Math.floor(img.height / fh);
+                    if (cols < 1 || rows < 1) {
+                        showToast(`Image (${img.width}x${img.height}) is smaller than one ${fw}x${fh} frame.`);
+                        return;
+                    }
+                    const tmp = document.createElement('canvas');
+                    tmp.width = img.width; tmp.height = img.height;
+                    const tctx = tmp.getContext('2d', { willReadFrequently: true });
+                    tctx.drawImage(img, 0, 0);
+                    const all = tctx.getImageData(0, 0, img.width, img.height).data;
+                    const hex = (n) => n.toString(16).padStart(2, '0');
+
+                    const frames = [];
+                    const MAX_FRAMES = 512;
+                    outer:
+                    for (let r = 0; r < rows; r++) {
+                        for (let c = 0; c < cols; c++) {
+                            if (frames.length >= MAX_FRAMES) break outer;
+                            const data = [];
+                            let hasPixels = false;
+                            for (let y = 0; y < fh; y++) {
+                                const row = [];
+                                for (let x = 0; x < fw; x++) {
+                                    const i = ((r * fh + y) * img.width + (c * fw + x)) * 4;
+                                    const a = all[i + 3];
+                                    if (a > 0) {
+                                        hasPixels = true;
+                                        let col = '#' + hex(all[i]) + hex(all[i+1]) + hex(all[i+2]);
+                                        if (a < 255) col += hex(a);
+                                        row.push(col.toUpperCase());
+                                    } else row.push(null);
+                                }
+                                data.push(row);
+                            }
+                            frames.push({ hasPixels, layers: [{ id: Date.now() + Math.random(), name: 'Layer 1', visible: true, data }] });
+                        }
+                    }
+                    // drop unused empty cells at the end of the sheet
+                    while (frames.length > 1 && !frames[frames.length - 1].hasPixels) frames.pop();
+
+                    gridWidth = fw; gridHeight = fh;
+                    startAnimation(frames.map(f => f.layers));
+                    showToast(`Split into ${frames.length} frame${frames.length === 1 ? '' : 's'} (${fw}x${fh}).`);
+                };
+                img.onerror = () => showToast('Could not read that image.');
+                img.src = ev.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // --- Sprite sheet export ---
+        function getExportParams() {
+            const n = animFrames.length;
+            return {
+                n,
+                cols: clampInt(expCols.value, 1, Math.max(1, n), Math.min(n, 4)),
+                pad: clampInt(expPad.value, 0, 64, 0),
+                scale: clampInt(expScale.value, 1, 32, 1)
+            };
+        }
+
+        function sheetLayout(p) {
+            const rows = Math.ceil(p.n / p.cols);
+            const w = p.cols * gridWidth + (p.cols - 1) * p.pad;
+            const h = rows * gridHeight + (rows - 1) * p.pad;
+            const cells = [];
+            for (let i = 0; i < p.n; i++) {
+                cells.push({ index: i, x: (i % p.cols) * (gridWidth + p.pad), y: Math.floor(i / p.cols) * (gridHeight + p.pad) });
+            }
+            return { rows, w, h, cells };
+        }
+
+        function buildSheetCanvas(p) {
+            const L = sheetLayout(p);
+            const sheet = document.createElement('canvas');
+            sheet.width = L.w * p.scale;
+            sheet.height = L.h * p.scale;
+            const sctx = sheet.getContext('2d');
+            sctx.imageSmoothingEnabled = false;
+            L.cells.forEach(cell => {
+                const comp = compositeLayers(animFrames[cell.index], gridWidth, gridHeight);
+                sctx.drawImage(comp, cell.x * p.scale, cell.y * p.scale, gridWidth * p.scale, gridHeight * p.scale);
+            });
+            return { sheet, L };
+        }
+
+        function updateExportPreview() {
+            const p = getExportParams();
+            const L = sheetLayout(p);
+            const sw = L.w * p.scale, sh = L.h * p.scale;
+            const tooBig = sw > 16384 || sh > 16384;
+            expInfo.textContent = `${p.n} frame${p.n === 1 ? '' : 's'}  |  ${p.cols} col x ${L.rows} row  |  Sheet: ${sw} x ${sh} px` +
+                                  (tooBig ? '  (too large! lower the scale)' : '');
+            if (tooBig) { expPreview.width = 1; expPreview.height = 1; return; }
+
+            const { sheet } = buildSheetCanvas(p);
+            const box = document.getElementById('exp-preview-box');
+            const maxW = box.clientWidth - 8 || 400, maxH = box.clientHeight - 8 || 180;
+            let k = Math.min(maxW / sw, maxH / sh);
+            k = k >= 1 ? Math.floor(k) : k;
+            const pw = Math.max(1, Math.round(sw * k)), ph = Math.max(1, Math.round(sh * k));
+            expPreview.width = pw; expPreview.height = ph;
+            const pctx = expPreview.getContext('2d');
+            pctx.imageSmoothingEnabled = false;
+            pctx.clearRect(0, 0, pw, ph);
+            pctx.drawImage(sheet, 0, 0, pw, ph);
+            if (expDividers.checked) {
+                pctx.save();
+                pctx.strokeStyle = 'rgba(255,0,80,0.9)';
+                pctx.lineWidth = 1;
+                pctx.setLineDash([3, 2]);
+                L.cells.forEach(c => {
+                    pctx.strokeRect(Math.round(c.x * p.scale * k) + 0.5, Math.round(c.y * p.scale * k) + 0.5,
+                                    Math.max(1, Math.round(gridWidth * p.scale * k) - 1), Math.max(1, Math.round(gridHeight * p.scale * k) - 1));
+                });
+                pctx.restore();
+            }
+        }
+
+        function openAnimExport() {
+            const n = animFrames.length;
+            expCols.max = n;
+            expCols.value = Math.min(n, 8);
+            animExportWindow.classList.remove('hidden');
+            updateExportPreview();
+        }
+
+        function downloadBlob(blob, filename) {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 2000);
+        }
+
+        function saveSpriteSheet() {
+            const p = getExportParams();
+            const L = sheetLayout(p);
+            if (L.w * p.scale > 16384 || L.h * p.scale > 16384) { showToast('Sheet is too large. Lower the scale.'); return; }
+            const base = (expName.value.trim() || 'spritesheet').replace(/[^\w\-]+/g, '_');
+            const { sheet } = buildSheetCanvas(p);
+
+            sheet.toBlob((blob) => {
+                downloadBlob(blob, base + '.png');
+                if (expJson.checked) {
+                    const meta = {
+                        image: base + '.png',
+                        frameWidth: gridWidth * p.scale,
+                        frameHeight: gridHeight * p.scale,
+                        columns: p.cols,
+                        rows: L.rows,
+                        spacing: p.pad * p.scale,
+                        scale: p.scale,
+                        frameCount: p.n,
+                        fps: animFps,
+                        frames: L.cells.map(c => ({
+                            index: c.index,
+                            x: c.x * p.scale, y: c.y * p.scale,
+                            w: gridWidth * p.scale, h: gridHeight * p.scale
+                        }))
+                    };
+                    setTimeout(() => downloadBlob(new Blob([JSON.stringify(meta, null, 2)], { type: 'application/json' }), base + '.json'), 400);
+                }
+                showToast(`Sprite sheet saved (${p.n} frames)!`);
+            }, 'image/png');
+            animExportWindow.classList.add('hidden');
+        }
+
+        function setupAnimator() {
+            document.getElementById('btn-create-anim').addEventListener('click', () => {
+                gridWidth = clampInt(document.getElementById('anim-frame-w').value, 1, 512, 16);
+                gridHeight = clampInt(document.getElementById('anim-frame-h').value, 1, 512, 16);
+                startAnimation(null);
+            });
+            document.getElementById('anim-sheet-upload').addEventListener('change', (e) => {
+                const f = e.target.files[0];
+                if (f) loadSpriteSheet(f);
+                e.target.value = '';
+            });
+
+            btnAnimPlay.addEventListener('click', () => { animPlaying ? stopPlay() : startPlay(); });
+            document.getElementById('btn-anim-prev').addEventListener('click', () => selectFrame(currentFrameIndex - 1));
+            document.getElementById('btn-anim-next').addEventListener('click', () => selectFrame(currentFrameIndex + 1));
+            document.getElementById('btn-anim-add').addEventListener('click', () => addFrame(false));
+            document.getElementById('btn-anim-dup').addEventListener('click', () => addFrame(true));
+            document.getElementById('btn-anim-del').addEventListener('click', deleteFrame);
+            document.getElementById('btn-anim-left').addEventListener('click', () => moveFrame(-1));
+            document.getElementById('btn-anim-right').addEventListener('click', () => moveFrame(1));
+            animFpsInput.addEventListener('input', () => { animFps = clampInt(animFpsInput.value, 1, 60, 8); });
+            animOnionInput.addEventListener('change', () => { animOnion = animOnionInput.checked; renderOnion(); });
+
+            [expCols, expPad, expScale].forEach(el => el.addEventListener('input', updateExportPreview));
+            expDividers.addEventListener('change', updateExportPreview);
+            const closeExp = () => animExportWindow.classList.add('hidden');
+            document.getElementById('btn-close-anim-export').addEventListener('click', closeExp);
+            document.getElementById('btn-cancel-anim-export').addEventListener('click', closeExp);
+            document.getElementById('anim-export-backdrop').addEventListener('click', closeExp);
+            document.getElementById('btn-save-anim-export').addEventListener('click', saveSpriteSheet);
         }
 
         init();
